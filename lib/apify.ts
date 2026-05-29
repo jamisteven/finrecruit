@@ -3,21 +3,27 @@
 
 export type ApifyPost = {
   id?: string
+  linkedinUrl?: string
   url?: string
   postUrl?: string
-  text?: string
   content?: string
   commentary?: string
+  text?: string
+  author?: {
+    name?: string
+    info?: string
+    headline?: string
+    linkedinUrl?: string
+    url?: string
+    profileUrl?: string
+  }
   authorName?: string
-  authorFullName?: string
-  author?: { name?: string; headline?: string; url?: string; profileUrl?: string }
   authorHeadline?: string
   authorProfileUrl?: string
-  postedAt?: string
+  postedAt?: { date?: string; timestamp?: number } | string
   publishedAt?: string
   createdAt?: string
-  timestamp?: string
-  date?: string
+  repost?: ApifyPost
 }
 
 export const FINANCE_JOB_QUERIES = [
@@ -37,8 +43,6 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
   if (!apiToken) throw new Error('APIFY_API_TOKEN not set')
 
   const allPosts: ApifyPost[] = []
-
-  // Run 3 queries per ingest call to stay within Vercel timeout
   const batch = queries.slice(0, 3)
 
   for (const query of batch) {
@@ -71,13 +75,10 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
 
       console.log(`[apify] Run ${runId} started, polling...`)
 
-      // Poll every 8s up to 5 minutes
       let status = ''
       for (let i = 0; i < 38; i++) {
         await new Promise((r) => setTimeout(r, 8000))
-        const statusRes = await fetch(
-          `https://api.apify.com/v2/actor-runs/${runId}?token=${apiToken}`
-        )
+        const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${apiToken}`)
         const statusData = await statusRes.json()
         status = statusData.data?.status
         console.log(`[apify] ${runId}: ${status}`)
@@ -104,7 +105,7 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
   return allPosts
 }
 
-export function normalisePost(raw: ApifyPost & { repost?: ApifyPost }): {
+export function normalisePost(raw: ApifyPost): {
   postUrl: string
   text: string
   authorName: string | null
@@ -112,18 +113,27 @@ export function normalisePost(raw: ApifyPost & { repost?: ApifyPost }): {
   authorLinkedinUrl: string | null
   postedAt: string | null
 } {
-  // For reposts, use the original post's content + author (that's where the job info is)
-  const src = raw.repost || raw
-  const text = src.commentary || src.text || src.content || ''
-  // Fall back to outer post text if repost text is very short (just a comment like "Sharing this!")
-  const finalText = text.length > 50 ? text : (raw.commentary || raw.text || raw.content || text)
+  // For reposts, use the original post content (where the actual job info lives)
+  const src: ApifyPost = raw.repost || raw
+  const rawText = src.content || src.commentary || src.text || ''
+  // If repost caption is too short, use it; otherwise fall back to outer post
+  const text = rawText.length > 50 ? rawText : (raw.content || raw.commentary || raw.text || rawText)
+
+  // postedAt from HarvestAPI is an object: { date: "...", timestamp: ... }
+  const postedAtField = src.postedAt
+  const postedAt = postedAtField
+    ? typeof postedAtField === 'object'
+      ? (postedAtField as { date?: string }).date || null
+      : postedAtField
+    : null
 
   return {
-    postUrl: raw.url || raw.postUrl || '',
-    text: finalText,
-    authorName: (src.author as { name?: string })?.name || src.authorFullName || src.authorName || null,
-    authorHeadline: (src.author as { headline?: string })?.headline || src.authorHeadline || null,
-    authorLinkedinUrl: (src.author as { url?: string; profileUrl?: string })?.url || (src.author as { profileUrl?: string })?.profileUrl || src.authorProfileUrl || null,
-    postedAt: (src as ApifyPost).postedAt || raw.publishedAt || raw.createdAt || raw.timestamp || null,
+    postUrl: raw.linkedinUrl || raw.url || raw.postUrl || '',
+    text,
+    authorName: src.author?.name || src.authorName || null,
+    // HarvestAPI puts headline in author.info
+    authorHeadline: src.author?.info || src.author?.headline || src.authorHeadline || null,
+    authorLinkedinUrl: src.author?.linkedinUrl || src.author?.url || src.authorProfileUrl || null,
+    postedAt,
   }
 }
