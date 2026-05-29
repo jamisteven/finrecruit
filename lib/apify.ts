@@ -20,8 +20,6 @@ export type ApifyPost = {
   date?: string
 }
 
-// Queries rotated across cron runs to stay within Vercel's 5min timeout
-// Each ingest run picks 3 queries, cycling through the full list over time
 export const FINANCE_JOB_QUERIES = [
   'finance recruiter hiring london',
   'investment banking hiring analyst',
@@ -40,7 +38,7 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
 
   const allPosts: ApifyPost[] = []
 
-  // Only run 3 queries per call to stay within Vercel's 5min timeout
+  // Run 3 queries per ingest call to stay within Vercel timeout
   const batch = queries.slice(0, 3)
 
   for (const query of batch) {
@@ -53,9 +51,10 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            query,
-            count: 20,
-            datePosted: 'past-week',
+            searchQueries: [query],
+            maxPosts: 20,
+            scrapeComments: false,
+            scrapeReactions: false,
           }),
         }
       )
@@ -72,7 +71,7 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
 
       console.log(`[apify] Run ${runId} started, polling...`)
 
-      // Poll every 8s, up to 75 attempts (~10 min max per query)
+      // Poll every 8s up to 5 minutes
       let status = ''
       for (let i = 0; i < 38; i++) {
         await new Promise((r) => setTimeout(r, 8000))
