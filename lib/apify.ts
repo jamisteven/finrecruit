@@ -104,7 +104,7 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
   return allPosts
 }
 
-export function normalisePost(raw: ApifyPost): {
+export function normalisePost(raw: ApifyPost & { repost?: ApifyPost }): {
   postUrl: string
   text: string
   authorName: string | null
@@ -112,12 +112,18 @@ export function normalisePost(raw: ApifyPost): {
   authorLinkedinUrl: string | null
   postedAt: string | null
 } {
+  // For reposts, use the original post's content + author (that's where the job info is)
+  const src = raw.repost || raw
+  const text = src.commentary || src.text || src.content || ''
+  // Fall back to outer post text if repost text is very short (just a comment like "Sharing this!")
+  const finalText = text.length > 50 ? text : (raw.commentary || raw.text || raw.content || text)
+
   return {
     postUrl: raw.url || raw.postUrl || '',
-    text: raw.commentary || raw.text || raw.content || '',
-    authorName: raw.author?.name || raw.authorFullName || raw.authorName || null,
-    authorHeadline: raw.author?.headline || raw.authorHeadline || null,
-    authorLinkedinUrl: raw.author?.url || raw.author?.profileUrl || raw.authorProfileUrl || null,
-    postedAt: raw.date || raw.postedAt || raw.publishedAt || raw.createdAt || raw.timestamp || null,
+    text: finalText,
+    authorName: (src.author as { name?: string })?.name || src.authorFullName || src.authorName || null,
+    authorHeadline: (src.author as { headline?: string })?.headline || src.authorHeadline || null,
+    authorLinkedinUrl: (src.author as { url?: string; profileUrl?: string })?.url || (src.author as { profileUrl?: string })?.profileUrl || src.authorProfileUrl || null,
+    postedAt: (src as ApifyPost).postedAt || raw.publishedAt || raw.createdAt || raw.timestamp || null,
   }
 }
