@@ -4,10 +4,9 @@ import { classifyPost } from '@/lib/classifier'
 import { createServerClient } from '@/lib/supabase'
 import { IngestResult } from '@/types'
 
-export const maxDuration = 300 // 5 min timeout for Vercel
+export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
-  // Simple auth: require a secret header to prevent public triggering
   const secret = req.headers.get('x-ingest-secret')
   if (secret !== process.env.INGEST_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -24,21 +23,30 @@ export async function POST(req: NextRequest) {
   try {
     const db = createServerClient()
 
-    // 1. Scrape LinkedIn posts via Apify
     console.log('[ingest] Starting Apify scrape...')
     const rawPosts = await runApifyScraper(FINANCE_JOB_QUERIES)
     result.total = rawPosts.length
     console.log(`[ingest] Got ${rawPosts.length} raw posts`)
 
-    // 2. Process each post
     for (const rawPost of rawPosts) {
       try {
-        const post = normalisePost(rawPost)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const post = normalisePost(rawPost as any)
 
-        // Skip if no text or URL
-        if (!post.text || !post.postUrl) continue
+        if (!post.postUrl) {
+          console.log('[ingest] Skipping post with no URL')
+          continue
+        }
 
-        // 3. Check for duplicate by post URL
+        // Debug: log what text we're working with
+        console.log(`[ingest] Post url=${post.postUrl.slice(0, 60)} textLen=${post.text?.length ?? 0} text_preview="${post.text?.slice(0, 80)}"`)
+
+        if (!post.text || post.text.length < 20) {
+          console.log('[ingest] Skipping post with no/short text')
+          continue
+        }
+
+        // Check duplicate
         const { data: existing } = await db
           .from('jobs')
           .select('id')
@@ -50,14 +58,14 @@ export async function POST(req: NextRequest) {
           continue
         }
 
-        // 4. Classify with Claude
+        // Classify with Claude
         const classified = await classifyPost(post.text, post.authorHeadline)
+        console.log(`[ingest] isJob=${classified.isJob} title="${classified.title}"`)
 
         if (!classified.isJob) continue
 
         result.classified_as_jobs++
 
-        // 5. Insert into Supabase
         const { error } = await db.from('jobs').insert({
           title: classified.title,
           company: classified.company,
@@ -97,7 +105,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Allow GET for manual health check
 export async function GET() {
   return NextResponse.json({ status: 'ok', message: 'Ingest endpoint ready. Use POST to trigger.' })
 }
