@@ -68,16 +68,25 @@ export default function HomePage() {
 
   useEffect(() => { fetchJobs() }, [fetchJobs])
 
-  // Client-side location filter
+  // Client-side location filter — handles compound locations like "NY | London | Remote"
   const displayJobs = allJobs.filter((job) => {
     if (filters.locations.length === 0) return true
-    return filters.locations.some((loc) =>
-      job.location?.toLowerCase().includes(loc.toLowerCase())
+    if (!job.location) return false
+    const jobLocs = job.location.split(/[|,]/).map((l) => l.trim().toLowerCase())
+    return filters.locations.some((sel) =>
+      jobLocs.some((jl) => jl.includes(sel.toLowerCase()) || sel.toLowerCase().includes(jl))
     )
   })
 
+  // Split compound locations like "New York | London | Remote" into individual pills
   const availableLocations = [...new Set(
-    allJobs.map((j) => j.location).filter((l): l is string => !!l)
+    allJobs.flatMap((j) => {
+      if (!j.location) return []
+      return j.location
+        .split(/[|,]/)
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0 && l.length < 40)
+    })
   )].sort()
 
   const activeSector = SECTORS.find((s) => s.id === filters.sector)
