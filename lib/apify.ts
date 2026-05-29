@@ -43,7 +43,10 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
   if (!apiToken) throw new Error('APIFY_API_TOKEN not set')
 
   const allPosts: ApifyPost[] = []
-  const batch = queries.slice(0, 3)
+  // Rotate queries based on hour of day so each run covers different queries
+  const hour = new Date().getUTCHours()
+  const offset = (hour * 3) % queries.length
+  const batch = [...queries, ...queries].slice(offset, offset + 3)
 
   for (const query of batch) {
     try {
@@ -56,7 +59,7 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             searchQueries: [query],
-            maxPosts: 20,
+            maxPosts: 10,
             scrapeComments: false,
             scrapeReactions: false,
           }),

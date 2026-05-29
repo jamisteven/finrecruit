@@ -14,68 +14,81 @@ export async function classifyPost(rawText: string, authorHeadline: string | nul
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set')
 
-  const prompt = `You are an expert at reading LinkedIn posts from finance recruiters and identifying job postings.
+  const FALLBACK: ClassifiedJob = {
+    isJob: false, title: '', company: null, location: null,
+    seniority: 'Unknown', salary: null, apply_method: null, summary: '', tags: [],
+  }
 
-Analyze this LinkedIn post and determine if it is advertising one or more job openings in finance/investment.
+  const prompt = `You are classifying LinkedIn posts to find job openings. Cast a WIDE net — include any post where someone is hiring or recruiting for a specific open role.
 
-Finance recruiters often use informal language like:
-- "We're looking for...", "Exciting seat available", "Mandate to fill"
-- "My client is hiring", "Reach out if interested", "DM me"
-- "Now recruiting for...", "HOT JOBS", "actively recruiting"
-- Lists of roles with salaries and requirements
+Include these as jobs:
+- Finance roles (analyst, trader, PM, quant, banker, etc.)
+- Support roles at finance firms (EA, ops, compliance, legal, tech, HR)
+- Any role where a recruiter mentions a specific open position
+- Posts with salary ranges and requirements
+- "HOT JOBS" style lists
+- Reposts of job opportunities
 
-Author's LinkedIn headline: ${authorHeadline || 'Unknown'}
+Only exclude:
+- General career advice with no specific opening
+- Articles/thought leadership
+- Posts asking for internship lists or resources
+- Self-promotion with no specific job
 
-Post text:
+Author headline: ${authorHeadline || 'Unknown'}
+
+Post:
 ---
 ${rawText.slice(0, 2500)}
 ---
 
-If the post contains MULTIPLE job listings, extract the FIRST/PRIMARY one.
+If multiple jobs listed, extract the most senior/interesting one.
 
-Respond ONLY with a valid JSON object, no markdown, no backticks, no explanation:
-{"isJob":true,"title":"exact job title","company":"company name or null","location":"city or Remote or null","seniority":"Senior","salary":"salary range or null","apply_method":"how to apply or null","summary":"1-2 sentence summary of the role","tags":["relevant","tags"]}
+Reply ONLY with JSON, no markdown:
+{"isJob":true,"title":"job title","company":"company or null","location":"city or Remote or null","seniority":"one of: Intern/Junior/Mid/Senior/VP/Director/MD/Partner/C-Suite/Unknown","salary":"range or null","apply_method":"DM/email/link/etc or null","summary":"1-2 sentences about the role","tags":["tag1","tag2"]}
 
-If NOT a job post, respond ONLY with: {"isJob":false,"title":"","company":null,"location":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[]}`
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-
-  if (!res.ok) {
-    const errText = await res.text()
-    console.error(`[classifier] Anthropic API error ${res.status}: ${errText}`)
-    throw new Error(`Anthropic API error: ${res.status}`)
-  }
-
-  const data = await res.json()
-  const text = data.content?.find((b: { type: string }) => b.type === 'text')?.text || '{}'
+Or if not a job: {"isJob":false,"title":"","company":null,"location":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[]}`
 
   try {
-    const clean = text.replace(/```json|```/g, '').trim()
-    return JSON.parse(clean)
-  } catch (e) {
-    console.error('[classifier] JSON parse failed:', text, e)
-    return {
-      isJob: false,
-      title: '',
-      company: null,
-      location: null,
-      seniority: 'Unknown',
-      salary: null,
-      apply_method: null,
-      summary: '',
-      tags: [],
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeout)
+
+    if (!res.ok) {
+      const errText = await res.text()
+      console.error(`[classifier] Anthropic API error ${res.status}: ${errText}`)
+      return FALLBACK
     }
+
+    const data = await res.json()
+    const text = data.content?.find((b: { type: string }) => b.type === 'text')?.text || '{}'
+    const clean = text.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean)
+    console.log(`[classifier] isJob=${parsed.isJob} title="${parsed.title}"`)
+    return parsed
+
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') {
+      console.error('[classifier] Timed out after 15s')
+    } else {
+      console.error('[classifier] Error:', e)
+    }
+    return FALLBACK
   }
 }
