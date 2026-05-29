@@ -1,9 +1,7 @@
 // Apify LinkedIn Post Search Scraper
 // Actor: harvestapi/linkedin-post-search
-// Docs: https://apify.com/harvestapi/linkedin-post-search
 
 export type ApifyPost = {
-  // HarvestAPI linkedin-post-search fields
   id?: string
   url?: string
   postUrl?: string
@@ -22,17 +20,18 @@ export type ApifyPost = {
   date?: string
 }
 
-// Search queries that target finance recruiters posting jobs
+// Queries rotated across cron runs to stay within Vercel's 5min timeout
+// Each ingest run picks 3 queries, cycling through the full list over time
 export const FINANCE_JOB_QUERIES = [
-  'finance recruiter hiring',
-  'investment banking hiring analyst associate',
-  'hedge fund role recruiting',
+  'finance recruiter hiring london',
+  'investment banking hiring analyst',
+  'hedge fund recruiting role',
   'private equity hiring associate',
   'asset management role opportunity',
-  'quant researcher trader hiring',
+  'quant researcher hiring',
   'financial services recruiter mandate',
-  'now recruiting finance london',
   'now recruiting finance new york',
+  'fixed income credit hiring',
 ]
 
 export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
@@ -41,76 +40,71 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
 
   const allPosts: ApifyPost[] = []
 
-  for (const query of queries) {
-    try {
-      console.log(`[apify] Scraping query: "${query}"`)
+  // Only run 3 queries per call to stay within Vercel's 5min timeout
+  const batch = queries.slice(0, 3)
 
-      // Start the actor run
+  for (const query of batch) {
+    try {
+      console.log(`[apify] Starting run for: "${query}"`)
+
       const startRes = await fetch(
         `https://api.apify.com/v2/acts/harvestapi~linkedin-post-search/runs?token=${apiToken}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            query: query,
-            count: 25,
+            query,
+            count: 20,
             datePosted: 'past-week',
           }),
         }
       )
 
       if (!startRes.ok) {
-        const errText = await startRes.text()
-        console.error(`[apify] Start failed for "${query}": ${startRes.status} ${errText}`)
+        console.error(`[apify] Start failed: ${startRes.status}`)
         continue
       }
 
       const runData = await startRes.json()
       const runId = runData.data?.id
-      if (!runId) {
-        console.error(`[apify] No runId returned for "${query}"`)
-        continue
-      }
+      const datasetId = runData.data?.defaultDatasetId
+      if (!runId || !datasetId) continue
 
-      console.log(`[apify] Run started: ${runId}`)
+      console.log(`[apify] Run ${runId} started, polling...`)
 
-      // Poll until finished (max 3 minutes, every 5s)
+      // Poll every 8s, up to 75 attempts (~10 min max per query)
       let status = ''
-      for (let i = 0; i < 36; i++) {
-        await new Promise((r) => setTimeout(r, 5000))
+      for (let i = 0; i < 38; i++) {
+        await new Promise((r) => setTimeout(r, 8000))
         const statusRes = await fetch(
           `https://api.apify.com/v2/actor-runs/${runId}?token=${apiToken}`
         )
         const statusData = await statusRes.json()
         status = statusData.data?.status
-        console.log(`[apify] Run ${runId} status: ${status}`)
-        if (status === 'SUCCEEDED' || status === 'FAILED' || status === 'ABORTED') break
+        console.log(`[apify] ${runId}: ${status}`)
+        if (['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) break
       }
 
       if (status !== 'SUCCEEDED') {
-        console.error(`[apify] Run ${runId} did not succeed: ${status}`)
+        console.error(`[apify] Run ${runId} ended with: ${status}`)
         continue
       }
 
-      // Fetch results from dataset
-      const datasetId = runData.data?.defaultDatasetId
-      if (!datasetId) continue
-
       const resultsRes = await fetch(
-        `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=50`
+        `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=20`
       )
       const items: ApifyPost[] = await resultsRes.json()
-      console.log(`[apify] Got ${items.length} posts for "${query}"`)
+      console.log(`[apify] "${query}" → ${items.length} posts`)
       allPosts.push(...items)
+
     } catch (err) {
-      console.error(`[apify] Error scraping "${query}":`, err)
+      console.error(`[apify] Error on "${query}":`, err)
     }
   }
 
   return allPosts
 }
 
-// Normalise HarvestAPI post shape into our standard format
 export function normalisePost(raw: ApifyPost): {
   postUrl: string
   text: string
