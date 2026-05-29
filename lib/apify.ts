@@ -1,32 +1,38 @@
-// Apify LinkedIn Posts Scraper
-// Actor: apify/linkedin-posts-scraper (or voyager-based actor)
-// Docs: https://apify.com/apify/linkedin-posts-scraper
+// Apify LinkedIn Post Search Scraper
+// Actor: harvestapi/linkedin-post-search
+// Docs: https://apify.com/harvestapi/linkedin-post-search
 
 export type ApifyPost = {
+  // HarvestAPI linkedin-post-search fields
   id?: string
   url?: string
   postUrl?: string
   text?: string
   content?: string
+  commentary?: string
   authorName?: string
+  authorFullName?: string
+  author?: { name?: string; headline?: string; url?: string; profileUrl?: string }
   authorHeadline?: string
   authorProfileUrl?: string
   postedAt?: string
   publishedAt?: string
+  createdAt?: string
   timestamp?: string
+  date?: string
 }
 
 // Search queries that target finance recruiters posting jobs
 export const FINANCE_JOB_QUERIES = [
-  'finance hiring recruiter',
-  'investment banking analyst associate hiring',
-  'hedge fund role opportunity',
-  'private equity analyst associate hiring',
-  'asset management portfolio hiring',
-  'quant trader researcher hiring',
-  'financial services recruiting opportunity',
-  'now hiring finance london new york',
-  'looking for candidates finance mandate',
+  'finance recruiter hiring',
+  'investment banking hiring analyst associate',
+  'hedge fund role recruiting',
+  'private equity hiring associate',
+  'asset management role opportunity',
+  'quant researcher trader hiring',
+  'financial services recruiter mandate',
+  'now recruiting finance london',
+  'now recruiting finance new york',
 ]
 
 export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
@@ -37,46 +43,54 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
 
   for (const query of queries) {
     try {
+      console.log(`[apify] Scraping query: "${query}"`)
+
       // Start the actor run
       const startRes = await fetch(
-        `https://api.apify.com/v2/acts/apify~linkedin-posts-scraper/runs?token=${apiToken}`,
+        `https://api.apify.com/v2/acts/harvestapi~linkedin-post-search/runs?token=${apiToken}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            searchQueries: [query],
-            maxResults: 25,
-            // Only posts from last 7 days
-            dateRange: 'PAST_WEEK',
+            query: query,
+            count: 25,
+            datePosted: 'past-week',
           }),
         }
       )
 
       if (!startRes.ok) {
-        console.error(`Apify start failed for query "${query}": ${startRes.status}`)
+        const errText = await startRes.text()
+        console.error(`[apify] Start failed for "${query}": ${startRes.status} ${errText}`)
         continue
       }
 
       const runData = await startRes.json()
       const runId = runData.data?.id
-      if (!runId) continue
+      if (!runId) {
+        console.error(`[apify] No runId returned for "${query}"`)
+        continue
+      }
 
-      // Poll until finished (max 2 minutes)
-      let finished = false
-      for (let i = 0; i < 24; i++) {
+      console.log(`[apify] Run started: ${runId}`)
+
+      // Poll until finished (max 3 minutes, every 5s)
+      let status = ''
+      for (let i = 0; i < 36; i++) {
         await new Promise((r) => setTimeout(r, 5000))
         const statusRes = await fetch(
           `https://api.apify.com/v2/actor-runs/${runId}?token=${apiToken}`
         )
         const statusData = await statusRes.json()
-        const status = statusData.data?.status
-        if (status === 'SUCCEEDED' || status === 'FAILED' || status === 'ABORTED') {
-          finished = true
-          break
-        }
+        status = statusData.data?.status
+        console.log(`[apify] Run ${runId} status: ${status}`)
+        if (status === 'SUCCEEDED' || status === 'FAILED' || status === 'ABORTED') break
       }
 
-      if (!finished) continue
+      if (status !== 'SUCCEEDED') {
+        console.error(`[apify] Run ${runId} did not succeed: ${status}`)
+        continue
+      }
 
       // Fetch results from dataset
       const datasetId = runData.data?.defaultDatasetId
@@ -86,16 +100,17 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
         `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=50`
       )
       const items: ApifyPost[] = await resultsRes.json()
+      console.log(`[apify] Got ${items.length} posts for "${query}"`)
       allPosts.push(...items)
     } catch (err) {
-      console.error(`Error scraping query "${query}":`, err)
+      console.error(`[apify] Error scraping "${query}":`, err)
     }
   }
 
   return allPosts
 }
 
-// Normalise Apify post shape (field names vary by actor version)
+// Normalise HarvestAPI post shape into our standard format
 export function normalisePost(raw: ApifyPost): {
   postUrl: string
   text: string
@@ -106,10 +121,10 @@ export function normalisePost(raw: ApifyPost): {
 } {
   return {
     postUrl: raw.url || raw.postUrl || '',
-    text: raw.text || raw.content || '',
-    authorName: raw.authorName || null,
-    authorHeadline: raw.authorHeadline || null,
-    authorLinkedinUrl: raw.authorProfileUrl || null,
-    postedAt: raw.postedAt || raw.publishedAt || raw.timestamp || null,
+    text: raw.commentary || raw.text || raw.content || '',
+    authorName: raw.author?.name || raw.authorFullName || raw.authorName || null,
+    authorHeadline: raw.author?.headline || raw.authorHeadline || null,
+    authorLinkedinUrl: raw.author?.url || raw.author?.profileUrl || raw.authorProfileUrl || null,
+    postedAt: raw.date || raw.postedAt || raw.publishedAt || raw.createdAt || raw.timestamp || null,
   }
 }
