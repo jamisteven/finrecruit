@@ -10,7 +10,18 @@ export type ClassifiedJob = {
   tags: string[]
 }
 
-export async function classifyPost(rawText: string, authorHeadline: string | null): Promise<ClassifiedJob> {
+const SECTOR_CONTEXT: Record<string, string> = {
+  finance: 'finance and investment (banking, hedge funds, PE, asset management, quant, trading, credit, fintech)',
+  tech: 'technology (software engineering, product, data, AI/ML, devops, infrastructure, startups)',
+  legal: 'legal (law firms, in-house counsel, compliance, litigation, corporate law, paralegal)',
+  marketing: 'marketing (growth, performance, content, brand, SEO, product marketing, CMO, digital)',
+}
+
+export async function classifyPost(
+  rawText: string,
+  authorHeadline: string | null,
+  sector = 'finance'
+): Promise<ClassifiedJob> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set')
 
@@ -19,21 +30,22 @@ export async function classifyPost(rawText: string, authorHeadline: string | nul
     seniority: 'Unknown', salary: null, apply_method: null, summary: '', tags: [],
   }
 
-  const prompt = `You are classifying LinkedIn posts to find job openings. Cast a WIDE net — include any post where someone is hiring or recruiting for a specific open role.
+  const sectorContext = SECTOR_CONTEXT[sector] || sector
 
-Include these as jobs:
-- Finance roles (analyst, trader, PM, quant, banker, etc.)
-- Support roles at finance firms (EA, ops, compliance, legal, tech, HR)
-- Any role where a recruiter mentions a specific open position
-- Posts with salary ranges and requirements
-- "HOT JOBS" style lists
-- Reposts of job opportunities
+  const prompt = `You are classifying LinkedIn posts to find job openings in ${sectorContext}.
+
+Cast a WIDE net — include any post where someone is hiring for a specific open role, including:
+- Core ${sector} roles
+- Support roles at ${sector} firms (ops, EA, HR, legal, tech, finance)
+- Recruiter posts listing specific open positions with requirements
+- "HOT JOBS" style lists — extract the most senior/interesting one
+- Reposts sharing a job opportunity
 
 Only exclude:
 - General career advice with no specific opening
-- Articles/thought leadership
-- Posts asking for internship lists or resources
-- Self-promotion with no specific job
+- Thought leadership / articles
+- Posts asking for job lists or resources
+- Self-promotion with no specific open role
 
 Author headline: ${authorHeadline || 'Unknown'}
 
@@ -42,9 +54,7 @@ Post:
 ${rawText.slice(0, 2500)}
 ---
 
-If multiple jobs listed, extract the most senior/interesting one.
-
-Reply ONLY with JSON, no markdown:
+Reply ONLY with JSON, no markdown, no backticks:
 {"isJob":true,"title":"job title","company":"company or null","location":"city or Remote or null","seniority":"one of: Intern/Junior/Mid/Senior/VP/Director/MD/Partner/C-Suite/Unknown","salary":"range or null","apply_method":"DM/email/link/etc or null","summary":"1-2 sentences about the role","tags":["tag1","tag2"]}
 
 Or if not a job: {"isJob":false,"title":"","company":null,"location":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[]}`
@@ -71,8 +81,7 @@ Or if not a job: {"isJob":false,"title":"","company":null,"location":null,"senio
     clearTimeout(timeout)
 
     if (!res.ok) {
-      const errText = await res.text()
-      console.error(`[classifier] Anthropic API error ${res.status}: ${errText}`)
+      console.error(`[classifier] Anthropic API error ${res.status}`)
       return FALLBACK
     }
 
@@ -80,12 +89,12 @@ Or if not a job: {"isJob":false,"title":"","company":null,"location":null,"senio
     const text = data.content?.find((b: { type: string }) => b.type === 'text')?.text || '{}'
     const clean = text.replace(/```json|```/g, '').trim()
     const parsed = JSON.parse(clean)
-    console.log(`[classifier] isJob=${parsed.isJob} title="${parsed.title}"`)
+    console.log(`[classifier] [${sector}] isJob=${parsed.isJob} title="${parsed.title}"`)
     return parsed
 
   } catch (e) {
     if ((e as Error).name === 'AbortError') {
-      console.error('[classifier] Timed out after 15s')
+      console.error('[classifier] Timed out')
     } else {
       console.error('[classifier] Error:', e)
     }

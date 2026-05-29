@@ -1,4 +1,5 @@
 export type Seniority = 'Intern' | 'Junior' | 'Mid' | 'Senior' | 'VP' | 'Director' | 'MD' | 'Partner' | 'C-Suite' | 'Unknown'
+export type Sector = 'all' | 'finance' | 'tech' | 'legal' | 'marketing'
 
 export type JobPost = {
   id: string
@@ -10,6 +11,7 @@ export type JobPost = {
   apply_method: string | null
   summary: string
   tags: string[]
+  sector: string
   post_url: string
   author_name: string | null
   author_headline: string | null
@@ -21,13 +23,15 @@ export type JobPost = {
 }
 
 export type FilterState = {
+  sector: Sector
   seniority: Seniority | 'All'
-  location: string
+  locations: string[]
   search: string
   sortBy: 'newest' | 'oldest'
 }
 
 export type IngestResult = {
+  sector: string
   total: number
   classified_as_jobs: number
   duplicates_skipped: number

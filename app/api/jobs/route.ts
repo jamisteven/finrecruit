@@ -4,10 +4,10 @@ import { createServerClient } from '@/lib/supabase'
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const seniority = searchParams.get('seniority')
-  const location = searchParams.get('location')
   const search = searchParams.get('search')
+  const sector = searchParams.get('sector')
   const sortBy = searchParams.get('sortBy') || 'newest'
-  const limit = parseInt(searchParams.get('limit') || '50')
+  const limit = parseInt(searchParams.get('limit') || '100')
   const offset = parseInt(searchParams.get('offset') || '0')
 
   const db = createServerClient()
@@ -19,25 +19,16 @@ export async function GET(req: NextRequest) {
     .range(offset, offset + limit - 1)
     .order('extracted_at', { ascending: sortBy === 'oldest' })
 
-  if (seniority && seniority !== 'All') {
-    query = query.eq('seniority', seniority)
-  }
-
-  if (location) {
-    query = query.ilike('location', `%${location}%`)
-  }
-
+  if (seniority && seniority !== 'All') query = query.eq('seniority', seniority)
+  if (sector && sector !== 'all') query = query.eq('sector', sector)
   if (search) {
     query = query.or(
-      `title.ilike.%${search}%,company.ilike.%${search}%,summary.ilike.%${search}%,raw_text.ilike.%${search}%`
+      `title.ilike.%${search}%,company.ilike.%${search}%,summary.ilike.%${search}%`
     )
   }
 
-  const { data, error, count } = await query
+  const { data, error } = await query
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ jobs: data, count })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ jobs: data })
 }

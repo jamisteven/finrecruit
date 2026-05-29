@@ -26,31 +26,66 @@ export type ApifyPost = {
   repost?: ApifyPost
 }
 
-export const FINANCE_JOB_QUERIES = [
-  'finance recruiter hiring london',
-  'investment banking hiring analyst',
-  'hedge fund recruiting role',
-  'private equity hiring associate',
-  'asset management role opportunity',
-  'quant researcher hiring',
-  'financial services recruiter mandate',
-  'now recruiting finance new york',
-  'fixed income credit hiring',
-]
+export type Sector = 'finance' | 'tech' | 'legal' | 'marketing'
 
-export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
+export const SECTOR_QUERIES: Record<Sector, string[]> = {
+  finance: [
+    'finance recruiter hiring london',
+    'investment banking hiring analyst',
+    'hedge fund recruiting role',
+    'private equity hiring associate',
+    'asset management role opportunity',
+    'quant researcher hiring',
+    'financial services recruiter mandate',
+    'now recruiting finance new york',
+    'fixed income credit hiring',
+  ],
+  tech: [
+    'software engineer hiring recruiter',
+    'engineering manager recruiter hiring',
+    'AI ML engineer role opportunity',
+    'backend frontend engineer recruiting',
+    'tech recruiter now hiring',
+    'product manager role recruiter',
+    'devops platform engineer hiring',
+    'data engineer scientist recruiting',
+    'startup engineer hiring london new york',
+  ],
+  legal: [
+    'legal recruiter hiring lawyer',
+    'associate solicitor hiring law firm',
+    'in-house counsel role recruiting',
+    'compliance legal recruiter opportunity',
+    'corporate lawyer hiring recruiter',
+    'litigation associate recruiting role',
+    'legal counsel mandate recruiter',
+    'paralegal hiring law firm',
+    'now recruiting legal role london',
+  ],
+  marketing: [
+    'marketing recruiter hiring role',
+    'growth marketing manager recruiting',
+    'performance marketing hiring opportunity',
+    'CMO VP marketing recruiter',
+    'content marketing SEO hiring',
+    'brand marketing role recruiter',
+    'digital marketing hiring london new york',
+    'head of marketing recruiting mandate',
+    'product marketing manager hiring',
+  ],
+}
+
+export async function runApifyScraperForSector(sector: Sector, queryOffset = 0): Promise<ApifyPost[]> {
   const apiToken = process.env.APIFY_API_TOKEN
   if (!apiToken) throw new Error('APIFY_API_TOKEN not set')
 
+  const queries = SECTOR_QUERIES[sector]
+  const batch = [...queries, ...queries].slice(queryOffset % queries.length, (queryOffset % queries.length) + 3)
   const allPosts: ApifyPost[] = []
-  // Rotate queries based on hour of day so each run covers different queries
-  const hour = new Date().getUTCHours()
-  const offset = (hour * 3) % queries.length
-  const batch = [...queries, ...queries].slice(offset, offset + 3)
 
   for (const query of batch) {
     try {
-      console.log(`[apify] Starting run for: "${query}"`)
+      console.log(`[apify] [${sector}] Starting run for: "${query}"`)
 
       const startRes = await fetch(
         `https://api.apify.com/v2/acts/harvestapi~linkedin-post-search/runs?token=${apiToken}`,
@@ -76,7 +111,7 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
       const datasetId = runData.data?.defaultDatasetId
       if (!runId || !datasetId) continue
 
-      console.log(`[apify] Run ${runId} started, polling...`)
+      console.log(`[apify] Run ${runId} started...`)
 
       let status = ''
       for (let i = 0; i < 38; i++) {
@@ -88,13 +123,10 @@ export async function runApifyScraper(queries: string[]): Promise<ApifyPost[]> {
         if (['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) break
       }
 
-      if (status !== 'SUCCEEDED') {
-        console.error(`[apify] Run ${runId} ended with: ${status}`)
-        continue
-      }
+      if (status !== 'SUCCEEDED') continue
 
       const resultsRes = await fetch(
-        `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=20`
+        `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=10`
       )
       const items: ApifyPost[] = await resultsRes.json()
       console.log(`[apify] "${query}" → ${items.length} posts`)
@@ -116,13 +148,10 @@ export function normalisePost(raw: ApifyPost): {
   authorLinkedinUrl: string | null
   postedAt: string | null
 } {
-  // For reposts, use the original post content (where the actual job info lives)
   const src: ApifyPost = raw.repost || raw
   const rawText = src.content || src.commentary || src.text || ''
-  // If repost caption is too short, use it; otherwise fall back to outer post
   const text = rawText.length > 50 ? rawText : (raw.content || raw.commentary || raw.text || rawText)
 
-  // postedAt from HarvestAPI is an object: { date: "...", timestamp: ... }
   const postedAtField = src.postedAt
   const postedAt = postedAtField
     ? typeof postedAtField === 'object'
@@ -134,7 +163,6 @@ export function normalisePost(raw: ApifyPost): {
     postUrl: raw.linkedinUrl || raw.url || raw.postUrl || '',
     text,
     authorName: src.author?.name || src.authorName || null,
-    // HarvestAPI puts headline in author.info
     authorHeadline: src.author?.info || src.author?.headline || src.authorHeadline || null,
     authorLinkedinUrl: src.author?.linkedinUrl || src.author?.url || src.authorProfileUrl || null,
     postedAt,
