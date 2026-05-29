@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+:root {
+  --bg-base: #0A0E13;
+  --bg-primary: #0F1419;
+  --bg-secondary: #1A1F29;
+  --bg-hover: #1E2535;
+  --border: #1E2535;
+  --border-subtle: #151b26;
+  --gold: #C4A769;
+  --gold-dim: #9a7f4f;
+  --gold-glow: rgba(196, 167, 105, 0.15);
+  --text-primary: #F0EDE8;
+  --text-secondary: #8B9AAF;
+  --text-muted: #4A5568;
+  --green: #2ECC71;
+  --red: #E74C3C;
+  --blue: #3B9EEB;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'DM Sans', 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg-base);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
+
+/* Gold accent line */
+.gold-line {
+  background: linear-gradient(90deg, var(--gold), transparent);
+  height: 1px;
+}
+
+/* Tag chip */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  text-transform: lowercase;
+}
+
+/* Card hover */
+.job-card {
+  transition: border-color 0.15s, background 0.15s;
+}
+.job-card:hover {
+  border-color: var(--gold-dim) !important;
+  background: var(--bg-hover) !important;
+}
+
+/* Fade in */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  animation: fadeUp 0.3s ease both;
+}
+
+/* Pulse dot */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.pulse-dot {
+  animation: pulse 2s ease-in-out infinite;
+}
