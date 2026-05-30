@@ -77,6 +77,10 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'bank capital markets recruiter hiring',
     'securities lawyer finance recruiter hiring',
     'financial controller CFO recruiter hiring',
+    // Toronto specific
+    'finance recruiter hiring Toronto',
+    'investment banking Toronto recruiter hiring',
+    'private equity Toronto recruiter hiring',
   ],
   tech: [
     'software engineer recruiter now hiring',
@@ -120,6 +124,10 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'fintech engineer recruiter hiring',
     'founding engineer startup recruiter hiring',
     'developer advocate recruiter hiring',
+    // Toronto specific
+    'software engineer recruiter hiring Toronto',
+    'tech recruiter hiring Toronto',
+    'startup engineer Toronto recruiter hiring',
   ],
   legal: [
     'legal recruiter now hiring lawyer',
@@ -163,6 +171,10 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'shipping maritime lawyer recruiter hiring',
     'sports entertainment lawyer recruiter hiring',
     'immigration lawyer recruiter hiring',
+    // Toronto specific
+    'legal recruiter hiring Toronto',
+    'lawyer Toronto recruiter hiring',
+    'in-house counsel Toronto recruiter hiring',
   ],
   marketing: [
     'marketing recruiter now hiring',
@@ -206,6 +218,10 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'podcast video content recruiter hiring',
     'retail marketing recruiter hiring',
     'partnership marketing recruiter hiring',
+    // Toronto specific
+    'marketing recruiter hiring Toronto',
+    'growth marketing Toronto recruiter hiring',
+    'head of marketing Toronto recruiter hiring',
   ],
 }
 
