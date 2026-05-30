@@ -1,8 +1,9 @@
 {
   "crons": [
-    { "path": "/api/ingest?sector=finance",   "schedule": "0 */6 * * *" },
-    { "path": "/api/ingest?sector=tech",      "schedule": "30 1,7,13,19 * * *" },
-    { "path": "/api/ingest?sector=legal",     "schedule": "0 2,8,14,20 * * *" },
-    { "path": "/api/ingest?sector=marketing", "schedule": "30 2,8,14,20 * * *" }
+    { "path": "/api/ingest?sector=finance",    "schedule": "0 */6 * * *" },
+    { "path": "/api/ingest?sector=tech",       "schedule": "30 1,7,13,19 * * *" },
+    { "path": "/api/ingest?sector=legal",      "schedule": "0 2,8,14,20 * * *" },
+    { "path": "/api/ingest?sector=marketing",  "schedule": "30 2,8,14,20 * * *" },
+    { "path": "/api/ingest-recruiters",        "schedule": "0 3,9,15,21 * * *" }
   ]
 }
