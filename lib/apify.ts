@@ -24,6 +24,12 @@ export type ApifyPost = {
   publishedAt?: string
   createdAt?: string
   repost?: ApifyPost
+  job?: {
+    title?: string
+    location?: string
+    linkedinUrl?: string
+    subtitle?: string  // e.g. "Job by LHH"
+  }
 }
 
 export type Sector = 'finance' | 'tech' | 'legal' | 'marketing'
@@ -176,6 +182,14 @@ export function normalisePost(raw: ApifyPost): {
   const rawText = src.content || src.commentary || src.text || ''
   const text = rawText.length > 50 ? rawText : (raw.content || raw.commentary || raw.text || rawText)
 
+  // If post has an embedded LinkedIn job card, append its details to the text
+  // so the classifier can extract title, location, company etc.
+  const jobCard = src.job || raw.job
+  const jobCardText = jobCard
+    ? `\n\nJob card details: Title: ${jobCard.title || ''} | Location: ${jobCard.location || ''} | Company: ${jobCard.subtitle?.replace('Job by ', '') || ''} | Apply: ${jobCard.linkedinUrl || ''}`
+    : ''
+  const finalText = text + jobCardText
+
   const postedAtField = src.postedAt
   const postedAt = postedAtField
     ? typeof postedAtField === 'object'
@@ -185,7 +199,7 @@ export function normalisePost(raw: ApifyPost): {
 
   return {
     postUrl: raw.linkedinUrl || raw.url || raw.postUrl || '',
-    text,
+    text: finalText,
     authorName: src.author?.name || src.authorName || null,
     authorHeadline: src.author?.info || src.author?.headline || src.authorHeadline || null,
     authorLinkedinUrl: src.author?.linkedinUrl || src.author?.url || src.authorProfileUrl || null,
