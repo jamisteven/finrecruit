@@ -18,15 +18,19 @@ export async function POST(req: NextRequest) {
 
   const db = createServerClient()
 
-  // Get a batch of recruiters rotating by hour
+  // Get a batch of recruiters - manual offset or rotate by hour
   const batchSize = 10
   const { count: totalRecruiters } = await db
     .from('recruiters')
     .select('*', { count: 'exact', head: true })
     .eq('active', true)
 
+  const url = new URL(req.url)
+  const offsetParam = url.searchParams.get('offset')
   const hour = new Date().getUTCHours()
-  const offset = (hour * batchSize) % (totalRecruiters || 1)
+  const offset = offsetParam !== null
+    ? parseInt(offsetParam)
+    : (hour * batchSize) % (totalRecruiters || 1)
 
   const { data: recruiters, error: recError } = await db
     .from('recruiters')
