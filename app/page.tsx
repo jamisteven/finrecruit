@@ -130,7 +130,7 @@ export default function HomePage() {
             Hidden jobs from LinkedIn
           </h1>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Recruiters post jobs as regular LinkedIn posts, not in the Jobs section. RoleRadar surfaces them automatically.
+            Recruiters often share job openings as standard LinkedIn posts instead of formal listings. RoleRadar automatically finds and surface them for you.
           </p>
         </div>
 
