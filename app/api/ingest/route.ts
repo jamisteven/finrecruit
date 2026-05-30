@@ -23,8 +23,11 @@ export async function POST(req: NextRequest) {
     ? sectorParam
     : SECTORS[new Date().getUTCHours() % SECTORS.length]
 
-  // Rotate queries within sector by minute
-  const queryOffset = (new Date().getUTCHours() * 3) % SECTOR_QUERIES[sector].length
+  // Allow manual offset override via ?offset= param, otherwise rotate by hour
+  const offsetParam = url.searchParams.get('offset')
+  const queryOffset = offsetParam !== null
+    ? parseInt(offsetParam)
+    : (new Date().getUTCHours() * 3) % SECTOR_QUERIES[sector].length
 
   console.log(`[ingest] Starting sector="${sector}" queryOffset=${queryOffset}`)
 
