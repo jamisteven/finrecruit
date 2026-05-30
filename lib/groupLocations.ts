@@ -29,6 +29,8 @@ const REGIONS: { name: string; patterns: RegExp[] }[] = [
       /plano|irving|frisco|mckinney|garland/i,
       /lexington park|linthicum|marysville|middletown|maitland/i,
       /philadelphia|portland|pasadena|pleasant prairie|reston/i,
+      /^ca$|^nj$|^pa$|^tx$|^sf$|^us$|^usa$|^ny$|^nyc$|^mi$|^va$|^oh$/i,
+      /^east coast$|^west coast$|^mason$|^novi$|^texas$/i,
       /san francisco|sf|san jose|santa clara|sunnyvale|walnut creek/i,
       /seattle|st\.? louis|stamford|stanford|sunnyvale/i,
       /tampa|tinton falls|texas|west coast|west covina/i,
