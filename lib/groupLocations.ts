@@ -3,125 +3,151 @@ export type GroupedLocations = {
   cities: string[]
 }[]
 
-const US_PATTERNS = [
-  /new york|nyc|manhattan|brooklyn|bronx|queens|staten island/i,
-  /los angeles|san francisco|bay area|silicon valley|san jose|oakland/i,
-  /chicago|boston|seattle|austin|denver|miami|dallas|houston/i,
-  /atlanta|philadelphia|phoenix|san diego|portland|las vegas/i,
-  /washington.?dc|\bdc\b|mclean|bethesda|arlington|virginia|reston/i,
-  /charlotte|nashville|minneapolis|detroit|baltimore|cleveland/i,
-  /fort lauderdale|west palm beach|tampa|orlando|jacksonville/i,
-  /salt lake|memphis|kansas city|st louis|pittsburgh|cincinnati/i,
-  /milwaukee|indianapolis|columbus|louisville|richmond|raleigh/i,
-  /new jersey|newark|jersey city|hoboken|princeton/i,
-  /connecticut|hartford|stamford|greenwich/i,
-  /irvine|newport beach|santa monica|pasadena|long beach/i,
-  /scottsdale|tempe|chandler|gilbert|mesa|tucson/i,
-  /boulder|colorado springs|fort collins/i,
-  /schaumburg|evanston|naperville|oak park/i,
-  /woodside|palo alto|menlo park|redwood city|burlingame/i,
-  /plano|irving|frisco|mckinney|garland/i,
-  /remote$|united states|\busa\b|\bus\b/i,
-  /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/,
-  /, [A-Z]{2}$/,
+// Order matters - more specific patterns first
+const REGIONS: { name: string; patterns: RegExp[] }[] = [
+  {
+    name: 'US',
+    patterns: [
+      // Cities
+      /new york|nyc|manhattan|brooklyn|bronx|queens/i,
+      /\bny\b|new york city|new york, ny/i,
+      /los angeles|san francisco|bay area|silicon valley|san jose|oakland/i,
+      /chicago|boston|seattle|austin|denver|miami|dallas|houston/i,
+      /atlanta|philadelphia|phoenix|san diego|portland|las vegas/i,
+      /washington.?dc|\bdc\b|mclean|bethesda|arlington|virginia|herndon|reston/i,
+      /charlotte|nashville|minneapolis|detroit|baltimore|cleveland/i,
+      /fort lauderdale|west palm beach|tampa|orlando|jacksonville|palm beach/i,
+      /salt lake|memphis|kansas city|st louis|pittsburgh|cincinnati|mason, oh/i,
+      /milwaukee|indianapolis|columbus|louisville|richmond|raleigh/i,
+      /new jersey|newark|jersey city|hoboken|princeton|morristown/i,
+      /connecticut|hartford|stamford|greenwich/i,
+      /irvine|newport beach|santa monica|pasadena|long beach|mill valley/i,
+      /scottsdale|tempe|chandler|gilbert|mesa|tucson/i,
+      /boulder|colorado springs|fort collins/i,
+      /schaumburg|evanston|naperville|oak park/i,
+      /woodside|palo alto|menlo park|redwood city|burlingame/i,
+      /plano|irving|frisco|mckinney|garland/i,
+      /lexington park|linthicum|marysville|middletown|maitland/i,
+      /midtown|lekki/i,
+      /ocean city|mill valley|newport/i,
+      /novi, michigan|\bmi\b|michigan/i,
+      /indiana\b|iowa\b/i,
+      /united states|\busa\b/i,
+      /remote$|^remote/i,
+      // State codes at end of string
+      /,\s*(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)$/,
+      /\b(AL|AK|AZ|AR|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MN|MS|MO|MT|NE|NV|NH|NM|NC|ND|OH|OK|OR|RI|SC|SD|TN|UT|VT|WA|WV|WI|WY)\b/,
+    ],
+  },
+  {
+    name: 'UK',
+    patterns: [
+      /london|city of london|canary wharf/i,
+      /london area/i,
+      /manchester|birmingham|edinburgh|glasgow|bristol|leeds|liverpool/i,
+      /cambridge|oxford|reading|guildford|brighton|southampton/i,
+      /\buk\b|united kingdom|england|scotland|wales|northern ireland/i,
+      /haywards heath|bromley|kent|surrey|sussex|essex|hertfordshire/i,
+      /sheffield|nottingham|leicester|coventry|newcastle|cardiff/i,
+      /hatfield|watford|luton|slough|windsor|woking|basingstoke/i,
+      /ashton|epsom|forres|birkirkara/i,
+    ],
+  },
+  {
+    name: 'Canada',
+    patterns: [
+      /toronto|vancouver|montreal|calgary|ottawa|waterloo|edmonton/i,
+      /mississauga|brampton|hamilton|kitchener|oakville|ontario/i,
+      /\bcanada\b/i,
+    ],
+  },
+  {
+    name: 'EMEA',
+    patterns: [
+      // Western Europe
+      /amsterdam|netherlands|rotterdam|eindhoven/i,
+      /frankfurt|berlin|munich|hamburg|dusseldorf|cologne|\bgermany\b/i,
+      /paris|lyon|marseille|\bfrance\b/i,
+      /zurich|geneva|switzerland|basel/i,
+      /dublin|\bireland\b/i,
+      /stockholm|\bsweden\b|gothenburg/i,
+      /copenhagen|\bdenmark\b/i,
+      /oslo|\bnorway\b/i,
+      /brussels|\bbelgium\b|antwerp/i,
+      /madrid|barcelona|\bspain\b|valencia/i,
+      /milan|rome|\bitaly\b|turin|florence/i,
+      /lisbon|porto|\bportugal\b/i,
+      /warsaw|krakow|\bpoland\b/i,
+      /vienna|\baustria\b/i,
+      /luxembourg/i,
+      /helsinki|\bfinland\b/i,
+      /prague|czech/i,
+      /budapest|\bhungary\b/i,
+      /bucharest|\bromania\b/i,
+      /athens|\bgreece\b/i,
+      /dach|benelux/i,
+      // Middle East & Africa
+      /dubai|abu dhabi|\buae\b|united arab emirates/i,
+      /riyadh|jeddah|\bsaudi\b/i,
+      /tel aviv|\bisrael\b|jerusalem/i,
+      /johannesburg|cape town|south africa/i,
+      /cairo|\begypt\b/i,
+      /beirut|\blebanon\b/i,
+      /doha|\bqatar\b/i,
+      /kuwait|bahrain/i,
+      /nairobi|\bkenya\b/i,
+      /lagos|\bnigeria\b|maiduguri/i,
+      /lekki/i,
+    ],
+  },
+  {
+    name: 'APAC',
+    patterns: [
+      /singapore/i,
+      /hong kong/i,
+      /tokyo|osaka|\bjapan\b/i,
+      /sydney|melbourne|brisbane|perth|adelaide|\baustralia\b|maitland|dunedin/i,
+      /mumbai|delhi|bangalore|bengaluru|hyderabad|noida|pune|chennai|kolkata|gurgaon|gurugram|ahmedabad|chandigarh|indore|jaipur|gachibowli|\bindia\b/i,
+      /new delhi|delhi ncr/i,
+      /shanghai|beijing|shenzhen|guangzhou|\bchina\b/i,
+      /seoul|busan|\bkorea\b/i,
+      /taipei|\btaiwan\b/i,
+      /ho chi minh|hanoi|\bvietnam\b/i,
+      /bangkok|\bthailand\b/i,
+      /kuala lumpur|\bmalaysia\b/i,
+      /jakarta|\bindonesia\b/i,
+      /manila|\bphilippines\b/i,
+      /auckland|new zealand/i,
+      /dhaka|\bbangladesh\b/i,
+      /karachi|lahore|\bpakistan\b/i,
+      /colombo|sri lanka/i,
+    ],
+  },
+  {
+    name: 'Latin America',
+    patterns: [
+      /são paulo|sao paulo|\bbrazil\b|rio de janeiro/i,
+      /mexico|ciudad de mexico|guadalajara/i,
+      /bogota|medellin|\bcolombia\b/i,
+      /buenos aires|\bargentina\b/i,
+      /santiago|\bchile\b/i,
+      /lima|\bperu\b/i,
+      /belize/i,
+    ],
+  },
 ]
 
-const UK_PATTERNS = [
-  /london|city of london|canary wharf/i,
-  /manchester|birmingham|edinburgh|glasgow|bristol|leeds|liverpool/i,
-  /cambridge|oxford|reading|guildford|brighton|southampton/i,
-  /\buk\b|united kingdom|england|scotland|wales|northern ireland/i,
-  /haywards heath|bromley|kent|surrey|sussex|essex|hertfordshire/i,
-  /sheffield|nottingham|leicester|coventry|newcastle|cardiff/i,
-  /hatfield|watford|luton|slough|windsor|woking|basingstoke/i,
-]
-
-const CANADA_PATTERNS = [
-  /toronto|vancouver|montreal|calgary|ottawa|waterloo|edmonton/i,
-  /canada|\bon\b|\bbc\b|\bab\b|\bqc\b/i,
-  /mississauga|brampton|hamilton|kitchener|london, on/i,
-]
-
-const EMEA_PATTERNS = [
-  // Western Europe
-  /amsterdam|netherlands|rotterdam|the hague/i,
-  /frankfurt|berlin|munich|hamburg|dusseldorf|cologne|germany/i,
-  /paris|lyon|marseille|france/i,
-  /zurich|geneva|switzerland|basel/i,
-  /dublin|ireland/i,
-  /stockholm|sweden|gothenburg/i,
-  /copenhagen|denmark|aarhus/i,
-  /oslo|norway/i,
-  /brussels|belgium|antwerp/i,
-  /madrid|barcelona|spain|valencia/i,
-  /milan|rome|italy|turin|florence/i,
-  /lisbon|porto|portugal/i,
-  /warsaw|krakow|poland/i,
-  /vienna|austria/i,
-  /luxembourg/i,
-  /helsinki|finland/i,
-  /amsterdam|utrecht|eindhoven/i,
-  /prague|czech/i,
-  /budapest|hungary/i,
-  /bucharest|romania/i,
-  /athens|greece/i,
-  // Middle East & Africa
-  /dubai|abu dhabi|uae|united arab emirates/i,
-  /riyadh|jeddah|saudi/i,
-  /tel aviv|israel|jerusalem/i,
-  /johannesburg|cape town|south africa/i,
-  /cairo|egypt/i,
-  /beirut|lebanon/i,
-  /doha|qatar/i,
-  /kuwait/i,
-  /bahrain/i,
-  /nairobi|kenya/i,
-  /lagos|nigeria/i,
-]
-
-const APAC_PATTERNS = [
-  /singapore/i,
-  /hong kong/i,
-  /tokyo|osaka|japan/i,
-  /sydney|melbourne|brisbane|perth|adelaide|australia/i,
-  /mumbai|delhi|bangalore|hyderabad|india|noida|pune|chennai|kolkata|gurgaon/i,
-  /shanghai|beijing|shenzhen|guangzhou|china/i,
-  /seoul|busan|korea/i,
-  /taipei|taiwan/i,
-  /ho chi minh|hanoi|vietnam/i,
-  /bangkok|thailand/i,
-  /kuala lumpur|malaysia/i,
-  /jakarta|indonesia/i,
-  /manila|philippines/i,
-  /auckland|new zealand/i,
-  /dhaka|bangladesh/i,
-  /karachi|lahore|pakistan/i,
-  /colombo|sri lanka/i,
-]
-
-const LATAM_PATTERNS = [
-  /são paulo|sao paulo|brazil|brasil|rio de janeiro/i,
-  /mexico|ciudad de mexico|guadalajara/i,
-  /bogota|medellin|colombia/i,
-  /buenos aires|argentina/i,
-  /santiago|chile/i,
-  /lima|peru/i,
-  /caracas|venezuela/i,
-]
-
-function matchesPatterns(loc: string, patterns: RegExp[]): boolean {
-  return patterns.some((p) => p.test(loc))
-}
+// Locations to skip entirely
+const SKIP = /^(unknown|on-site|onsite|in-office|multiple|hybrid|various)$/i
 
 function assignRegion(loc: string): string | null {
-  if (!loc || loc === 'Unknown' || loc === 'On-site') return null
+  if (!loc || SKIP.test(loc.trim())) return null
   if (/^remote/i.test(loc)) return 'Remote'
-  if (matchesPatterns(loc, US_PATTERNS)) return 'US'
-  if (matchesPatterns(loc, UK_PATTERNS)) return 'UK'
-  if (matchesPatterns(loc, CANADA_PATTERNS)) return 'Canada'
-  if (matchesPatterns(loc, EMEA_PATTERNS)) return 'EMEA'
-  if (matchesPatterns(loc, APAC_PATTERNS)) return 'APAC'
-  if (matchesPatterns(loc, LATAM_PATTERNS)) return 'Latin America'
+
+  for (const { name, patterns } of REGIONS) {
+    if (patterns.some((p) => p.test(loc))) return name
+  }
+
   return 'Other'
 }
 
@@ -132,10 +158,9 @@ export function groupLocations(locations: string[]): GroupedLocations {
     const region = assignRegion(loc)
     if (!region) continue
     if (!groups[region]) groups[region] = []
-    groups[region].push(loc)
+    if (!groups[region].includes(loc)) groups[region].push(loc)
   }
 
-  // Sort cities within each group
   for (const region of Object.keys(groups)) {
     groups[region].sort()
   }
