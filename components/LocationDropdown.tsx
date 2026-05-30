@@ -131,7 +131,7 @@ export function LocationDropdown({ locations, selected, onChange }: Props) {
               ))
             ) : (
               // Grouped by country
-              grouped.map(({ country, flag, cities }) => {
+              grouped.map(({ country, cities }) => {
                 const expanded = expandedCountries.has(country)
                 const allSelected = cities.every((c) => selected.includes(c))
                 const someSelected = cities.some((c) => selected.includes(c))
@@ -154,7 +154,6 @@ export function LocationDropdown({ locations, selected, onChange }: Props) {
                           transform: expanded ? 'rotate(90deg)' : 'none',
                           transition: 'transform 0.15s', flexShrink: 0,
                         }} />
-                        <span style={{ fontSize: '13px' }}>{flag}</span>
                         <span style={{ fontSize: '12px', fontWeight: 600, color: someSelected ? '#3B9EEB' : 'var(--text-secondary)' }}>
                           {country}
                         </span>
