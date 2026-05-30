@@ -34,7 +34,7 @@ export async function classifyPost(
 
   const prompt = `You are classifying LinkedIn posts to find job openings in ${sectorContext}.
 
-Cast a WIDE net — include any post where someone is hiring for a specific open role, including:
+Cast a WIDE net — include any post where someone is hiring for a specific open role, including.
 - Core ${sector} roles
 - Support roles at ${sector} firms (ops, EA, HR, legal, tech, finance)
 - Recruiter posts listing specific open positions with requirements
