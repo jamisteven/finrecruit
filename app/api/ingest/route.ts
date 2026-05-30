@@ -9,8 +9,10 @@ export const maxDuration = 300
 const SECTORS: Sector[] = ['finance', 'tech', 'legal', 'marketing']
 
 export async function POST(req: NextRequest) {
+  // Allow Vercel cron calls (they send x-vercel-cron header) or manual calls with secret
+  const isVercelCron = req.headers.get('x-vercel-cron') === '1'
   const secret = req.headers.get('x-ingest-secret')
-  if (secret !== process.env.INGEST_SECRET) {
+  if (!isVercelCron && secret !== process.env.INGEST_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
