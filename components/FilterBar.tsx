@@ -2,6 +2,7 @@
 import { FilterState, Seniority } from '@/types'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { LocationDropdown } from './LocationDropdown'
+import { SectorDropdown } from './SectorDropdown'
 
 const SENIORITIES: Array<Seniority | 'All'> = [
   'All', 'Intern', 'Junior', 'Mid', 'Senior', 'VP', 'Director', 'MD', 'Partner', 'C-Suite',
@@ -25,7 +26,7 @@ export function FilterBar({ filters, onChange, total, availableLocations, darkMo
       borderRadius: '10px', padding: '16px 20px',
       display: 'flex', flexDirection: 'column', gap: '14px',
     }}>
-      {/* Search + location dropdown + count */}
+      {/* Search + sector + location + count */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
           <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -42,6 +43,11 @@ export function FilterBar({ filters, onChange, total, availableLocations, darkMo
             }}
           />
         </div>
+
+        <SectorDropdown
+          selected={filters.sector}
+          onChange={(s) => set({ sector: s })}
+        />
 
         <LocationDropdown
           locations={availableLocations}

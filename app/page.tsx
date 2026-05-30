@@ -6,14 +6,6 @@ import { FilterBar } from '@/components/FilterBar'
 import { StatsBar } from '@/components/StatsBar'
 import { RefreshCw, Sun, Moon } from 'lucide-react'
 
-const SECTORS: { id: Sector; label: string; emoji: string }[] = [
-  { id: 'all',       label: 'All',       emoji: '✦' },
-  { id: 'finance',   label: 'Finance',   emoji: '📈' },
-  { id: 'tech',      label: 'Tech',      emoji: '💻' },
-  { id: 'legal',     label: 'Legal',     emoji: '⚖️' },
-  { id: 'marketing', label: 'Marketing', emoji: '📣' },
-]
-
 const DEFAULT_FILTERS: FilterState = {
   sector: 'all', seniority: 'All', locations: [], search: '', sortBy: 'newest',
 }
@@ -86,7 +78,6 @@ export default function HomePage() {
   })
 
   const availableLocations = splitLocations(allJobs)
-  const activeSector = SECTORS.find((s) => s.id === filters.sector)
 
   const headerBg = darkMode ? 'var(--bg-primary)' : '#ffffff'
 
@@ -133,30 +124,10 @@ export default function HomePage() {
 
       <div className="gold-line" />
 
-      {/* Sector tab bar */}
-      <div style={{ background: headerBg, borderBottom: '1px solid var(--border)', padding: '0 24px' }}>
-        <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex' }}>
-          {SECTORS.map((s) => {
-            const active = filters.sector === s.id
-            return (
-              <button key={s.id} onClick={() => setFilters({ ...filters, sector: s.id })} style={{
-                padding: '12px 18px', fontSize: '13px', fontWeight: active ? 600 : 400,
-                cursor: 'pointer', background: 'none', border: 'none',
-                borderBottom: active ? '2px solid var(--gold)' : '2px solid transparent',
-                color: active ? 'var(--gold)' : 'var(--text-secondary)',
-                transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
-              }}>
-                <span>{s.emoji}</span>{s.label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
       <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', marginBottom: '4px' }}>
-            {activeSector?.id === 'all' ? 'Hidden jobs across all sectors' : `Hidden ${activeSector?.label} jobs`}
+            Hidden jobs from LinkedIn
           </h1>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
             Recruiters post jobs as regular LinkedIn posts, not in the Jobs section. RoleRadar surfaces them automatically.
