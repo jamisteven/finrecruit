@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { runApifyScraperForSector, normalisePost, Sector, SECTOR_QUERIES } from '@/lib/apify'
 import { classifyPost } from '@/lib/classifier'
 import { createServerClient } from '@/lib/supabase'
+import { normaliseLocation } from '@/lib/normaliseLocation'
 
 export const maxDuration = 300
 
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
         const { error } = await db.from('jobs').insert({
           title: classified.title,
           company: classified.company,
-          location: classified.location,
+          location: normaliseLocation(classified.location),
           seniority: classified.seniority,
           salary: classified.salary,
           apply_method: classified.apply_method,
