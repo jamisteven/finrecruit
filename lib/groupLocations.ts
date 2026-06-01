@@ -76,7 +76,7 @@ const REGIONS: { name: string; patterns: RegExp[] }[] = [
       /amsterdam|netherlands|rotterdam|eindhoven|veldhoven/i,
       /frankfurt|berlin|munich|hamburg|dusseldorf|cologne|\bgermany\b/i,
       /paris|lyon|marseille|\bfrance\b/i,
-      /zurich|geneva|switzerland|basel/i,
+      /zurich|geneva|switzerland|basel|bern|lausanne|\bzug\b/i,
       /dublin|\bireland\b/i,
       /stockholm|\bsweden\b|gothenburg/i,
       /copenhagen|\bdenmark\b/i,

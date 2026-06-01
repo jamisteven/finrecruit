@@ -35,6 +35,7 @@ export async function classifyPost(
   const prompt = `You are classifying LinkedIn posts to find job openings in ${sectorContext}.
 
 Cast a WIDE net — include any post where someone is hiring for a specific open role, including.
+Posts may be in English OR German (including Swiss German). For German posts, key hiring phrases include: 'wir suchen', 'gesucht', 'Stelle frei', 'Stellenangebot', 'einstellen', 'wir stellen ein', 'jetzt bewerben', 'zur Verstärkung'. Extract all fields in English regardless of the post language.
 - Core ${sector} roles
 - Support roles at ${sector} firms (ops, EA, HR, legal, tech, finance)
 - Recruiter posts listing specific open positions with requirements

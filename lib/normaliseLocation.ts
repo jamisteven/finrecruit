@@ -65,6 +65,15 @@ const ALIASES: Record<string, string> = {
   'zürich': 'Zurich',
   'zurich, switzerland': 'Zurich',
   'zürich, switzerland': 'Zurich',
+  'zurich, schweiz': 'Zurich',
+  'zürich, schweiz': 'Zurich',
+  'zug': 'Zug',
+  'bern': 'Bern',
+  'basel': 'Basel',
+  'lausanne': 'Lausanne',
+  'geneva, switzerland': 'Geneva',
+  'genf': 'Geneva',
+  'schweiz': 'Switzerland',
 
   // Hong Kong
   'hong kong sar': 'Hong Kong',
