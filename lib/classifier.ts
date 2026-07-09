@@ -72,7 +72,7 @@ Or if not a job: {"isJob":false,"title":"","company":null,"location":null,"senio
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 512,
         messages: [{ role: 'user', content: prompt }],
       }),
