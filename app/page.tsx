@@ -52,7 +52,7 @@ export default function HomePage() {
       if (filters.search) params.set('search', filters.search)
       if (filters.sector !== 'all') params.set('sector', filters.sector)
       params.set('sortBy', filters.sortBy)
-      params.set('limit', '500')
+      params.set('limit', '5000')
 
       const res = await fetch(`/api/jobs?${params}`)
       if (!res.ok) throw new Error('API error')

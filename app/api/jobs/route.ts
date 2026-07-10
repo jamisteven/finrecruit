@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search')
   const sector = searchParams.get('sector')
   const sortBy = searchParams.get('sortBy') || 'newest'
-  const limit = parseInt(searchParams.get('limit') || '500')
+  const limit = parseInt(searchParams.get('limit') || '5000')
   const offset = parseInt(searchParams.get('offset') || '0')
 
   const db = createServerClient()
