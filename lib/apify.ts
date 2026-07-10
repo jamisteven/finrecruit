@@ -151,9 +151,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'Softwareingenieur Zürich einstellen',
     'IT Recruiter Stelle Zürich Bern Basel',
     'Entwickler gesucht Zürich Schweiz',
-    'Backend Entwickler Stelle Zürich',
-    'Frontend Entwickler Zürich einstellen',
-    'Data Engineer Stelle Schweiz',
     'Cloud Engineer Zürich gesucht',
     'Software Engineer Zürich wir suchen',
     'CTO Head of Engineering Zürich',
@@ -165,7 +162,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     // Germany - German
     'Softwareentwickler Stelle Berlin München Hamburg',
     'IT Recruiter Stellenangebot Frankfurt Deutschland',
-    'Backend Entwickler Berlin gesucht',
     'Entwickler einstellen Deutschland',
     'Software Engineer Berlin Stelle frei',
   ],
@@ -182,16 +178,10 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'commercial solicitor recruiter hiring',
     'general counsel recruiter hiring',
     'legal operations recruiter hiring',
-    'IP lawyer recruiter hiring opportunity',
-    'M&A lawyer recruiter hiring',
-    'regulatory counsel recruiter hiring',
     // 25 additional high-quality queries
     'private equity lawyer recruiter hiring',
     'funds lawyer recruiter hiring',
     'banking finance lawyer recruiter hiring',
-    'tax lawyer recruiter hiring',
-    'real estate lawyer recruiter hiring',
-    'disputes arbitration lawyer recruiter hiring',
     'restructuring lawyer recruiter hiring',
     'data privacy lawyer recruiter hiring',
     'antitrust competition lawyer recruiter hiring',
@@ -201,9 +191,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'technology lawyer recruiter hiring',
     'international arbitration recruiter hiring',
     'senior associate partner law firm recruiter',
-    'GC deputy GC recruiter hiring',
-    'securities lawyer recruiter hiring',
-    'fintech regulatory lawyer recruiter hiring',
     'legal director recruiter hiring',
     'barrister chambers recruiter hiring',
     'planning environment lawyer recruiter hiring',
@@ -261,7 +248,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     // Toronto specific
     'marketing recruiter hiring Toronto',
     'growth marketing Toronto recruiter hiring',
-    'head of marketing Toronto recruiter hiring',
   ],
 }
 
