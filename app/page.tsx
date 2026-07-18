@@ -268,7 +268,7 @@ export default function HomePage() {
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                 style={{
                   width: '100%', padding: '9px 12px 9px 32px',
-                  background: surface, border: `1px solid ${border}`,
+                  border: `1px solid ${border}`,
                   borderRadius: '8px', color: textPrimary, fontSize: '13px',
                   outline: 'none', transition: 'border-color 0.15s',
                   boxSizing: 'border-box',
@@ -279,7 +279,7 @@ export default function HomePage() {
               value={filters.sortBy}
               onChange={(e) => setFilters({ ...filters, sortBy: e.target.value as 'newest' | 'oldest' })}
               style={{
-                padding: '9px 12px', background: surface, border: `1px solid ${border}`,
+                padding: '9px 12px', border: `1px solid ${border}`,
                 borderRadius: '8px', color: textSecondary, fontSize: '12px',
                 outline: 'none', cursor: 'pointer',
               }}
@@ -309,7 +309,7 @@ export default function HomePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[...Array(5)].map((_, i) => (
                 <div key={i} style={{
-                  background: surface, border: `1px solid ${border}`,
+                  border: `1px solid ${border}`,
                   borderRadius: '10px', height: '140px',
                   animation: 'shimmer 1.5s infinite',
                   background: `linear-gradient(90deg, ${surface} 25%, ${surfaceHover} 50%, ${surface} 75%)`,
@@ -319,7 +319,7 @@ export default function HomePage() {
             </div>
           ) : displayJobs.length === 0 ? (
             <div style={{
-              background: surface, border: `1px solid ${border}`,
+              border: `1px solid ${border}`,
               borderRadius: '12px', padding: '60px 24px', textAlign: 'center',
             }}>
               <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔍</div>
