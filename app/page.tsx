@@ -170,7 +170,9 @@ export default function HomePage() {
   }
 
   const resetAll = () => setFilters(DEFAULT_FILTERS)
-  const sectorLabel = (s: Sector) => SECTORS.find((x) => x.id === s)?.label ?? s
+  // JobPost.sector is a plain string in the API payload, so accept any string
+  const sectorLabel = (s: string) =>
+    SECTORS.find((x) => x.id === s)?.label ?? (s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Other')
 
   return (
     <div className={`ulj${dark ? ' dark' : ''}`}>
@@ -330,7 +332,7 @@ export default function HomePage() {
                       <b>{job.company}</b>
                       {job.location && <><span className="sep">·</span>{job.location}</>}
                       {wt && <><span className="sep">·</span>{wt}</>}
-                      {job.seniority && <><span className="sep">·</span>{job.seniority}</>}
+                      {job.seniority && job.seniority !== 'Unknown' && <><span className="sep">·</span>{job.seniority}</>}
                     </p>
                     {job.summary && <p className="summary">{job.summary}</p>}
                     {(job.salary || job.apply_method) && (
