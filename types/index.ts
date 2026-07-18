@@ -1,5 +1,6 @@
 export type Seniority = 'Intern' | 'Junior' | 'Mid' | 'Senior' | 'VP' | 'Director' | 'MD' | 'Partner' | 'C-Suite' | 'Unknown'
 export type Sector = 'all' | 'finance' | 'tech' | 'legal' | 'marketing'
+export type WorkType = 'Remote' | 'On-site' | 'Hybrid'
 
 export type JobPost = {
   id: string
@@ -26,6 +27,7 @@ export type FilterState = {
   sector: Sector
   seniority: Seniority | 'All'
   locations: string[]
+  workTypes: WorkType[]
   search: string
   sortBy: 'newest' | 'oldest'
 }
