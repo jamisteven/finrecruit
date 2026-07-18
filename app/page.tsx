@@ -374,7 +374,7 @@ export default function HomePage() {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400;1,8..60,500&family=Inter:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
 
         .ulj {
           /* light theme */
@@ -438,7 +438,7 @@ export default function HomePage() {
           height: 60px; display: flex; align-items: center; gap: 20px;
         }
         .ulj .wordmark {
-          font-family: 'Source Serif 4', Georgia, serif; font-size: 21px; font-weight: 600;
+          font-family: 'Fraunces', Georgia, serif; font-size: 21px; font-weight: 600;
           letter-spacing: -0.02em; white-space: nowrap; text-decoration: none; color: var(--ink);
         }
         .ulj .wordmark em { font-style: italic; font-weight: 400; color: var(--ink-2); }
@@ -486,7 +486,7 @@ export default function HomePage() {
         /* ── Hero ── */
         .ulj .hero { max-width: 1200px; margin: 0 auto; padding: 44px 28px 30px; display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
         .ulj .hero h1 {
-          font-family: 'Source Serif 4', Georgia, serif; font-weight: 600; font-size: clamp(28px, 4vw, 40px);
+          font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(28px, 4vw, 40px);
           line-height: 1.12; letter-spacing: -0.015em; max-width: 560px;
         }
         .ulj .hero h1 em { font-style: italic; }
@@ -494,7 +494,7 @@ export default function HomePage() {
         .ulj .stats { display: flex; }
         .ulj .stat { padding: 0 26px; border-left: 1px solid var(--hairline-2); }
         .ulj .stat:first-child { border-left: none; padding-left: 0; }
-        .ulj .stat .num { font-family: 'Source Serif 4', Georgia, serif; font-size: 34px; font-weight: 600; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+        .ulj .stat .num { font-family: 'Fraunces', Georgia, serif; font-size: 34px; font-weight: 500; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
         .ulj .stat .lbl { margin-top: 6px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
 
         /* ── Layout ── */
@@ -547,7 +547,7 @@ export default function HomePage() {
 
         /* ── Feed ── */
         .ulj .feed-bar { display: flex; align-items: baseline; gap: 14px; padding: 8px 0 16px; }
-        .ulj .feed-bar .count { font-family: 'Source Serif 4', Georgia, serif; font-size: 17px; font-weight: 600; }
+        .ulj .feed-bar .count { font-family: 'Fraunces', Georgia, serif; font-size: 17px; font-weight: 500; }
         .ulj .feed-bar .count b { font-variant-numeric: tabular-nums; }
         .ulj .feed-bar .clear { font-size: 12px; color: var(--ink-2); background: none; border: none; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 0; }
         .ulj .feed-bar .clear:hover { color: var(--ink); }
@@ -583,7 +583,7 @@ export default function HomePage() {
         .ulj .verified svg { color: var(--live); }
         .ulj .ago { margin-left: auto; font: 500 11.5px 'Spline Sans Mono', monospace; color: var(--ink-3); }
         .ulj .ago.fresh { color: var(--live); }
-        .ulj .card h3 { font-family: 'Source Serif 4', Georgia, serif; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
+        .ulj .card h3 { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; }
         .ulj .card h3 a { color: inherit; text-decoration: none; }
         .ulj .card h3 a:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
         .ulj .meta { margin-top: 5px; font-size: 13px; color: var(--ink-2); }
@@ -625,7 +625,7 @@ export default function HomePage() {
           background: var(--surface); border: 1px dashed var(--hairline-2); border-radius: 16px;
           padding: 64px 24px; text-align: center;
         }
-        .ulj .empty h3 { font-family: 'Source Serif 4', Georgia, serif; font-size: 22px; font-weight: 600; }
+        .ulj .empty h3 { font-family: 'Fraunces', Georgia, serif; font-size: 22px; font-weight: 500; }
         .ulj .empty p { margin: 8px 0 20px; color: var(--ink-2); font-size: 13.5px; }
         .ulj .empty button {
           padding: 9px 18px; background: var(--ink); color: var(--page); border: none;
