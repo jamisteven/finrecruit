@@ -165,7 +165,7 @@ export default function HomePage() {
         <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h1 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, letterSpacing: '-0.03em', margin: 0 }}>
-              Jobs recruiters post on LinkedIn — not in the jobs section
+              Spot companies that are hiring before they post a job.
             </h1>
             <p style={{ fontSize: '12px', color: textSecondary, margin: '3px 0 0' }}>Updated twice daily · Finance, Tech, Legal, Marketing · Global</p>
           </div>
@@ -282,7 +282,7 @@ export default function HomePage() {
 
           <div style={{ marginTop: '32px', paddingTop: '20px', borderTop: `1px solid ${border}`, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '11px', color: textMuted }}>
             <span>Sourced from public LinkedIn posts · AI-classified · Always verify with the recruiter directly</span>
-            <span>RoleRadar © {new Date().getFullYear()}</span>
+            <span>unlisted.jobs © {new Date().getFullYear()}</span>
           </div>
         </div>
       </div>
