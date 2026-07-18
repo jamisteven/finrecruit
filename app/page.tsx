@@ -138,7 +138,7 @@ export default function HomePage() {
               <Zap size={15} color="#fff" fill="#fff" />
             </div>
             <span style={{ fontWeight: 700, fontSize: '15px', color: textPrimary, letterSpacing: '-0.03em' }}>
-              Role<span style={{ color: accent }}>Radar</span>
+              unListed<span style={{ color: accent }}>Jobs</span>
             </span>
             {usingDemo && <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: accent, background: accentBg, padding: '2px 6px', borderRadius: '3px' }}>Demo</span>}
           </div>
@@ -165,7 +165,7 @@ export default function HomePage() {
         <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h1 style={{ fontSize: '18px', fontWeight: 700, color: textPrimary, letterSpacing: '-0.03em', margin: 0 }}>
-              Spot companies that are hiring before they post a job.
+              Find the jobs LinkedIn doesn't show you
             </h1>
             <p style={{ fontSize: '12px', color: textSecondary, margin: '3px 0 0' }}>Updated twice daily · Finance, Tech, Legal, Marketing · Global</p>
           </div>
