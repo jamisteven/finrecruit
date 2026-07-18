@@ -488,6 +488,9 @@ export default function HomePage() {
         .ulj .hero h1 {
           font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(28px, 4vw, 40px);
           line-height: 1.12; letter-spacing: -0.015em; max-width: 560px;
+          /* Cap Fraunces' optical size — at display sizes it auto-switches to its
+             quirky display letterforms (curly j, angled s). 18 keeps the calmer text cut. */
+          font-variation-settings: 'opsz' 18;
         }
         .ulj .hero h1 em { font-style: italic; }
         .ulj .hero .sub { margin-top: 10px; font-size: 14px; color: var(--ink-2); max-width: 480px; }
