@@ -40,7 +40,10 @@ function inferWorkType(job: JobPost): WorkType | null {
   return null
 }
 
-function timeAgo(iso: string): string {
+const toTime = (iso?: string | null) => (iso ? new Date(iso).getTime() : 0)
+
+function timeAgo(iso?: string | null): string | null {
+  if (!iso) return null
   const m = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000))
   if (m < 60) return `${m}m ago`
   const h = Math.round(m / 60)
@@ -48,7 +51,7 @@ function timeAgo(iso: string): string {
   return `${Math.round(h / 24)}d ago`
 }
 
-const isFresh = (iso: string) => Date.now() - new Date(iso).getTime() < 86400000
+const isFresh = (iso?: string | null) => !!iso && Date.now() - new Date(iso).getTime() < 86400000
 
 const initials = (name: string) =>
   name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
@@ -123,7 +126,7 @@ export default function HomePage() {
     })
     // Client-side sort fallback (API also sorts; demo data needs it)
     return [...list].sort((a, b) => {
-      const d = new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime()
+      const d = toTime(b.posted_at) - toTime(a.posted_at)
       return filters.sortBy === 'newest' ? d : -d
     })
   }, [allJobs, filters.locations, filters.workTypes, filters.sortBy])
@@ -139,7 +142,7 @@ export default function HomePage() {
   const availableLocations = useMemo(() => splitLocations(allJobs), [allJobs])
   const todayCount = useMemo(() => {
     const today = new Date().toDateString()
-    return allJobs.filter((j) => new Date(j.extracted_at).toDateString() === today).length
+    return allJobs.filter((j) => j.extracted_at && new Date(j.extracted_at).toDateString() === today).length
   }, [allJobs])
 
   const anyFilter = filters.sector !== 'all' || filters.locations.length > 0 || filters.workTypes.length > 0 || filters.search !== ''
@@ -319,7 +322,7 @@ export default function HomePage() {
                           Verified post
                         </span>
                       )}
-                      <span className={`ago${isFresh(job.posted_at) ? ' fresh' : ''}`}>{timeAgo(job.posted_at)}</span>
+                      {job.posted_at && <span className={`ago${isFresh(job.posted_at) ? ' fresh' : ''}`}>{timeAgo(job.posted_at)}</span>}
                     </div>
 
                     <h3><a href={job.post_url} target="_blank" rel="noopener noreferrer">{job.title}</a></h3>
