@@ -18,34 +18,35 @@ export async function POST(req: NextRequest) {
 
   const db = createServerClient()
 
-  // Get a batch of recruiters - manual offset or rotate by hour
-  const batchSize = 10
-  const { count: totalRecruiters } = await db
-    .from('recruiters')
-    .select('*', { count: 'exact', head: true })
-    .eq('active', true)
-
-  const url = new URL(req.url)
-  const offsetParam = url.searchParams.get('offset')
-  const hour = new Date().getUTCHours()
-  const offset = offsetParam !== null
-    ? parseInt(offsetParam)
-    : (hour * batchSize) % (totalRecruiters || 1)
-
+  // State machine: only fetch recruiters that are due for scraping
   const { data: recruiters, error: recError } = await db
     .from('recruiters')
-    .select('id, linkedin_url, headline, sector')
+    .select('id, linkedin_url, headline, sector, last_scraped_at, scrape_count, post_count')
     .eq('active', true)
-    .range(offset, offset + batchSize - 1)
+    .lte('next_scrape_at', new Date().toISOString())
+    .order('next_scrape_at', { ascending: true })
+    .limit(20)
 
   if (recError || !recruiters?.length) {
-    return NextResponse.json({ error: 'No recruiters found' }, { status: 500 })
+    return NextResponse.json({ 
+      success: true, 
+      message: 'No recruiters due for scraping',
+      next_check: 'Try again later'
+    })
   }
 
-  const profileUrls = recruiters.map((r) => r.linkedin_url)
-  console.log(`[ingest-recruiters] Scraping ${profileUrls.length} profiles offset=${offset}`)
+  console.log(`[ingest-recruiters] ${recruiters.length} recruiters due for scraping`)
 
-  const result = { total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0 }
+  const profileUrls = recruiters.map((r) => r.linkedin_url)
+  const result = { 
+    total: 0, 
+    classified_as_jobs: 0, 
+    duplicates_skipped: 0, 
+    inserted: 0, 
+    errors: 0,
+    recruiters_scraped: recruiters.length,
+    recruiters_with_new_posts: 0,
+  }
 
   try {
     const startRes = await fetch(
@@ -93,6 +94,8 @@ export async function POST(req: NextRequest) {
     result.total = rawPosts.length
     console.log(`[ingest-recruiters] Got ${rawPosts.length} posts`)
 
+    // Track which recruiters had new posts
+    const recruiterNewPostCount: Record<string, number> = {}
     const recruiterMap = new Map(recruiters.map((r) => [r.linkedin_url, r]))
 
     for (const rawPost of rawPosts) {
@@ -102,10 +105,14 @@ export async function POST(req: NextRequest) {
 
         const { data: existing } = await db
           .from('jobs').select('id').eq('post_url', post.postUrl).single()
+
         if (existing) { result.duplicates_skipped++; continue }
 
-        const HIRING_SIGNALS = ['hiring', 'recruit', 'looking for', 'seeking', 'vacancy',
-          'opening', 'mandate', 'apply', 'candidate', 'now hiring', 'join our', 'come work']
+        const HIRING_SIGNALS = [
+          'hiring', 'recruit', 'looking for', 'seeking', 'vacancy',
+          'opening', 'mandate', 'apply', 'candidate', 'now hiring',
+          'join our', 'come work', 'suchen', 'stelle', 'gesucht',
+        ]
         if (!HIRING_SIGNALS.some((s) => post.text.toLowerCase().includes(s))) continue
 
         const cleanAuthorUrl = post.authorLinkedinUrl?.split('?')[0]
@@ -138,12 +145,12 @@ export async function POST(req: NextRequest) {
         })
 
         if (error) { console.error('[ingest-recruiters] DB error:', error); result.errors++ }
-        else result.inserted++
-
-        if (recruiter) {
-          await db.from('recruiters')
-            .update({ last_scraped_at: new Date().toISOString() })
-            .eq('id', recruiter.id)
+        else {
+          result.inserted++
+          // Track new posts per recruiter
+          if (cleanAuthorUrl) {
+            recruiterNewPostCount[cleanAuthorUrl] = (recruiterNewPostCount[cleanAuthorUrl] || 0) + 1
+          }
         }
 
       } catch (err) {
@@ -152,7 +159,45 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Auto-add any new recruiters found in posts
+    // Update state machine for each recruiter
+    const now = new Date()
+    for (const recruiter of recruiters) {
+      const newPosts = recruiterNewPostCount[recruiter.linkedin_url] || 0
+      const hadNewPosts = newPosts > 0
+
+      if (hadNewPosts) result.recruiters_with_new_posts++
+
+      // Calculate next scrape time based on activity:
+      // - Had new posts → check again in 24h (active poster)
+      // - No new posts, low scrape count → check again in 48h (still learning)
+      // - No new posts, high scrape count → back off to 72h (infrequent poster)
+      // - No new posts after 10+ scrapes → back off to 7 days
+      let hoursUntilNextScrape: number
+      const totalScrapes = (recruiter.scrape_count || 0) + 1
+
+      if (hadNewPosts) {
+        hoursUntilNextScrape = 24
+      } else if (totalScrapes <= 3) {
+        hoursUntilNextScrape = 48
+      } else if (totalScrapes <= 10) {
+        hoursUntilNextScrape = 72
+      } else {
+        hoursUntilNextScrape = 168 // 7 days for consistently inactive recruiters
+      }
+
+      const nextScrapeAt = new Date(now.getTime() + hoursUntilNextScrape * 60 * 60 * 1000)
+
+      await db.from('recruiters').update({
+        last_scraped_at: now.toISOString(),
+        next_scrape_at: nextScrapeAt.toISOString(),
+        scrape_count: totalScrapes,
+        post_count: (recruiter.post_count || 0) + newPosts,
+        // Mark inactive if never posted after 10+ scrapes
+        active: totalScrapes >= 10 && (recruiter.post_count || 0) + newPosts === 0 ? false : true,
+      }).eq('id', recruiter.id)
+    }
+
+    // Auto-add any new recruiters discovered
     for (const rawPost of rawPosts) {
       const post = normalisePost(rawPost)
       if (!post.authorLinkedinUrl) continue
@@ -163,11 +208,12 @@ export async function POST(req: NextRequest) {
         name: post.authorName,
         headline: post.authorHeadline,
         source: 'auto',
+        next_scrape_at: new Date().toISOString(),
       }, { onConflict: 'linkedin_url', ignoreDuplicates: true })
     }
 
     console.log('[ingest-recruiters] Done:', result)
-    return NextResponse.json({ success: true, result, profiles_scraped: profileUrls.length })
+    return NextResponse.json({ success: true, result })
 
   } catch (err) {
     console.error('[ingest-recruiters] Fatal:', err)
