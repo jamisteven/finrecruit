@@ -183,6 +183,7 @@ export default function HomePage() {
     tech: allJobs.filter((j) => j.sector === 'tech').length,
     legal: allJobs.filter((j) => j.sector === 'legal').length,
     marketing: allJobs.filter((j) => j.sector === 'marketing').length,
+    realestate: allJobs.filter((j) => j.sector === 'realestate').length,
   }), [allJobs])
 
   const locStats = useMemo(() => locationStats(allJobs), [allJobs])
