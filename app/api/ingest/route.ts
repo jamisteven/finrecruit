@@ -6,7 +6,7 @@ import { normaliseLocation } from '@/lib/normaliseLocation'
 
 export const maxDuration = 300
 
-const SECTORS: Sector[] = ['finance', 'tech', 'legal', 'marketing']
+const SECTORS: Sector[] = ['finance', 'tech', 'legal', 'marketing', 'realestate']
 
 export async function POST(req: NextRequest) {
   // Allow Vercel cron calls (they send x-vercel-cron header) or manual calls with secret
