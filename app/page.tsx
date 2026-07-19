@@ -105,6 +105,7 @@ export default function HomePage() {
   const [usingDemo, setUsingDemo] = useState(true)
   const [saved, setSaved] = useState<Set<string>>(new Set())
   const [locQuery, setLocQuery] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)  // mobile filter accordion
   const searchRef = useRef<HTMLInputElement>(null)
 
   const fetchJobs = useCallback(async () => {
@@ -212,6 +213,7 @@ export default function HomePage() {
   }, [allJobs])
 
   const anyFilter = filters.sector !== 'all' || filters.locations.length > 0 || filters.workTypes.length > 0 || filters.search !== ''
+  const activeFilterCount = (filters.sector !== 'all' ? 1 : 0) + filters.workTypes.length + filters.locations.length
 
   const toggleWorkType = (wt: WorkType) => {
     const next = filters.workTypes.includes(wt)
@@ -298,7 +300,15 @@ export default function HomePage() {
 
       <div className="layout">
         {/* ── Sidebar ─────────────────────────── */}
-        <aside className="filters">
+        <aside className={`filters${filtersOpen ? ' open' : ''}`}>
+          {/* Mobile-only accordion header */}
+          <button className="filters-head" onClick={() => setFiltersOpen(!filtersOpen)} aria-expanded={filtersOpen}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="10" y1="18" x2="14" y2="18" /></svg>
+            Filters
+            {activeFilterCount > 0 && <span className="fbadge">{activeFilterCount}</span>}
+            <svg className={`chev${filtersOpen ? ' up' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+
           <div className="fgroup">
             <div className="flabel"><span>Sector</span></div>
             {SECTORS.map((s) => {
@@ -418,7 +428,7 @@ export default function HomePage() {
                     <p className="meta">
                       <b>{job.company}</b>
                       {job.location && <><span className="sep">·</span>{job.location}</>}
-                      {wt && <><span className="sep">·</span>{wt}</>}
+                      {wt && wt.toLowerCase() !== job.location?.trim().toLowerCase() && <><span className="sep">·</span>{wt}</>}
                       {job.seniority && job.seniority !== 'Unknown' && <><span className="sep">·</span>{job.seniority}</>}
                     </p>
                     {job.summary && <p className="summary">{job.summary}</p>}
@@ -482,6 +492,7 @@ export default function HomePage() {
           --sec-tech:      #2a78d6;
           --sec-legal:     #eda100;
           --sec-marketing: #e87ba4;
+          --sec-realestate:#4a3aa7;
         }
         .ulj.dark {
           --page:      #131210;
@@ -495,10 +506,11 @@ export default function HomePage() {
           --live:      #2FA36A;
           --shadow:    0 1px 2px rgba(0,0,0,0.3);
           --shadow-lift: 0 10px 30px -8px rgba(0,0,0,0.5);
-          --sec-finance:   #00a300;
+          --sec-finance:   #008300;
           --sec-tech:      #3987e5;
           --sec-legal:     #c98500;
           --sec-marketing: #d55181;
+          --sec-realestate:#b3a7f2;
         }
 
         .ulj, .ulj * { box-sizing: border-box; margin: 0; }
@@ -588,6 +600,7 @@ export default function HomePage() {
 
         /* ── Layout ── */
         .ulj .layout { max-width: 1200px; margin: 0 auto; padding: 8px 28px 60px; display: grid; grid-template-columns: 218px 1fr; gap: 40px; align-items: start; }
+        .ulj .layout > * { min-width: 0; }  /* let grid children shrink below content width */
 
         /* ── Sidebar ── */
         .ulj .filters { position: sticky; top: 84px; display: flex; flex-direction: column; gap: 26px; padding-top: 8px; }
@@ -740,11 +753,65 @@ export default function HomePage() {
           font-size: 11.5px; color: var(--ink-3);
         }
 
+        /* Mobile filters accordion header — hidden on desktop */
+        .ulj .filters-head { display: none; }
+        .ulj .fbadge {
+          min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px;
+          background: var(--ink); color: var(--page);
+          font: 600 10.5px 'Spline Sans Mono', monospace;
+          display: inline-grid; place-items: center;
+        }
+
+        /* ── Tablet & below: single column, collapsible filters ── */
         @media (max-width: 900px) {
-          .ulj .layout { grid-template-columns: 1fr; gap: 24px; }
-          .ulj .filters { position: static; }
-          .ulj .stats { width: 100%; }
-          .ulj .search-wrap { display: none; }
+          .ulj .layout { grid-template-columns: 1fr; gap: 16px; }
+          .ulj .filters { position: static; padding-top: 0; gap: 0; }
+          .ulj .filters-head {
+            display: flex; align-items: center; gap: 8px; width: 100%;
+            padding: 11px 14px; background: var(--surface);
+            border: 1px solid var(--hairline-2); border-radius: 10px;
+            font: 600 13px 'Inter', sans-serif; color: var(--ink); cursor: pointer;
+          }
+          .ulj .filters-head .chev { margin-left: auto; transition: transform .15s; }
+          .ulj .filters-head .chev.up { transform: rotate(180deg); }
+          .ulj .filters .fgroup, .ulj .filters .side-note { display: none; }
+          .ulj .filters.open .fgroup { display: block; margin-top: 18px; }
+          .ulj .filters.open .side-note { display: block; margin-top: 14px; }
+          .ulj .stats { width: 100%; justify-content: space-between; }
+        }
+
+        /* ── Phones: wrap masthead, compress hero & feed ── */
+        @media (max-width: 760px) {
+          .ulj .masthead-in {
+            flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 10px; row-gap: 10px;
+          }
+          .ulj .search-wrap { order: 3; flex-basis: 100%; max-width: none; }
+          .ulj .slash { display: none; }
+          .ulj .live-pill { display: none; }
+          .ulj .refresh-btn { width: 36px; padding: 0; justify-content: center; }
+          .ulj .refresh-btn span { display: none; }  /* icon-only so the top row fits one line */
+          .ulj .hero { padding: 26px 16px 16px; gap: 18px; }
+          .ulj .hero .sub { font-size: 13px; }
+          .ulj .stat { padding: 0 12px; }
+          .ulj .stat .num { font-size: 24px; }
+          .ulj .stat .lbl { font-size: 9.5px; }
+          .ulj .layout { padding: 4px 16px 40px; }
+          .ulj .chip { padding: 7px 13px; }  /* bigger tap targets */
+        }
+
+        /* ── Small phones: tighter cards ── */
+        @media (max-width: 640px) {
+          .ulj .feed-bar { flex-wrap: wrap; row-gap: 8px; }
+          .ulj .card { padding: 15px 16px 0; border-radius: 12px; }
+          .ulj .card h3 { font-size: 17.5px; }
+          .ulj .meta { font-size: 12.5px; }
+          .ulj .summary { font-size: 13px; }
+          .ulj .card-foot { margin: 14px -16px 0; padding: 10px 12px 12px 16px; flex-wrap: nowrap; }
+          .ulj .author { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .ulj .card-actions { flex-shrink: 0; }
+          .ulj .ghost-btn { padding: 0 10px; }
+          .ulj .apply-btn { padding: 0 11px; }
+          .ulj .colophon { flex-direction: column; gap: 4px; }
         }
       `}</style>
     </div>
