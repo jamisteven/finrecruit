@@ -459,7 +459,9 @@ export default function HomePage() {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
+        /* Roman only, no italic file — the em italics render as a synthetic slant
+           of the roman, which is calmer than Fraunces' real (very calligraphic) italic. */
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
 
         .ulj {
           /* light theme */
