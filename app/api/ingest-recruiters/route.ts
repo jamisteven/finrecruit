@@ -226,6 +226,7 @@ function guessSector(headline: string): string {
   if (h.includes('legal') || h.includes('law') || h.includes('solicitor') || h.includes('counsel')) return 'legal'
   if (h.includes('tech') || h.includes('engineer') || h.includes('software') || h.includes('product')) return 'tech'
   if (h.includes('marketing') || h.includes('brand') || h.includes('growth') || h.includes('content')) return 'marketing'
+  if (h.includes('real estate') || h.includes('property') || h.includes('leasing') || h.includes('realestate')) return 'realestate'
   return 'finance'
 }
 
