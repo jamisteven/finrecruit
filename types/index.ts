@@ -1,5 +1,5 @@
 export type Seniority = 'Intern' | 'Junior' | 'Mid' | 'Senior' | 'VP' | 'Director' | 'MD' | 'Partner' | 'C-Suite' | 'Unknown'
-export type Sector = 'all' | 'finance' | 'tech' | 'legal' | 'marketing'
+export type Sector = 'all' | 'finance' | 'tech' | 'legal' | 'marketing' | 'realestate'
 export type WorkType = 'Remote' | 'On-site' | 'Hybrid'
 
 export type JobPost = {

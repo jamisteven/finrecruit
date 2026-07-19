@@ -12,6 +12,7 @@ const SECTORS: { id: Sector; label: string }[] = [
   { id: 'tech',      label: 'Tech' },
   { id: 'legal',     label: 'Legal' },
   { id: 'marketing', label: 'Marketing' },
+  { id: 'realestate', label: 'Real Estate' },
 ]
 
 const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
