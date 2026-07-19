@@ -23,13 +23,52 @@ const DEMO_JOBS: JobPost[] = [
   { id: '4', title: 'Head of Performance Marketing', company: 'DTC Scale-up', location: 'Remote', seniority: 'Director', salary: '$130k–$160k', apply_method: 'DM recruiter', summary: 'High-growth consumer brand hiring a performance marketing lead to own paid acquisition.', tags: ['performance-marketing', 'paid-social', 'remote'], sector: 'marketing', post_url: '#', author_name: 'Priya Nair', author_headline: 'Marketing Recruiter | Growth & Brand', author_linkedin_url: '#', raw_text: '', posted_at: new Date(Date.now() - 28800000).toISOString(), extracted_at: new Date().toISOString(), is_verified_job: true },
 ]
 
-function splitLocations(jobs: JobPost[]): string[] {
-  return [...new Set(
-    jobs.flatMap((j) => {
-      if (!j.location) return []
-      return j.location.split(/[|,]/).map((l) => l.trim()).filter((l) => l.length > 0 && l.length < 40)
-    })
-  )].sort()
+// Country/region groups so "Switzerland" catches Zurich, Geneva, Basel, …
+// Keywords ≤3 chars are matched as whole words to avoid e.g. "us" matching "Austin".
+const REGIONS: Record<string, string[]> = {
+  'Switzerland':    ['switzerland', 'zurich', 'zürich', 'geneva', 'genève', 'genf', 'basel', 'bern', 'lausanne', 'zug', 'lugano', 'st. gallen', 'winterthur'],
+  'United Kingdom': ['united kingdom', 'uk', 'england', 'scotland', 'london', 'manchester', 'edinburgh', 'birmingham', 'leeds', 'glasgow', 'bristol', 'cambridge', 'oxford', 'belfast'],
+  'United States':  ['united states', 'usa', 'us', 'new york', 'nyc', 'san francisco', 'bay area', 'boston', 'chicago', 'los angeles', 'austin', 'seattle', 'miami', 'atlanta', 'dallas', 'houston', 'denver', 'washington', 'charlotte', 'philadelphia', 'california', 'texas', 'arizona'],
+  'Germany':        ['germany', 'berlin', 'munich', 'münchen', 'frankfurt', 'hamburg', 'cologne', 'köln', 'düsseldorf', 'stuttgart'],
+  'France':         ['france', 'paris', 'lyon', 'marseille'],
+  'Netherlands':    ['netherlands', 'amsterdam', 'rotterdam', 'the hague', 'utrecht', 'eindhoven'],
+  'UAE':            ['uae', 'united arab emirates', 'dubai', 'abu dhabi'],
+  'Singapore':      ['singapore'],
+  'Hong Kong':      ['hong kong'],
+  'India':          ['india', 'mumbai', 'bangalore', 'bengaluru', 'delhi', 'new delhi', 'gurgaon', 'gurugram', 'hyderabad', 'pune', 'chennai', 'ahmedabad', 'noida'],
+  'Australia':      ['australia', 'sydney', 'melbourne', 'brisbane', 'perth'],
+  'Canada':         ['canada', 'toronto', 'vancouver', 'montreal', 'calgary'],
+  'Spain':          ['spain', 'madrid', 'barcelona'],
+  'Ireland':        ['ireland', 'dublin'],
+}
+
+const matchKw = (part: string, kw: string) =>
+  kw.length <= 3 ? part === kw || part.split(/[\s/]+/).includes(kw) : part.includes(kw)
+
+const locParts = (location: string) =>
+  location.split(/[|,]/).map((l) => l.trim().toLowerCase()).filter(Boolean)
+
+const jobInRegion = (job: JobPost, region: string) => {
+  const kws = REGIONS[region]
+  if (!kws || !job.location) return false
+  return locParts(job.location).some((p) => kws.some((k) => matchKw(p, k)))
+}
+
+// Distinct location strings with counts, most frequent first
+function locationStats(jobs: JobPost[]): { name: string; count: number }[] {
+  const freq = new Map<string, { name: string; count: number }>()
+  for (const j of jobs) {
+    if (!j.location) continue
+    for (const raw of j.location.split(/[|,]/)) {
+      const name = raw.trim()
+      if (!name || name.length >= 40) continue
+      const key = name.toLowerCase()
+      const cur = freq.get(key)
+      if (cur) cur.count++
+      else freq.set(key, { name, count: 1 })
+    }
+  }
+  return [...freq.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 }
 
 function inferWorkType(job: JobPost): WorkType | null {
@@ -64,6 +103,7 @@ export default function HomePage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [usingDemo, setUsingDemo] = useState(true)
   const [saved, setSaved] = useState<Set<string>>(new Set())
+  const [locQuery, setLocQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
 
   const fetchJobs = useCallback(async () => {
@@ -115,8 +155,13 @@ export default function HomePage() {
     const list = allJobs.filter((job) => {
       if (filters.locations.length > 0) {
         if (!job.location) return false
-        const jobLocs = job.location.split(/[|,]/).map((l) => l.trim().toLowerCase())
-        if (!filters.locations.some((sel) => jobLocs.some((jl) => jl.includes(sel.toLowerCase()) || sel.toLowerCase().includes(jl)))) return false
+        const jobLocs = locParts(job.location)
+        const ok = filters.locations.some((sel) => {
+          if (REGIONS[sel]) return jobInRegion(job, sel)  // country/region selection
+          const s = sel.toLowerCase()
+          return jobLocs.some((jl) => jl.includes(s) || s.includes(jl))
+        })
+        if (!ok) return false
       }
       if (filters.workTypes.length > 0) {
         const wt = inferWorkType(job)
@@ -139,7 +184,26 @@ export default function HomePage() {
     marketing: allJobs.filter((j) => j.sector === 'marketing').length,
   }), [allJobs])
 
-  const availableLocations = useMemo(() => splitLocations(allJobs), [allJobs])
+  const locStats = useMemo(() => locationStats(allJobs), [allJobs])
+  const availableLocations = useMemo(() => locStats.map((l) => l.name), [locStats])
+
+  const regionCounts = useMemo(() =>
+    Object.keys(REGIONS)
+      .map((name) => ({ name, count: allJobs.filter((j) => jobInRegion(j, name)).length }))
+      .filter((r) => r.count > 0)
+      .sort((a, b) => b.count - a.count),
+    [allJobs])
+
+  // City chips: selected ones always visible, then matches for the typed query
+  // (or the most frequent cities when nothing is typed)
+  const CITY_LIMIT = 12
+  const visibleCities = useMemo(() => {
+    const q = locQuery.trim().toLowerCase()
+    const matches = q ? locStats.filter((l) => l.name.toLowerCase().includes(q)) : locStats
+    const selected = locStats.filter((l) => filters.locations.includes(l.name))
+    const rest = matches.filter((l) => !filters.locations.includes(l.name))
+    return { shown: [...selected, ...rest.slice(0, CITY_LIMIT)], hidden: Math.max(0, rest.length - CITY_LIMIT) }
+  }, [locStats, locQuery, filters.locations])
   const todayCount = useMemo(() => {
     const today = new Date().toDateString()
     return allJobs.filter((j) => j.extracted_at && new Date(j.extracted_at).toDateString() === today).length
@@ -272,13 +336,34 @@ export default function HomePage() {
               <span>Location</span>
               {filters.locations.length > 0 && <button onClick={() => setFilters({ ...filters, locations: [] })}>Clear</button>}
             </div>
+
+            {regionCounts.length > 0 && (
+              <div className="chips regions">
+                {regionCounts.map((r) => (
+                  <button key={r.name} className={`chip${filters.locations.includes(r.name) ? ' on' : ''}`} onClick={() => toggleLocation(r.name)}>
+                    {r.name}<span className="n">{r.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <input
+              className="loc-search"
+              type="text"
+              placeholder="Search cities…"
+              value={locQuery}
+              onChange={(e) => setLocQuery(e.target.value)}
+            />
             <div className="chips">
-              {availableLocations.map((loc) => (
-                <button key={loc} className={`chip${filters.locations.includes(loc) ? ' on' : ''}`} onClick={() => toggleLocation(loc)}>
-                  {loc}
+              {visibleCities.shown.map((l) => (
+                <button key={l.name} className={`chip${filters.locations.includes(l.name) ? ' on' : ''}`} onClick={() => toggleLocation(l.name)}>
+                  {l.name}
                 </button>
               ))}
             </div>
+            {visibleCities.hidden > 0 && (
+              <p className="more-note">+{visibleCities.hidden} more — type to search</p>
+            )}
           </div>
 
           <p className="side-note">Sourced from public posts. Always verify details with the recruiter before applying.</p>
@@ -374,7 +459,7 @@ export default function HomePage() {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
 
         .ulj {
           /* light theme */
@@ -488,9 +573,6 @@ export default function HomePage() {
         .ulj .hero h1 {
           font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(28px, 4vw, 40px);
           line-height: 1.12; letter-spacing: -0.015em; max-width: 560px;
-          /* Cap Fraunces' optical size — at display sizes it auto-switches to its
-             quirky display letterforms (curly j, angled s). 18 keeps the calmer text cut. */
-          font-variation-settings: 'opsz' 18;
         }
         .ulj .hero h1 em { font-style: italic; }
         .ulj .hero .sub { margin-top: 10px; font-size: 14px; color: var(--ink-2); max-width: 480px; }
@@ -546,6 +628,18 @@ export default function HomePage() {
         }
         .ulj .chip:hover { border-color: var(--ink-3); color: var(--ink); }
         .ulj .chip.on { background: var(--ink); border-color: var(--ink); color: var(--page); }
+        .ulj .chip .n { margin-left: 6px; font: 500 10.5px 'Spline Sans Mono', monospace; color: var(--ink-3); }
+        .ulj .chip.on .n { color: color-mix(in srgb, var(--page) 70%, transparent); }
+        .ulj .chips.regions { padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px dashed var(--hairline); }
+        .ulj .loc-search {
+          width: 100%; height: 30px; padding: 0 10px; margin-bottom: 8px;
+          background: var(--surface); color: var(--ink);
+          border: 1px solid var(--hairline-2); border-radius: 8px;
+          font: 500 12px 'Inter', sans-serif; outline: none;
+        }
+        .ulj .loc-search::placeholder { color: var(--ink-3); }
+        .ulj .loc-search:focus { border-color: var(--ink-2); }
+        .ulj .more-note { margin-top: 8px; font-size: 11px; color: var(--ink-3); }
         .ulj .side-note { font-size: 11.5px; color: var(--ink-3); line-height: 1.55; padding-top: 4px; }
 
         /* ── Feed ── */
