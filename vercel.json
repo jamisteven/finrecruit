@@ -4,11 +4,10 @@
     { "path": "/api/ingest?sector=tech",      "schedule": "10 14 * * *" },
     { "path": "/api/ingest?sector=legal",     "schedule": "20 14 * * *" },
     { "path": "/api/ingest?sector=marketing", "schedule": "30 14 * * *" },
-    { "path": "/api/ingest-recruiters",       "schedule": "45 14 * * *" },
+    { "path": "/api/ingest-recruiters",       "schedule": "0 */2 * * *" },
     { "path": "/api/ingest?sector=finance",   "schedule": "0 19 * * *" },
     { "path": "/api/ingest?sector=tech",      "schedule": "10 19 * * *" },
     { "path": "/api/ingest?sector=legal",     "schedule": "20 19 * * *" },
-    { "path": "/api/ingest?sector=marketing", "schedule": "30 19 * * *" },
-    { "path": "/api/ingest-recruiters",       "schedule": "45 19 * * *" }
+    { "path": "/api/ingest?sector=marketing", "schedule": "30 19 * * *" }
   ]
 }
