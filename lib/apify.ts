@@ -28,11 +28,11 @@ export type ApifyPost = {
     title?: string
     location?: string
     linkedinUrl?: string
-    subtitle?: string  // e.g. "Job by LHH"
+    subtitle?: string
   }
 }
 
-export type Sector = 'finance' | 'tech' | 'legal' | 'marketing'
+export type Sector = 'finance' | 'tech' | 'legal' | 'marketing' | 'realestate'
 
 export const SECTOR_QUERIES: Record<Sector, string[]> = {
   finance: [
@@ -51,7 +51,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'fintech finance role recruiter hiring',
     'equity research analyst hiring recruiter',
     'risk management recruiter hiring',
-    // 25 additional high-quality queries
     'portfolio manager recruiter hiring',
     'investment analyst recruiter opportunity',
     'M&A analyst associate recruiter hiring',
@@ -77,13 +76,11 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'bank capital markets recruiter hiring',
     'securities lawyer finance recruiter hiring',
     'financial controller CFO recruiter hiring',
-    // Toronto specific
     'finance recruiter hiring Toronto',
     'investment banking Toronto recruiter hiring',
     'private equity Toronto recruiter hiring',
   ],
   tech: [
-    // Core English queries
     'software engineer recruiter now hiring',
     'engineering manager recruiter hiring',
     'AI ML engineer recruiter opportunity',
@@ -120,7 +117,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'fintech engineer recruiter hiring',
     'founding engineer startup recruiter hiring',
     'developer advocate recruiter hiring',
-    // Enhanced tech queries - specific roles & seniority
     'staff engineer recruiter hiring',
     'engineering director recruiter hiring',
     'head of product recruiter hiring',
@@ -136,17 +132,14 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'network engineer recruiter hiring',
     'hardware engineer recruiter hiring',
     'game engineer recruiter hiring',
-    // Toronto specific
     'software engineer recruiter hiring Toronto',
     'tech recruiter hiring Toronto',
     'startup engineer Toronto recruiter hiring',
-    // Switzerland - English
     'software engineer recruiter hiring Zurich',
     'tech recruiter hiring Zurich Switzerland',
     'engineering manager hiring Zurich',
     'startup engineer Zurich recruiter hiring',
     'AI ML engineer Zurich hiring',
-    // Switzerland & DACH - German
     'Softwareentwickler Stelle Zürich',
     'Softwareingenieur Zürich einstellen',
     'IT Recruiter Stelle Zürich Bern Basel',
@@ -159,7 +152,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'DevOps Engineer Schweiz einstellen',
     'Machine Learning Engineer Zürich Stelle',
     'Fullstack Entwickler Zürich gesucht',
-    // Germany - German
     'Softwareentwickler Stelle Berlin München Hamburg',
     'IT Recruiter Stellenangebot Frankfurt Deutschland',
     'Entwickler einstellen Deutschland',
@@ -178,7 +170,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'commercial solicitor recruiter hiring',
     'general counsel recruiter hiring',
     'legal operations recruiter hiring',
-    // 25 additional high-quality queries
     'private equity lawyer recruiter hiring',
     'funds lawyer recruiter hiring',
     'banking finance lawyer recruiter hiring',
@@ -198,7 +189,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'shipping maritime lawyer recruiter hiring',
     'sports entertainment lawyer recruiter hiring',
     'immigration lawyer recruiter hiring',
-    // Toronto specific
     'legal recruiter hiring Toronto',
     'lawyer Toronto recruiter hiring',
     'in-house counsel Toronto recruiter hiring',
@@ -219,7 +209,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'marketing director recruiter hiring',
     'email marketing recruiter hiring',
     'creative director recruiter hiring',
-    // 25 additional high-quality queries
     'chief marketing officer recruiter hiring',
     'B2B marketing recruiter hiring',
     'B2C marketing recruiter hiring',
@@ -245,9 +234,46 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'podcast video content recruiter hiring',
     'retail marketing recruiter hiring',
     'partnership marketing recruiter hiring',
-    // Toronto specific
     'marketing recruiter hiring Toronto',
     'growth marketing Toronto recruiter hiring',
+  ],
+  realestate: [
+    'property manager recruiter hiring',
+    'property management recruiter now hiring',
+    'regional property manager recruiter hiring',
+    'assistant property manager recruiter hiring',
+    'residential property manager recruiter hiring',
+    'commercial property manager recruiter hiring',
+    'leasing agent recruiter hiring',
+    'leasing consultant recruiter hiring',
+    'leasing manager recruiter hiring',
+    'property leasing recruiter opportunity',
+    'leasing specialist recruiter hiring',
+    'leasing administrator recruiter hiring',
+    'leasing coordinator recruiter hiring',
+    'leasing admin recruiter opportunity',
+    'property maintenance recruiter hiring',
+    'maintenance technician property recruiter hiring',
+    'facilities maintenance recruiter hiring',
+    'building maintenance recruiter hiring',
+    'work order coordinator recruiter hiring',
+    'maintenance coordinator recruiter hiring',
+    'facilities coordinator recruiter hiring',
+    'real estate virtual assistant recruiter hiring',
+    'real estate VA recruiter opportunity',
+    'property management virtual assistant hiring',
+    'leasing assistant recruiter hiring',
+    'property leasing assistant recruiter hiring',
+    'real estate recruiter now hiring',
+    'property recruiter hiring opportunity',
+    'real estate operations recruiter hiring',
+    'HOA manager recruiter hiring',
+    'asset manager real estate recruiter hiring',
+    'real estate analyst recruiter hiring',
+    'property administrator recruiter hiring',
+    'real estate recruiter hiring Toronto',
+    'real estate recruiter hiring London',
+    'property management recruiter hiring New York',
   ],
 }
 
@@ -328,8 +354,6 @@ export function normalisePost(raw: ApifyPost): {
   const rawText = src.content || src.commentary || src.text || ''
   const text = rawText.length > 50 ? rawText : (raw.content || raw.commentary || raw.text || rawText)
 
-  // If post has an embedded LinkedIn job card, append its details to the text
-  // so the classifier can extract title, location, company etc.
   const jobCard = src.job || raw.job
   const jobCardText = jobCard
     ? `\n\nJob card details: Title: ${jobCard.title || ''} | Location: ${jobCard.location || ''} | Company: ${jobCard.subtitle?.replace('Job by ', '') || ''} | Apply: ${jobCard.linkedinUrl || ''}`
@@ -351,42 +375,4 @@ export function normalisePost(raw: ApifyPost): {
     authorLinkedinUrl: src.author?.linkedinUrl || src.author?.url || src.authorProfileUrl || null,
     postedAt,
   }
-  realestate: [
-    'property manager recruiter hiring',
-    'property management recruiter now hiring',
-    'regional property manager recruiter hiring',
-    'assistant property manager recruiter hiring',
-    'residential property manager recruiter hiring',
-    'commercial property manager recruiter hiring',
-    'leasing agent recruiter hiring',
-    'leasing consultant recruiter hiring',
-    'leasing manager recruiter hiring',
-    'property leasing recruiter opportunity',
-    'leasing specialist recruiter hiring',
-    'leasing administrator recruiter hiring',
-    'leasing coordinator recruiter hiring',
-    'leasing admin recruiter opportunity',
-    'property maintenance recruiter hiring',
-    'maintenance technician property recruiter hiring',
-    'facilities maintenance recruiter hiring',
-    'building maintenance recruiter hiring',
-    'work order coordinator recruiter hiring',
-    'maintenance coordinator recruiter hiring',
-    'facilities coordinator recruiter hiring',
-    'real estate virtual assistant recruiter hiring',
-    'real estate VA recruiter opportunity',
-    'property management virtual assistant hiring',
-    'leasing assistant recruiter hiring',
-    'property leasing assistant recruiter hiring',
-    'real estate recruiter now hiring',
-    'property recruiter hiring opportunity',
-    'real estate operations recruiter hiring',
-    'HOA manager recruiter hiring',
-    'asset manager real estate recruiter hiring',
-    'real estate analyst recruiter hiring',
-    'property administrator recruiter hiring',
-    'real estate recruiter hiring Toronto',
-    'real estate recruiter hiring London',
-    'property management recruiter hiring New York',
-  ],
 }
