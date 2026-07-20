@@ -17,6 +17,41 @@ const SECTORS: { id: Sector; label: string }[] = [
 
 const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
 
+// JobPost.sector is a plain string in the API payload, so accept any string
+const sectorLabel = (s: string) =>
+  SECTORS.find((x) => x.id === s)?.label ?? (s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Other')
+
+// ── Drop schedule (UTC) — mirrors the crons in vercel.json ──
+const DROP_SECTORS_FULL = ['finance', 'tech', 'legal', 'marketing', 'realestate']
+const DROP_BATCHES: { days: number[]; utcHour: number; utcMin: number; sectors: string[] }[] = [
+  { days: [1, 2, 3, 4, 5], utcHour: 14, utcMin: 0, sectors: DROP_SECTORS_FULL },
+  { days: [1, 2, 3, 4, 5], utcHour: 19, utcMin: 0, sectors: DROP_SECTORS_FULL },
+  { days: [1],             utcHour: 7,  utcMin: 0, sectors: ['finance', 'tech'] },
+]
+const SLOT_MS = 10 * 60_000  // sectors fire 10 minutes apart
+const TAIL_MS = 5 * 60_000   // grace period after the last sector's slot
+
+type Drop = { start: number; end: number; sectors: string[] }
+
+function dropsAround(now: number): { prev: Drop | null; next: Drop | null; current: Drop | null } {
+  const drops: Drop[] = []
+  const base = new Date(now)
+  for (let d = -8; d <= 8; d++) {
+    const day = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate() + d))
+    for (const b of DROP_BATCHES) {
+      if (!b.days.includes(day.getUTCDay())) continue
+      const start = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), b.utcHour, b.utcMin)
+      drops.push({ start, end: start + (b.sectors.length - 1) * SLOT_MS + TAIL_MS, sectors: b.sectors })
+    }
+  }
+  drops.sort((a, b) => a.start - b.start)
+  return {
+    current: drops.find((dr) => now >= dr.start && now < dr.end) ?? null,
+    next: drops.find((dr) => dr.start > now) ?? null,
+    prev: [...drops].reverse().find((dr) => dr.end <= now) ?? null,
+  }
+}
+
 const DEMO_JOBS: JobPost[] = [
   { id: '1', title: 'Equity Research Analyst — TMT', company: 'Tier 1 Hedge Fund', location: 'London', seniority: 'Senior', salary: '£120k–£160k + carry', apply_method: 'DM recruiter', summary: 'Long/short equity fund seeking a TMT-focused analyst with 4–7 years buyside experience.', tags: ['hedge-fund', 'equities', 'london'], sector: 'finance', post_url: '#', author_name: 'Sarah Mitchell', author_headline: 'Executive Search | Hedge Funds & Asset Management', author_linkedin_url: '#', raw_text: '', posted_at: new Date(Date.now() - 7200000).toISOString(), extracted_at: new Date().toISOString(), is_verified_job: true },
   { id: '2', title: 'Senior Software Engineer — AI Platform', company: 'Series B Startup', location: 'New York', seniority: 'Senior', salary: '$180k–$220k + equity', apply_method: 'Email CV', summary: 'Fast-growing AI startup hiring a senior engineer to build core inference infrastructure.', tags: ['ai', 'backend', 'new-york'], sector: 'tech', post_url: '#', author_name: 'James Park', author_headline: 'Tech Recruiter | AI & Engineering', author_linkedin_url: '#', raw_text: '', posted_at: new Date(Date.now() - 10800000).toISOString(), extracted_at: new Date().toISOString(), is_verified_job: true },
@@ -106,7 +141,9 @@ export default function HomePage() {
   const [saved, setSaved] = useState<Set<string>>(new Set())
   const [locQuery, setLocQuery] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)  // mobile filter accordion
+  const [nowTs, setNowTs] = useState<number | null>(null)  // null until mounted — avoids SSR hydration mismatch
   const searchRef = useRef<HTMLInputElement>(null)
+  const prevSlotKey = useRef<string | null>(null)
 
   const fetchJobs = useCallback(async () => {
     setLoading(true)
@@ -152,6 +189,81 @@ export default function HomePage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // Press-time ticker: per-second near/inside a drop, minute-rounded otherwise
+  // (minute-rounding makes setState a no-op between minutes, so no wasted re-renders)
+  useEffect(() => {
+    const update = () => {
+      const t = Date.now()
+      const { next, current } = dropsAround(t)
+      const fine = !!current || (next !== null && next.start - t < 11 * 60_000)
+      setNowTs(fine ? t : Math.floor(t / 60_000) * 60_000)
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Auto-refresh the feed as each sector's slot completes during a drop
+  useEffect(() => {
+    if (nowTs == null) return
+    const { current } = dropsAround(nowTs)
+    const key = current
+      ? `ing:${Math.min(Math.floor((nowTs - current.start) / SLOT_MS), current.sectors.length - 1)}`
+      : 'idle'
+    const prev = prevSlotKey.current
+    prevSlotKey.current = key
+    if (prev !== null && prev !== key && prev.startsWith('ing:')) fetchJobs()
+  }, [nowTs, fetchJobs])
+
+  type ClockPart = { v: string | number; u?: string }
+  const press = useMemo((): { cls: string; barW: number | null; label: string; detail: string; clock: ClockPart[] } | null => {
+    if (nowTs == null) return null
+    const { prev, next, current } = dropsAround(nowTs)
+
+    if (current) {
+      const idx = Math.min(Math.floor((nowTs - current.start) / SLOT_MS), current.sectors.length - 1)
+      const togo = current.sectors.length - 1 - idx
+      return {
+        cls: ' ingesting', barW: null, label: 'Fresh roles landing',
+        detail: `${sectorLabel(current.sectors[idx])} is in · ${togo > 0 ? `${togo} more to come` : 'wrapping up'}`,
+        clock: [{ v: 'ingesting…' }],
+      }
+    }
+    if (!next) return null
+
+    const remaining = next.start - nowTs
+    const startsLocal = new Date(next.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+    if (remaining > 8 * 3_600_000) {
+      const weekendGap = new Date(next.start).getUTCDay() === 1 && remaining > 20 * 3_600_000
+      return {
+        cls: ' far', barW: null, label: 'Next drop',
+        detail: weekendGap ? 'the presses rest on weekends' : 'done for today',
+        clock: [{ v: new Date(next.start).toLocaleString([], { weekday: 'long', hour: '2-digit', minute: '2-digit' }) }],
+      }
+    }
+
+    const spanStart = prev ? prev.end : next.start - 12 * 3_600_000
+    const barW = Math.round(Math.min(1, Math.max(0.02, (nowTs - spanStart) / (next.start - spanStart))) * 100)
+    const h = Math.floor(remaining / 3_600_000)
+    const m = Math.floor((remaining % 3_600_000) / 60_000)
+    const s = Math.floor((remaining % 60_000) / 1000)
+
+    if (remaining < 10 * 60_000) {
+      return {
+        cls: ' imminent', barW, label: 'Next drop',
+        detail: `${startsLocal} · starting with ${sectorLabel(next.sectors[0])}`,
+        clock: [{ v: m, u: 'm' }, { v: s, u: 's' }],
+      }
+    }
+    const names = next.sectors.map(sectorLabel)
+    return {
+      cls: '', barW, label: 'Next drop',
+      detail: `${startsLocal} · ${names[0]} first, then ${names.slice(1).join(', ')}`,
+      clock: h > 0 ? [{ v: h, u: 'h' }, { v: m, u: 'm' }] : [{ v: m, u: 'm' }],
+    }
+  }, [nowTs])
 
   const displayJobs = useMemo(() => {
     const list = allJobs.filter((job) => {
@@ -238,9 +350,6 @@ export default function HomePage() {
   }
 
   const resetAll = () => setFilters(DEFAULT_FILTERS)
-  // JobPost.sector is a plain string in the API payload, so accept any string
-  const sectorLabel = (s: string) =>
-    SECTORS.find((x) => x.id === s)?.label ?? (s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Other')
 
   return (
     <div className={`ulj${dark ? ' dark' : ''}`}>
@@ -396,6 +505,19 @@ export default function HomePage() {
               </select>
             </div>
           </div>
+
+          {press && (
+            <div className={`press${press.cls}`}>
+              {press.barW !== null && <div className="bar" style={{ width: `${press.barW}%` }} />}
+              {press.cls === ' ingesting' && <div className="bar shimmer" />}
+              <span className="pdot" />
+              <span className="plabel">{press.label}</span>
+              <span className="pdetail">{press.detail}</span>
+              <span className="pclock">
+                {press.clock.map((p, i) => <span key={i}>{p.v}{p.u && <span className="unit">{p.u}</span>}</span>)}
+              </span>
+            </div>
+          )}
 
           {loading ? (
             <div className="cards">
@@ -671,6 +793,34 @@ export default function HomePage() {
           border: 1px solid var(--hairline-2); border-radius: 8px; font: 500 12.5px 'Inter', sans-serif;
           outline: none; cursor: pointer;
         }
+
+        /* ── Press-time strip ── */
+        .ulj .press {
+          position: relative; overflow: hidden;
+          display: flex; align-items: center; gap: 10px;
+          background: var(--surface); border: 1px solid var(--hairline);
+          border-radius: 11px; padding: 11px 16px; margin-bottom: 14px;
+          box-shadow: var(--shadow); font-size: 12.5px; color: var(--ink-2);
+        }
+        .ulj .press .bar {
+          position: absolute; left: 0; top: 0; bottom: 0;
+          background: var(--surface-2); border-right: 1px solid var(--hairline-2);
+        }
+        .ulj .press .bar.shimmer {
+          width: 100%; border-right: none;
+          background: linear-gradient(100deg, var(--surface-2) 40%, var(--surface) 50%, var(--surface-2) 60%);
+          background-size: 200% 100%; animation: ulj-shimmer 1.6s infinite;
+        }
+        .ulj .press > *:not(.bar) { position: relative; z-index: 1; }
+        .ulj .press .pdot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); animation: ulj-pulse 2.2s infinite; flex-shrink: 0; }
+        .ulj .press.far .pdot { animation: none; opacity: .5; }
+        .ulj .press .plabel { font-weight: 600; color: var(--ink); white-space: nowrap; }
+        .ulj .press .pdetail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ulj .press .pclock { margin-left: auto; font: 600 13px 'Spline Sans Mono', monospace; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .ulj .press .pclock .unit { font-weight: 400; color: var(--ink-3); font-size: 11px; margin: 0 5px 0 1px; }
+        .ulj .press.imminent .pclock { color: var(--live); }
+        .ulj .press.ingesting .pclock { color: var(--live); font-size: 12px; }
+        .ulj .press.far .pclock { font-size: 12px; }
 
         .ulj .cards { display: flex; flex-direction: column; gap: 14px; }
         .ulj .skeleton {
