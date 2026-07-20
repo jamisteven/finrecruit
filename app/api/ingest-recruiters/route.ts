@@ -7,7 +7,11 @@ import { normaliseLocation } from '@/lib/normaliseLocation'
 export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
-  const isVercelCron = req.headers.get('x-vercel-cron') === '1'
+  // Auth: Vercel cron invocations automatically send `Authorization: Bearer ${CRON_SECRET}`
+  // when a CRON_SECRET env var is set on the project. Manual calls use x-ingest-secret as before.
+  const authHeader = req.headers.get('authorization')
+  const isVercelCron =
+    !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`
   const secret = req.headers.get('x-ingest-secret')
   if (!isVercelCron && secret !== process.env.INGEST_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -230,6 +234,8 @@ function guessSector(headline: string): string {
   return 'finance'
 }
 
-export async function GET() {
-  return NextResponse.json({ status: 'ok' })
+// Vercel cron invocations are GET requests — run the same ingestion as POST.
+// (The old GET health check was silently swallowing every cron fire.)
+export async function GET(req: NextRequest) {
+  return POST(req)
 }
