@@ -138,7 +138,6 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [usingDemo, setUsingDemo] = useState(true)
-  const [saved, setSaved] = useState<Set<string>>(new Set())
   const [locQuery, setLocQuery] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)  // mobile filter accordion
   const [nowTs, setNowTs] = useState<number | null>(null)  // null until mounted — avoids SSR hydration mismatch
@@ -341,14 +340,6 @@ export default function HomePage() {
     setFilters({ ...filters, locations: next })
   }
 
-  const toggleSaved = (id: string) => {
-    setSaved((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
   const resetAll = () => setFilters(DEFAULT_FILTERS)
 
   return (
@@ -398,7 +389,7 @@ export default function HomePage() {
       <section className="hero">
         <div>
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
-          <p className="sub">Roles recruiters post in the feed and never list — pulled from public posts, classified by AI, refreshed twice a day.</p>
+          <p className="sub">Roles recruiters post in the feed and never list - pulled from public posts, classified by AI, refreshed twice a day.</p>
         </div>
         <div className="stats">
           <div className="stat"><div className="num">{allJobs.length}</div><div className="lbl">Live roles</div></div>
@@ -570,9 +561,6 @@ export default function HomePage() {
                         {job.author_headline && <> · {job.author_headline}</>}
                       </span>
                       <div className="card-actions">
-                        <button className={`ghost-btn${saved.has(job.id) ? ' saved' : ''}`} onClick={() => toggleSaved(job.id)}>
-                          {saved.has(job.id) ? '★ Saved' : '☆ Save'}
-                        </button>
                         <a className="apply-btn" href={job.post_url} target="_blank" rel="noopener noreferrer">
                           View post
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7 17 17 7M7 7h10v10" /></svg>
@@ -871,13 +859,6 @@ export default function HomePage() {
         .ulj .author a { color: inherit; text-decoration: none; }
         .ulj .author a:hover { text-decoration: underline; }
         .ulj .card-actions { margin-left: auto; display: flex; gap: 8px; }
-        .ulj .ghost-btn {
-          height: 30px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px;
-          background: none; border: 1px solid var(--hairline-2); border-radius: 8px;
-          font: 600 12px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; transition: .12s;
-        }
-        .ulj .ghost-btn:hover { color: var(--ink); border-color: var(--ink-3); }
-        .ulj .ghost-btn.saved { color: var(--live); border-color: var(--live); }
         .ulj .apply-btn {
           height: 30px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px;
           background: var(--ink); color: var(--page); border: none; border-radius: 8px;
@@ -959,7 +940,6 @@ export default function HomePage() {
           .ulj .card-foot { margin: 14px -16px 0; padding: 10px 12px 12px 16px; flex-wrap: nowrap; }
           .ulj .author { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .ulj .card-actions { flex-shrink: 0; }
-          .ulj .ghost-btn { padding: 0 10px; }
           .ulj .apply-btn { padding: 0 11px; }
           .ulj .colophon { flex-direction: column; gap: 4px; }
         }
