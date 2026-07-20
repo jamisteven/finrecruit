@@ -84,8 +84,13 @@ const REGION_NAMES_LC = new Set(Object.keys(REGIONS).map((k) => k.toLowerCase())
 const matchKw = (part: string, kw: string) =>
   kw.length <= 3 ? part === kw || part.split(/[\s/]+/).includes(kw) : part.includes(kw)
 
+// Split compound locations into atomic parts: "New York / London" → two cities,
+// "Remote (Texas)" → remote + texas. Splits on | , / and parentheses.
 const locParts = (location: string) =>
-  location.split(/[|,]/).map((l) => l.trim().toLowerCase()).filter(Boolean)
+  location.replace(/[()]/g, ',').split(/[|,/]/).map((l) => l.trim().toLowerCase()).filter(Boolean)
+
+// Tokens that are work arrangements, not places — never shown as city chips
+const CITY_STOP = new Set(['hybrid', 'on-site', 'onsite', 'on site', 'office', 'flexible', 'wfh'])
 
 const jobInRegion = (job: JobPost, region: string) => {
   const kws = REGIONS[region]
@@ -93,12 +98,13 @@ const jobInRegion = (job: JobPost, region: string) => {
   return locParts(job.location).some((p) => kws.some((k) => matchKw(p, k)))
 }
 
-// Distinct location strings with counts, most frequent first
+// Distinct atomic location parts with counts, most frequent first
+// (same splitting rules as locParts, but preserves display casing)
 function locationStats(jobs: JobPost[]): { name: string; count: number }[] {
   const freq = new Map<string, { name: string; count: number }>()
   for (const j of jobs) {
     if (!j.location) continue
-    for (const raw of j.location.split(/[|,]/)) {
+    for (const raw of j.location.replace(/[()]/g, ',').split(/[|,/]/)) {
       const name = raw.trim()
       if (!name || name.length >= 40) continue
       const key = name.toLowerCase()
@@ -144,6 +150,7 @@ export default function HomePage() {
   const [saved, setSaved] = useState<Set<string>>(new Set())
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const [locQuery, setLocQuery] = useState('')
+  const [cityExpanded, setCityExpanded] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)  // mobile filter accordion
   const [nowTs, setNowTs] = useState<number | null>(null)  // null until mounted — avoids SSR hydration mismatch
   const searchRef = useRef<HTMLInputElement>(null)
@@ -314,10 +321,8 @@ export default function HomePage() {
         // "United States" + "New York" narrows to New York, not the union.
         const selRegions = filters.locations.filter((l) => REGIONS[l])
         const selCities = filters.locations.filter((l) => !REGIONS[l])
-        const matchCity = (sel: string) => {
-          const s = sel.toLowerCase()
-          return jobLocs.some((jl) => jl.includes(s) || s.includes(jl))
-        }
+        // Exact part match — same rule the chip counts use, so chip number === feed result
+        const matchCity = (sel: string) => jobLocs.includes(sel.toLowerCase())
         if (selRegions.length > 0 && !selRegions.some((r) => jobInRegion(job, r))) return false
         if (selCities.length > 0 && !selCities.some(matchCity)) return false
       }
@@ -372,35 +377,36 @@ export default function HomePage() {
     return locBase.filter((j) => selRegions.some((r) => jobInRegion(j, r)))
   }, [locBase, filters.locations])
 
-  // City counts use the SAME substring matcher as the feed filter, so a chip's
-  // number always equals the number of roles clicking it produces (a job located
-  // "New York / London" counts under both cities). Region names never appear as cities.
+  // City counts use the SAME exact-part matcher as the feed filter, so a chip's
+  // number always equals the number of roles clicking it produces. A job located
+  // "New York / London" counts once under each city. Region names and work-mode
+  // tokens (hybrid etc.) never appear as cities.
   const cityStats = useMemo(() => {
     const names = locationStats(cityBase)
       .map((l) => l.name)
-      .filter((n) => !REGION_NAMES_LC.has(n.toLowerCase()))
+      .filter((n) => !REGION_NAMES_LC.has(n.toLowerCase()) && !CITY_STOP.has(n.toLowerCase()))
     return names
       .map((name) => {
         const s = name.toLowerCase()
-        const count = cityBase.filter((j) =>
-          j.location && locParts(j.location).some((jl) => jl.includes(s) || s.includes(jl))
-        ).length
+        const count = cityBase.filter((j) => j.location && locParts(j.location).includes(s)).length
         return { name, count }
       })
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
   }, [cityBase])
 
   // City chips: selected ones always visible (even at 0), then matches for the
-  // typed query (or the most frequent cities when nothing is typed)
-  const CITY_LIMIT = 12
+  // typed query (or the most frequent cities when nothing is typed).
+  // Collapsed shows the top 24; expanded shows everything in a scrollable area.
+  const CITY_LIMIT = 24
   const visibleCities = useMemo(() => {
     const q = locQuery.trim().toLowerCase()
     const matches = q ? cityStats.filter((l) => l.name.toLowerCase().includes(q)) : cityStats
     const selectedNames = filters.locations.filter((l) => !REGIONS[l])
     const selected = selectedNames.map((name) => cityStats.find((l) => l.name === name) ?? { name, count: 0 })
     const rest = matches.filter((l) => !selectedNames.includes(l.name))
-    return { shown: [...selected, ...rest.slice(0, CITY_LIMIT)], hidden: Math.max(0, rest.length - CITY_LIMIT) }
-  }, [cityStats, locQuery, filters.locations])
+    const limit = cityExpanded ? rest.length : CITY_LIMIT
+    return { shown: [...selected, ...rest.slice(0, limit)], hidden: Math.max(0, rest.length - limit) }
+  }, [cityStats, locQuery, filters.locations, cityExpanded])
   const todayCount = useMemo(() => {
     const today = new Date().toDateString()
     return allJobs.filter((j) => j.extracted_at && new Date(j.extracted_at).toDateString() === today).length
@@ -561,15 +567,17 @@ export default function HomePage() {
               value={locQuery}
               onChange={(e) => setLocQuery(e.target.value)}
             />
-            <div className="chips">
+            <div className={`chips cities${cityExpanded ? ' expanded' : ''}`}>
               {visibleCities.shown.map((l) => (
                 <button key={l.name} className={`chip${filters.locations.includes(l.name) ? ' on' : ''}`} onClick={() => toggleLocation(l.name)}>
                   {l.name}<span className="n">{l.count}</span>
                 </button>
               ))}
             </div>
-            {visibleCities.hidden > 0 && (
-              <p className="more-note">+{visibleCities.hidden} more — type to search</p>
+            {(visibleCities.hidden > 0 || cityExpanded) && (
+              <button className="more-note" onClick={() => setCityExpanded(!cityExpanded)}>
+                {cityExpanded ? 'Show fewer' : `Show all (+${visibleCities.hidden} more)`}
+              </button>
             )}
           </div>
 
@@ -862,7 +870,13 @@ export default function HomePage() {
         }
         .ulj .loc-search::placeholder { color: var(--ink-3); }
         .ulj .loc-search:focus { border-color: var(--ink-2); }
-        .ulj .more-note { margin-top: 8px; font-size: 11px; color: var(--ink-3); }
+        .ulj .more-note {
+          margin-top: 8px; font-size: 11px; color: var(--ink-3);
+          background: none; border: none; cursor: pointer; padding: 0;
+          text-decoration: underline; text-underline-offset: 3px;
+        }
+        .ulj .more-note:hover { color: var(--ink); }
+        .ulj .chips.cities.expanded { max-height: 300px; overflow-y: auto; padding-right: 4px; }
         .ulj .side-note { font-size: 11.5px; color: var(--ink-3); line-height: 1.55; padding-top: 4px; }
         .ulj .saved-list { display: flex; flex-direction: column; gap: 2px; }
         .ulj .saved-link {
