@@ -57,8 +57,11 @@ export async function POST(req: NextRequest) {
         if (existing) { result.duplicates_skipped++; continue }
 
         // Pre-filter: skip posts with no hiring-signal words to save Claude tokens
+        // (English + German + French — German/French queries return German/French posts)
         const HIRING_SIGNALS = ['hiring', 'recruit', 'looking for', 'seeking', 'vacancy',
-          'opening', 'mandate', 'apply', 'candidate', 'now hiring', 'join our', 'come work']
+          'opening', 'mandate', 'apply', 'candidate', 'now hiring', 'join our', 'come work',
+          'suchen', 'gesucht', 'stelle', 'stellenangebot', 'einstellen', 'bewerbung', 'bewerben', 'verstärkung',
+          'recrute', 'recrutement', 'nous recherchons', 'poste à pourvoir', 'candidature', 'rejoignez']
         const textLower = post.text.toLowerCase()
         if (!HIRING_SIGNALS.some((s) => textLower.includes(s))) {
           console.log('[ingest] Skipping - no hiring signals')
