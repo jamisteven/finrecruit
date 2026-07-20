@@ -828,7 +828,16 @@ export default function HomePage() {
         .ulj .layout > * { min-width: 0; }  /* let grid children shrink below content width */
 
         /* ── Sidebar ── */
-        .ulj .filters { position: sticky; top: 84px; display: flex; flex-direction: column; gap: 26px; padding-top: 8px; }
+        .ulj .filters {
+          position: sticky; top: 84px;
+          display: flex; flex-direction: column; gap: 26px;
+          /* Scroll independently of the feed — otherwise a tall filter column's
+             bottom is unreachable until the whole page is scrolled through */
+          max-height: calc(100vh - 100px);
+          overflow-y: auto; overflow-x: hidden;
+          margin: 0 -10px; padding: 8px 10px 24px;
+          scrollbar-width: thin; scrollbar-color: var(--hairline-2) transparent;
+        }
         .ulj .flabel {
           font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
           color: var(--ink-3); padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid var(--hairline);
@@ -1034,7 +1043,7 @@ export default function HomePage() {
         /* ── Tablet & below: single column, collapsible filters ── */
         @media (max-width: 900px) {
           .ulj .layout { grid-template-columns: 1fr; gap: 16px; }
-          .ulj .filters { position: static; padding-top: 0; gap: 0; }
+          .ulj .filters { position: static; padding: 0; margin: 0; gap: 0; max-height: none; overflow: visible; }
           .ulj .filters-head {
             display: flex; align-items: center; gap: 8px; width: 100%;
             padding: 11px 14px; background: var(--surface);
