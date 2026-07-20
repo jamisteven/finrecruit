@@ -365,10 +365,30 @@ export default function HomePage() {
       .sort((a, b) => b.count - a.count),
     [locBase, filters.locations])
 
-  // City list: sector/work-type-scoped counts; region names never appear as cities
-  const cityStats = useMemo(
-    () => locationStats(locBase).filter((l) => !REGION_NAMES_LC.has(l.name.toLowerCase())),
-    [locBase])
+  // City list is scoped to the selected region(s): US selected → only US cities show
+  const cityBase = useMemo(() => {
+    const selRegions = filters.locations.filter((l) => REGIONS[l])
+    if (selRegions.length === 0) return locBase
+    return locBase.filter((j) => selRegions.some((r) => jobInRegion(j, r)))
+  }, [locBase, filters.locations])
+
+  // City counts use the SAME substring matcher as the feed filter, so a chip's
+  // number always equals the number of roles clicking it produces (a job located
+  // "New York / London" counts under both cities). Region names never appear as cities.
+  const cityStats = useMemo(() => {
+    const names = locationStats(cityBase)
+      .map((l) => l.name)
+      .filter((n) => !REGION_NAMES_LC.has(n.toLowerCase()))
+    return names
+      .map((name) => {
+        const s = name.toLowerCase()
+        const count = cityBase.filter((j) =>
+          j.location && locParts(j.location).some((jl) => jl.includes(s) || s.includes(jl))
+        ).length
+        return { name, count }
+      })
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  }, [cityBase])
 
   // City chips: selected ones always visible (even at 0), then matches for the
   // typed query (or the most frequent cities when nothing is typed)
