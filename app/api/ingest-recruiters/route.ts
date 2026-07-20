@@ -46,11 +46,13 @@ export async function POST(req: NextRequest) {
     total: 0, 
     classified_as_jobs: 0, 
     duplicates_skipped: 0, 
-    inserted: 0, 
+    inserted: 0,
     errors: 0,
+    skipped_off_sector: 0,
     recruiters_scraped: recruiters.length,
     recruiters_with_new_posts: 0,
   }
+  const VALID_SECTORS = ['finance', 'tech', 'legal', 'marketing', 'realestate']
 
   try {
     const startRes = await fetch(
@@ -121,10 +123,18 @@ export async function POST(req: NextRequest) {
 
         const cleanAuthorUrl = post.authorLinkedinUrl?.split('?')[0]
         const recruiter = cleanAuthorUrl ? recruiterMap.get(cleanAuthorUrl) : null
-        const sector = recruiter?.sector || guessSector(post.authorHeadline || '')
+        const hintSector = recruiter?.sector || guessSector(post.authorHeadline || '')
 
-        const classified = await classifyPost(post.text, post.authorHeadline, sector)
+        const classified = await classifyPost(post.text, post.authorHeadline, hintSector)
         if (!classified.isJob) continue
+
+        // The recruiter's sector is only a hint — trust the classifier's judgment of the role
+        const sector = VALID_SECTORS.includes(classified.sector) ? classified.sector : null
+        if (!sector) {
+          console.log(`[ingest-recruiters] Skipping off-sector role: "${classified.title}" (${classified.sector})`)
+          result.skipped_off_sector++
+          continue
+        }
 
         result.classified_as_jobs++
 

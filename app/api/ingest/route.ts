@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
   console.log(`[ingest] Starting sector="${sector}" queryOffset=${queryOffset}`)
 
-  const result = { sector, total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0 }
+  const result = { sector, total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0, skipped_off_sector: 0 }
 
   try {
     const db = createServerClient()
@@ -71,6 +71,16 @@ export async function POST(req: NextRequest) {
         const classified = await classifyPost(post.text, post.authorHeadline, sector)
         if (!classified.isJob) continue
 
+        // Trust the classifier's judgment of the ROLE's sector over the query's sector.
+        // A finance query that surfaces a tech job files it under tech; roles that fit
+        // no vertical ('other') are dropped instead of polluting a sector.
+        const jobSector = SECTORS.includes(classified.sector as Sector) ? (classified.sector as Sector) : null
+        if (!jobSector) {
+          console.log(`[ingest] Skipping off-sector role: "${classified.title}" (${classified.sector})`)
+          result.skipped_off_sector++
+          continue
+        }
+
         result.classified_as_jobs++
 
         const { error } = await db.from('jobs').insert({
@@ -82,7 +92,7 @@ export async function POST(req: NextRequest) {
           apply_method: classified.apply_method,
           summary: classified.summary,
           tags: classified.tags,
-          sector,
+          sector: jobSector,
           post_url: post.postUrl,
           author_name: post.authorName,
           author_headline: post.authorHeadline,
