@@ -138,6 +138,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [usingDemo, setUsingDemo] = useState(true)
+  const [saved, setSaved] = useState<Set<string>>(new Set())
+  const [highlightId, setHighlightId] = useState<string | null>(null)
   const [locQuery, setLocQuery] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)  // mobile filter accordion
   const [nowTs, setNowTs] = useState<number | null>(null)  // null until mounted — avoids SSR hydration mismatch
@@ -188,6 +190,39 @@ export default function HomePage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // Load saved jobs from localStorage once on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('bcj-saved')
+      if (raw) setSaved(new Set(JSON.parse(raw)))
+    } catch { /* ignore corrupt/blocked storage */ }
+  }, [])
+
+  const persistSaved = (next: Set<string>) => {
+    setSaved(next)
+    try { localStorage.setItem('bcj-saved', JSON.stringify([...next])) } catch { /* storage unavailable */ }
+  }
+
+  const toggleSaved = (id: string) => {
+    const next = new Set(saved)
+    next.has(id) ? next.delete(id) : next.add(id)
+    persistSaved(next)
+  }
+
+  const savedJobs = useMemo(() => allJobs.filter((j) => saved.has(j.id)), [allJobs, saved])
+
+  // Jump to a saved job's card in the feed; reset filters first if they're hiding it
+  const jumpToJob = (id: string) => {
+    const visible = displayJobs.some((j) => j.id === id)
+    if (!visible) setFilters(DEFAULT_FILTERS)
+    setFiltersOpen(false)
+    setHighlightId(id)
+    setTimeout(() => {
+      document.getElementById(`job-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, visible ? 0 : 150)
+    setTimeout(() => setHighlightId(null), 1800)
+  }
 
   // Press-time ticker: per-second near/inside a drop, minute-rounded otherwise
   // (minute-rounding makes setState a no-op between minutes, so no wasted re-renders)
@@ -365,11 +400,7 @@ export default function HomePage() {
           </div>
 
           <div className="mast-actions">
-            {usingDemo ? (
-              <span className="demo-badge">Demo data</span>
-            ) : todayCount > 0 ? (
-              <span className="live-pill"><span className="live-dot" /><span><b>{todayCount}</b> added today</span></span>
-            ) : null}
+            {usingDemo && <span className="demo-badge">Demo data</span>}
 
             <button className="icon-btn" onClick={() => setDark(!dark)} aria-label="Toggle dark mode" title="Toggle dark mode">
               {dark
@@ -389,7 +420,7 @@ export default function HomePage() {
       <section className="hero">
         <div>
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
-          <p className="sub">Roles recruiters post in the feed and never list - pulled from public posts, classified by AI, refreshed twice a day.</p>
+          <p className="sub">Roles recruiters post in the feed and never list — pulled from public posts, classified by AI, refreshed twice a day.</p>
         </div>
         <div className="stats">
           <div className="stat"><div className="num">{allJobs.length}</div><div className="lbl">Live roles</div></div>
@@ -408,6 +439,22 @@ export default function HomePage() {
             {activeFilterCount > 0 && <span className="fbadge">{activeFilterCount}</span>}
             <svg className={`chev${filtersOpen ? ' up' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
           </button>
+
+          {savedJobs.length > 0 && (
+            <div className="fgroup">
+              <div className="flabel">
+                <span>Saved jobs</span>
+                <button onClick={() => persistSaved(new Set())}>Clear</button>
+              </div>
+              <div className="saved-list">
+                {savedJobs.map((j) => (
+                  <button key={j.id} className="saved-link" onClick={() => jumpToJob(j.id)} title={j.title}>
+                    <span className="star">★</span><span className="t">{j.title}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="fgroup">
             <div className="flabel"><span>Sector</span></div>
@@ -525,7 +572,7 @@ export default function HomePage() {
               {displayJobs.map((job) => {
                 const wt = inferWorkType(job)
                 return (
-                  <article key={job.id} className="card" style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
+                  <article key={job.id} id={`job-${job.id}`} className={`card${highlightId === job.id ? ' flash' : ''}`} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
                     <div className="card-top">
                       <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}</span>
                       {job.is_verified_job && (
@@ -561,6 +608,9 @@ export default function HomePage() {
                         {job.author_headline && <> · {job.author_headline}</>}
                       </span>
                       <div className="card-actions">
+                        <button className={`ghost-btn${saved.has(job.id) ? ' saved' : ''}`} onClick={() => toggleSaved(job.id)}>
+                          {saved.has(job.id) ? '★ Saved' : '☆ Save'}
+                        </button>
                         <a className="apply-btn" href={job.post_url} target="_blank" rel="noopener noreferrer">
                           View post
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7 17 17 7M7 7h10v10" /></svg>
@@ -675,8 +725,6 @@ export default function HomePage() {
           color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--hairline-2);
           padding: 4px 9px; border-radius: 6px; white-space: nowrap;
         }
-        .ulj .live-pill { display: flex; align-items: center; gap: 7px; font: 500 12px 'Inter', sans-serif; color: var(--ink-2); white-space: nowrap; }
-        .ulj .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); animation: ulj-pulse 2.2s infinite; }
         @keyframes ulj-pulse { 50% { opacity: .35; } }
         .ulj .icon-btn {
           width: 36px; height: 36px; display: grid; place-items: center;
@@ -768,6 +816,16 @@ export default function HomePage() {
         .ulj .loc-search:focus { border-color: var(--ink-2); }
         .ulj .more-note { margin-top: 8px; font-size: 11px; color: var(--ink-3); }
         .ulj .side-note { font-size: 11.5px; color: var(--ink-3); line-height: 1.55; padding-top: 4px; }
+        .ulj .saved-list { display: flex; flex-direction: column; gap: 2px; }
+        .ulj .saved-link {
+          display: flex; align-items: baseline; gap: 8px; width: 100%;
+          padding: 6px 0; background: none; border: none; cursor: pointer; text-align: left;
+          font: 500 12.5px 'Inter', sans-serif; color: var(--ink-2); transition: color .12s;
+        }
+        .ulj .saved-link:hover { color: var(--ink); }
+        .ulj .saved-link .star { color: var(--live); font-size: 11px; flex-shrink: 0; }
+        .ulj .saved-link .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ulj .card.flash { border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 20%, transparent); }
 
         /* ── Feed ── */
         .ulj .feed-bar { display: flex; align-items: baseline; gap: 14px; padding: 8px 0 16px; }
@@ -859,6 +917,13 @@ export default function HomePage() {
         .ulj .author a { color: inherit; text-decoration: none; }
         .ulj .author a:hover { text-decoration: underline; }
         .ulj .card-actions { margin-left: auto; display: flex; gap: 8px; }
+        .ulj .ghost-btn {
+          height: 30px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px;
+          background: none; border: 1px solid var(--hairline-2); border-radius: 8px;
+          font: 600 12px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; transition: .12s;
+        }
+        .ulj .ghost-btn:hover { color: var(--ink); border-color: var(--ink-3); }
+        .ulj .ghost-btn.saved { color: var(--live); border-color: var(--live); }
         .ulj .apply-btn {
           height: 30px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px;
           background: var(--ink); color: var(--page); border: none; border-radius: 8px;
@@ -918,7 +983,6 @@ export default function HomePage() {
           }
           .ulj .search-wrap { order: 3; flex-basis: 100%; max-width: none; }
           .ulj .slash { display: none; }
-          .ulj .live-pill { display: none; }
           .ulj .refresh-btn { width: 36px; padding: 0; justify-content: center; }
           .ulj .refresh-btn span { display: none; }  /* icon-only so the top row fits one line */
           .ulj .hero { padding: 26px 16px 16px; gap: 18px; }
@@ -940,6 +1004,7 @@ export default function HomePage() {
           .ulj .card-foot { margin: 14px -16px 0; padding: 10px 12px 12px 16px; flex-wrap: nowrap; }
           .ulj .author { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .ulj .card-actions { flex-shrink: 0; }
+          .ulj .ghost-btn { padding: 0 10px; }
           .ulj .apply-btn { padding: 0 11px; }
           .ulj .colophon { flex-direction: column; gap: 4px; }
         }
