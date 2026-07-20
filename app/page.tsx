@@ -836,8 +836,9 @@ export default function HomePage() {
           max-height: calc(100vh - 100px);
           overflow-y: auto; overflow-x: hidden;
           margin: 0 -10px; padding: 8px 10px 24px;
-          scrollbar-width: thin; scrollbar-color: var(--hairline-2) transparent;
+          scrollbar-width: none;  /* scrolls via wheel/trackpad; bar itself hidden */
         }
+        .ulj .filters::-webkit-scrollbar { display: none; }
         .ulj .flabel {
           font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
           color: var(--ink-3); padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid var(--hairline);
