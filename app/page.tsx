@@ -152,7 +152,8 @@ export default function HomePage() {
     try {
       const params = new URLSearchParams()
       if (filters.search) params.set('search', filters.search)
-      if (filters.sector !== 'all') params.set('sector', filters.sector)
+      // NOTE: sector is deliberately NOT sent to the API — it's filtered client-side
+      // so the sidebar counts always reflect the full dataset.
       params.set('sortBy', filters.sortBy)
       params.set('limit', '5000')
 
@@ -172,7 +173,7 @@ export default function HomePage() {
       setAllJobs(DEMO_JOBS)
       setUsingDemo(true)
     } finally { setLoading(false) }
-  }, [filters.search, filters.sector, filters.sortBy])
+  }, [filters.search, filters.sortBy])
 
   // Debounced so typing in search doesn't fire a request per keystroke
   useEffect(() => {
@@ -302,6 +303,7 @@ export default function HomePage() {
 
   const displayJobs = useMemo(() => {
     const list = allJobs.filter((job) => {
+      if (filters.sector !== 'all' && job.sector !== filters.sector) return false
       if (filters.locations.length > 0) {
         if (!job.location) return false
         const jobLocs = locParts(job.location)
@@ -323,7 +325,7 @@ export default function HomePage() {
       const d = toTime(b.posted_at) - toTime(a.posted_at)
       return filters.sortBy === 'newest' ? d : -d
     })
-  }, [allJobs, filters.locations, filters.workTypes, filters.sortBy])
+  }, [allJobs, filters.sector, filters.locations, filters.workTypes, filters.sortBy])
 
   const sectorCounts = useMemo(() => ({
     all: allJobs.length,
