@@ -79,6 +79,8 @@ const REGIONS: Record<string, string[]> = {
   'Ireland':        ['ireland', 'dublin'],
 }
 
+const REGION_NAMES_LC = new Set(Object.keys(REGIONS).map((k) => k.toLowerCase()))
+
 const matchKw = (part: string, kw: string) =>
   kw.length <= 3 ? part === kw || part.split(/[\s/]+/).includes(kw) : part.includes(kw)
 
@@ -307,12 +309,17 @@ export default function HomePage() {
       if (filters.locations.length > 0) {
         if (!job.location) return false
         const jobLocs = locParts(job.location)
-        const ok = filters.locations.some((sel) => {
-          if (REGIONS[sel]) return jobInRegion(job, sel)  // country/region selection
+        // Hierarchical: regions scope (OR among them), cities refine (OR among them),
+        // and when both are selected a job must satisfy both groups — so
+        // "United States" + "New York" narrows to New York, not the union.
+        const selRegions = filters.locations.filter((l) => REGIONS[l])
+        const selCities = filters.locations.filter((l) => !REGIONS[l])
+        const matchCity = (sel: string) => {
           const s = sel.toLowerCase()
           return jobLocs.some((jl) => jl.includes(s) || s.includes(jl))
-        })
-        if (!ok) return false
+        }
+        if (selRegions.length > 0 && !selRegions.some((r) => jobInRegion(job, r))) return false
+        if (selCities.length > 0 && !selCities.some(matchCity)) return false
       }
       if (filters.workTypes.length > 0) {
         const wt = inferWorkType(job)
@@ -336,26 +343,44 @@ export default function HomePage() {
     realestate: allJobs.filter((j) => j.sector === 'realestate').length,
   }), [allJobs])
 
-  const locStats = useMemo(() => locationStats(allJobs), [allJobs])
-  const availableLocations = useMemo(() => locStats.map((l) => l.name), [locStats])
+  // Hero stat: distinct locations across the whole dataset (unfiltered)
+  const availableLocations = useMemo(() => locationStats(allJobs).map((l) => l.name), [allJobs])
+
+  // Base for location facet counts: every active filter EXCEPT location itself,
+  // so region/city counts respond to the selected sector and work types.
+  const locBase = useMemo(() => allJobs.filter((job) => {
+    if (filters.sector !== 'all' && job.sector !== filters.sector) return false
+    if (filters.workTypes.length > 0) {
+      const wt = inferWorkType(job)
+      if (!wt || !filters.workTypes.includes(wt)) return false
+    }
+    return true
+  }), [allJobs, filters.sector, filters.workTypes])
 
   const regionCounts = useMemo(() =>
     Object.keys(REGIONS)
-      .map((name) => ({ name, count: allJobs.filter((j) => jobInRegion(j, name)).length }))
-      .filter((r) => r.count > 0)
+      .map((name) => ({ name, count: locBase.filter((j) => jobInRegion(j, name)).length }))
+      // hide empty regions, but never hide one the user has selected
+      .filter((r) => r.count > 0 || filters.locations.includes(r.name))
       .sort((a, b) => b.count - a.count),
-    [allJobs])
+    [locBase, filters.locations])
 
-  // City chips: selected ones always visible, then matches for the typed query
-  // (or the most frequent cities when nothing is typed)
+  // City list: sector/work-type-scoped counts; region names never appear as cities
+  const cityStats = useMemo(
+    () => locationStats(locBase).filter((l) => !REGION_NAMES_LC.has(l.name.toLowerCase())),
+    [locBase])
+
+  // City chips: selected ones always visible (even at 0), then matches for the
+  // typed query (or the most frequent cities when nothing is typed)
   const CITY_LIMIT = 12
   const visibleCities = useMemo(() => {
     const q = locQuery.trim().toLowerCase()
-    const matches = q ? locStats.filter((l) => l.name.toLowerCase().includes(q)) : locStats
-    const selected = locStats.filter((l) => filters.locations.includes(l.name))
-    const rest = matches.filter((l) => !filters.locations.includes(l.name))
+    const matches = q ? cityStats.filter((l) => l.name.toLowerCase().includes(q)) : cityStats
+    const selectedNames = filters.locations.filter((l) => !REGIONS[l])
+    const selected = selectedNames.map((name) => cityStats.find((l) => l.name === name) ?? { name, count: 0 })
+    const rest = matches.filter((l) => !selectedNames.includes(l.name))
     return { shown: [...selected, ...rest.slice(0, CITY_LIMIT)], hidden: Math.max(0, rest.length - CITY_LIMIT) }
-  }, [locStats, locQuery, filters.locations])
+  }, [cityStats, locQuery, filters.locations])
   const todayCount = useMemo(() => {
     const today = new Date().toDateString()
     return allJobs.filter((j) => j.extracted_at && new Date(j.extracted_at).toDateString() === today).length
@@ -519,7 +544,7 @@ export default function HomePage() {
             <div className="chips">
               {visibleCities.shown.map((l) => (
                 <button key={l.name} className={`chip${filters.locations.includes(l.name) ? ' on' : ''}`} onClick={() => toggleLocation(l.name)}>
-                  {l.name}
+                  {l.name}<span className="n">{l.count}</span>
                 </button>
               ))}
             </div>
