@@ -81,8 +81,19 @@ const REGIONS: Record<string, string[]> = {
 
 const REGION_NAMES_LC = new Set(Object.keys(REGIONS).map((k) => k.toLowerCase()))
 
-const matchKw = (part: string, kw: string) =>
-  kw.length <= 3 ? part === kw || part.split(/[\s/]+/).includes(kw) : part.includes(kw)
+// Word-boundary keyword matching: "bern" must appear as a whole word, so it
+// matches "Bern" and "bern, switzerland" but NOT "Abernathy"; "india" must not
+// match "Indianapolis". Boundaries are any non-letter/non-digit (unicode-aware).
+const kwRegexCache = new Map<string, RegExp>()
+const matchKw = (part: string, kw: string) => {
+  let re = kwRegexCache.get(kw)
+  if (!re) {
+    const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    re = new RegExp(`(?:^|[^\\p{L}\\p{N}])${esc}(?:$|[^\\p{L}\\p{N}])`, 'u')
+    kwRegexCache.set(kw, re)
+  }
+  return re.test(part)
+}
 
 // Split compound locations into atomic parts: "New York / London" → two cities,
 // "Remote (Texas)" → remote + texas. Splits on | , / and parentheses.
