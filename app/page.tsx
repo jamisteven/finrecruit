@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { Analytics } from '@vercel/analytics/next'
 import { JobPost, FilterState, Sector, WorkType } from '@/types'
 
 const DEFAULT_FILTERS: FilterState = {
@@ -1009,6 +1010,8 @@ export default function HomePage() {
           .ulj .colophon { flex-direction: column; gap: 4px; }
         }
       `}</style>
+
+      <Analytics />
     </div>
   )
 }
