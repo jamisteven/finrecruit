@@ -34,7 +34,8 @@ export async function POST(req: NextRequest) {
 
   console.log(`[ingest] Starting sector="${sector}" queryOffset=${queryOffset}`)
 
-  const result = { sector, total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0, skipped_off_sector: 0 }
+  const MAX_POST_AGE_DAYS = 60  // ignore hiring posts older than this — role is long filled
+  const result = { sector, total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0, skipped_off_sector: 0, skipped_stale: 0 }
 
   try {
     const db = createServerClient()
@@ -47,6 +48,13 @@ export async function POST(req: NextRequest) {
         const post = normalisePost(rawPost)
 
         if (!post.postUrl || !post.text || post.text.length < 20) continue
+
+        // Age gate: LinkedIn search happily returns years-old posts — skip them
+        // before they cost a dedupe query or a classification call
+        if (post.postedAt && Date.now() - new Date(post.postedAt).getTime() > MAX_POST_AGE_DAYS * 86_400_000) {
+          result.skipped_stale++
+          continue
+        }
 
         const { data: existing } = await db
           .from('jobs')

@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
     inserted: 0,
     errors: 0,
     skipped_off_sector: 0,
+    skipped_stale: 0,
     recruiters_scraped: recruiters.length,
     recruiters_with_new_posts: 0,
   }
@@ -108,6 +109,12 @@ export async function POST(req: NextRequest) {
       try {
         const post = normalisePost(rawPost)
         if (!post.postUrl || !post.text || post.text.length < 20) continue
+
+        // Age gate — same 60-day rule as the sector ingest
+        if (post.postedAt && Date.now() - new Date(post.postedAt).getTime() > 60 * 86_400_000) {
+          result.skipped_stale++
+          continue
+        }
 
         const { data: existing } = await db
           .from('jobs').select('id').eq('post_url', post.postUrl).single()
