@@ -91,6 +91,11 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'Vermögensverwaltung Zürich Genf gesucht',
     'Bank Stelle Zürich wir suchen',
     'Portfolio Manager Zürich Stelle frei',
+    '#hiring finance recruiter',
+    '#nowhiring investment banking',
+    '#jobopening finance London New York',
+    '#hiring hedge fund private equity',
+    '#financejobs recruiter hiring',
   ],
   tech: [
     'software engineer recruiter now hiring',
@@ -168,6 +173,11 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'IT Recruiter Stellenangebot Frankfurt Deutschland',
     'Entwickler einstellen Deutschland',
     'Software Engineer Berlin Stelle frei',
+    '#hiring software engineer recruiter',
+    '#nowhiring engineer startup',
+    '#techjobs recruiter hiring',
+    '#hiring developer engineer',
+    '#jobopening tech London New York Zurich',
   ],
   legal: [
     'legal recruiter now hiring lawyer',
@@ -204,6 +214,11 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'legal recruiter hiring Toronto',
     'lawyer Toronto recruiter hiring',
     'in-house counsel Toronto recruiter hiring',
+    '#hiring lawyer solicitor recruiter',
+    '#legaljobs recruiter hiring',
+    '#nowhiring legal counsel',
+    '#hiring compliance recruiter',
+    '#jobopening legal London',
   ],
   marketing: [
     'marketing recruiter now hiring',
@@ -248,6 +263,11 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'partnership marketing recruiter hiring',
     'marketing recruiter hiring Toronto',
     'growth marketing Toronto recruiter hiring',
+    '#hiring marketing recruiter',
+    '#marketingjobs recruiter hiring',
+    '#nowhiring marketing director',
+    '#hiring growth marketing',
+    '#jobopening marketing London New York',
   ],
   realestate: [
     'property manager recruiter hiring',
@@ -286,12 +306,26 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'real estate recruiter hiring Toronto',
     'real estate recruiter hiring London',
     'property management recruiter hiring New York',
+    '#hiring property manager recruiter',
+    '#realestatejobs recruiter hiring',
+    '#nowhiring leasing property',
+    '#hiring property management',
   ],
 }
 
-export async function runApifyScraperForSector(sector: Sector, queryOffset = 0): Promise<ApifyPost[]> {
+export async function runApifyScraperForSector(
+  sector: Sector,
+  queryOffset = 0,
+  opts: { maxPosts?: number; recentOnly?: boolean } = {}
+): Promise<ApifyPost[]> {
   const apiToken = process.env.APIFY_API_TOKEN
   if (!apiToken) throw new Error('APIFY_API_TOKEN not set')
+
+  const maxPosts = Math.min(Math.max(opts.maxPosts ?? 10, 1), 25)
+  // recentOnly (the cron default): sort by date, only posts from the last week —
+  // avoids re-fetching LinkedIn's sticky "top match" posts on every run.
+  // Deep/loading runs use relevance ranking with no date filter to mine the backlog.
+  const recentOnly = opts.recentOnly ?? true
 
   const queries = SECTOR_QUERIES[sector]
   const batch = [...queries, ...queries].slice(queryOffset % queries.length, (queryOffset % queries.length) + 3)
@@ -299,7 +333,7 @@ export async function runApifyScraperForSector(sector: Sector, queryOffset = 0):
 
   for (const query of batch) {
     try {
-      console.log(`[apify] [${sector}] "${query}"`)
+      console.log(`[apify] [${sector}] "${query}" (${recentOnly ? 'recent' : 'deep'}, max ${maxPosts})`)
 
       const startRes = await fetch(
         `https://api.apify.com/v2/acts/harvestapi~linkedin-post-search/runs?token=${apiToken}`,
@@ -308,7 +342,10 @@ export async function runApifyScraperForSector(sector: Sector, queryOffset = 0):
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             searchQueries: [query],
-            maxPosts: 10,
+            maxPosts,
+            // 'month' (not 'week'): each query is only revisited every ~9-12 days
+            // in the rotation, so a 7-day window would leave blind gaps between visits
+            ...(recentOnly ? { sortBy: 'date', postedLimit: 'month' } : { sortBy: 'relevance' }),
             scrapeComments: false,
             scrapeReactions: false,
           }),
@@ -340,7 +377,7 @@ export async function runApifyScraperForSector(sector: Sector, queryOffset = 0):
       if (status !== 'SUCCEEDED') continue
 
       const resultsRes = await fetch(
-        `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=10`
+        `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=${maxPosts}`
       )
       const items: ApifyPost[] = await resultsRes.json()
       console.log(`[apify] "${query}" → ${items.length} posts`)
