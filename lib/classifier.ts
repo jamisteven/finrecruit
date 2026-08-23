@@ -66,7 +66,7 @@ ${rawText.slice(0, 2500)}
 ---
 
 Reply ONLY with JSON, no markdown, no backticks:
-{"isJob":true,"title":"job title","company":"company or null","location":"primary city only (e.g. London, New York, Remote) — do NOT list multiple cities","seniority":"one of: Intern/Junior/Mid/Senior/VP/Director/MD/Partner/C-Suite/Unknown","salary":"range or null","apply_method":"DM/email/link/etc or null","summary":"1-2 sentences about the role","tags":["tag1","tag2"],"sector":"one of: finance/tech/legal/marketing/realestate/other"}
+{"isJob":true,"title":"job title","company":"company or null","location":"primary city only (e.g. London, New York, Remote) — do NOT list multiple cities, do NOT include Indian cities (Bangalore, Mumbai, Hyderabad, Delhi, Chennai, Pune, Noida, Gurugram etc) — return null for India-based roles","seniority":"one of: Intern/Junior/Mid/Senior/VP/Director/MD/Partner/C-Suite/Unknown","salary":"range or null","apply_method":"DM/email/link/etc or null","summary":"1-2 sentences about the role","tags":["tag1","tag2"],"sector":"one of: finance/tech/legal/marketing/realestate/other"}
 
 Or if not a job: {"isJob":false,"title":"","company":null,"location":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[],"sector":"other"}`
 

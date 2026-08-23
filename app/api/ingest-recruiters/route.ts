@@ -135,6 +135,13 @@ export async function POST(req: NextRequest) {
         const classified = await classifyPost(post.text, post.authorHeadline, hintSector)
         if (!classified.isJob) continue
 
+        // Skip India-based roles
+        const INDIA_LOCATIONS = ['bengaluru', 'bangalore', 'hyderabad', 'mumbai',
+          'pune', 'chennai', 'noida', 'gurugram', 'gurgaon', 'delhi', 'kolkata',
+          'ahmedabad', 'jaipur', 'chandigarh', 'indore', 'india']
+        const loc = (classified.location || '').toLowerCase()
+        if (INDIA_LOCATIONS.some(l => loc.includes(l))) continue
+
         // The recruiter's sector is only a hint — trust the classifier's judgment of the role
         const sector = VALID_SECTORS.includes(classified.sector) ? classified.sector : null
         if (!sector) {

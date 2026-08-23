@@ -4,7 +4,7 @@ import { classifyPost } from '@/lib/classifier'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
-export const maxDuration = 300
+export const maxDuration = 600  // deep runs (3 queries × 25 posts + classification) need headroom
 
 const SECTORS: Sector[] = ['finance', 'tech', 'legal', 'marketing', 'realestate']
 
@@ -32,14 +32,25 @@ export async function POST(req: NextRequest) {
     ? parseInt(offsetParam)
     : (new Date().getUTCHours() * 3) % SECTOR_QUERIES[sector].length
 
-  console.log(`[ingest] Starting sector="${sector}" queryOffset=${queryOffset}`)
+  // mode=recent (default, used by crons): date-sorted, last-week posts only.
+  // mode=deep (manual loading sweeps): relevance-ranked, no date filter, deeper fetch.
+  const mode = url.searchParams.get('mode') === 'deep' ? 'deep' : 'recent'
+  const maxPostsParam = parseInt(url.searchParams.get('maxPosts') || '')
+  const maxPosts = Number.isFinite(maxPostsParam)
+    ? Math.min(Math.max(maxPostsParam, 1), 25)
+    : (mode === 'deep' ? 25 : 10)
+
+  console.log(`[ingest] Starting sector="${sector}" queryOffset=${queryOffset} mode=${mode} maxPosts=${maxPosts}`)
 
   const MAX_POST_AGE_DAYS = 60  // ignore hiring posts older than this — role is long filled
   const result = { sector, total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0, skipped_off_sector: 0, skipped_stale: 0 }
 
   try {
     const db = createServerClient()
-    const rawPosts = await runApifyScraperForSector(sector, queryOffset)
+    const rawPosts = await runApifyScraperForSector(sector, queryOffset, {
+      maxPosts,
+      recentOnly: mode === 'recent',
+    })
     result.total = rawPosts.length
     console.log(`[ingest] Got ${rawPosts.length} posts for sector=${sector}`)
 
@@ -78,6 +89,16 @@ export async function POST(req: NextRequest) {
 
         const classified = await classifyPost(post.text, post.authorHeadline, sector)
         if (!classified.isJob) continue
+
+        // Skip India-based roles
+        const INDIA_LOCATIONS = ['bengaluru', 'bangalore', 'hyderabad', 'mumbai', 
+          'pune', 'chennai', 'noida', 'gurugram', 'gurgaon', 'delhi', 'kolkata',
+          'ahmedabad', 'jaipur', 'chandigarh', 'indore', 'india']
+        const loc = (classified.location || '').toLowerCase()
+        if (INDIA_LOCATIONS.some(l => loc.includes(l))) {
+          console.log('[ingest] Skipping India-based role:', classified.location)
+          continue
+        }
 
         // Trust the classifier's judgment of the ROLE's sector over the query's sector.
         // A finance query that surfaces a tech job files it under tech; roles that fit
