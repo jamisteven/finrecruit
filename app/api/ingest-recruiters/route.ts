@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     .eq('active', true)
     .lte('next_scrape_at', new Date().toISOString())
     .order('next_scrape_at', { ascending: true })
-    .limit(20)
+    .limit(50)
 
   if (recError || !recruiters?.length) {
     return NextResponse.json({ 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           profileUrls,
-          maxPosts: 5,
+          maxPosts: 1,
           scrapeComments: false,
           scrapeReactions: false,
         }),
