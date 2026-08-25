@@ -1,9 +1,7 @@
 import { ImageResponse } from 'next/og'
+import { frauncesBold } from '@/lib/fraunces-font'
 
 export async function GET() {
-  const fontUrl = 'https://fonts.gstatic.com/s/fraunces/v38/6NUh8FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2Wa0K7iN7hzFUPJH58nib1603gg7S2nfgRYIcUByTCf7T.woff2'
-  const fraunces = await fetch(fontUrl).then(r => r.arrayBuffer())
-
   return new ImageResponse(
     <div style={{
       width: '1200px', height: '630px', background: '#F5F0E8',
@@ -40,7 +38,7 @@ export async function GET() {
     </div>,
     {
       width: 1200, height: 630,
-      fonts: [{ name: 'Fraunces', data: fraunces, weight: 700, style: 'normal' }],
+      fonts: [{ name: 'Fraunces', data: frauncesBold, weight: 700, style: 'normal' }],
     }
   )
 }
