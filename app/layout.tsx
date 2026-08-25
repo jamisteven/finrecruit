@@ -9,14 +9,14 @@ export const metadata: Metadata = {
     description: 'Roles recruiters post in the feed and never list — pulled from public posts, classified by AI, refreshed twice a day.',
     url: 'https://backchanneljobs.com',
     siteName: 'BackchannelJobs',
-    images: [{ url: '/og', width: 1200, height: 630 }],
+    images: [{ url: 'https://www.backchanneljobs.com/og', width: 1200, height: 630 }],
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: "BackchannelJobs — The jobs LinkedIn doesn't show you",
     description: 'Roles recruiters post in the feed and never list — pulled from public posts, classified by AI, refreshed twice a day.',
-    images: ['/og'],
+    images: ['https://www.backchanneljobs.com/og'],
   },
 }
 
