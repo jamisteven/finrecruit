@@ -6,7 +6,7 @@ export const runtime = 'nodejs'
 
 export async function GET() {
   const fontData = readFileSync(join(process.cwd(), 'public/fraunces-700.woff2'))
-  const fontBuffer = fontData.buffer.slice(fontData.byteOffset, fontData.byteOffset + fontData.byteLength)
+  const fontBuffer = new Uint8Array(fontData).buffer
 
   return new ImageResponse(
     <div style={{
