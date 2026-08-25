@@ -3,19 +3,10 @@ import { ImageResponse } from 'next/og'
 export const runtime = 'nodejs'
 
 export async function GET() {
-  const fs = await import('fs')
-  const path = await import('path')
-
-  // 1. Read the TTF font file
-  const fontBuffer = fs.readFileSync(
-    path.join(process.cwd(), 'public/fraunces-700.ttf')
-  )
-
-  // 2. Convert Node Buffer to ArrayBuffer required by Satori
-  const fontData = fontBuffer.buffer.slice(
-    fontBuffer.byteOffset,
-    fontBuffer.byteOffset + fontBuffer.byteLength
-  )
+  // Fetch Fraunces TTF direct from Google Fonts CDN
+  const fontData = await fetch(
+    'https://fonts.gstatic.com/s/fraunces/v32/6NUv81yM7341izC2p_9_s956w30t12zO0OflXbgqI0_A2A.ttf'
+  ).then((res) => res.arrayBuffer())
 
   return new ImageResponse(
     (
@@ -28,10 +19,10 @@ export async function GET() {
           flexDirection: 'column',
           justifyContent: 'space-between',
           padding: '60px',
-          fontFamily: 'Fraunces', // Matches the 'name' in fonts array
+          fontFamily: 'Fraunces',
         }}
       >
-        {/* Top Header & Main Copy */}
+        {/* Main Content */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ fontSize: 28, color: '#1A1A1A', display: 'flex' }}>
             backchannel.jobs
@@ -59,7 +50,7 @@ export async function GET() {
           </div>
         </div>
 
-        {/* Bottom Stats Section */}
+        {/* Bottom Bar */}
         <div style={{ display: 'flex', gap: '80px', alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <span style={{ fontSize: 52, fontWeight: 700, color: '#1A1A1A', display: 'flex' }}>
