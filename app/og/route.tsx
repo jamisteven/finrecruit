@@ -1,19 +1,18 @@
 import { ImageResponse } from 'next/og'
-import { frauncesBold } from '@/lib/fraunces-font'
 
 export async function GET() {
   return new ImageResponse(
     <div style={{
       width: '1200px', height: '630px', background: '#F5F0E8',
       display: 'flex', flexDirection: 'column', padding: '60px',
-      fontFamily: 'sans-serif',
+      fontFamily: 'serif',
     }}>
       <div style={{ fontSize: 28, color: '#1A1A1A', display: 'flex' }}>
         backchannel.jobs
       </div>
       <div style={{
         fontSize: 76, fontWeight: 700, color: '#1A1A1A',
-        fontFamily: 'Fraunces', marginTop: 60, lineHeight: 1.1,
+        marginTop: 60, lineHeight: 1.1,
         display: 'flex', flexDirection: 'column',
       }}>
         <span>The jobs LinkedIn</span>
@@ -24,11 +23,11 @@ export async function GET() {
       </div>
       <div style={{ display: 'flex', gap: '80px', marginTop: 'auto' }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: 52, fontWeight: 700, fontFamily: 'Fraunces', color: '#1A1A1A' }}>2,300+</span>
+          <span style={{ fontSize: 52, fontWeight: 700, color: '#1A1A1A' }}>2,300+</span>
           <span style={{ fontSize: 14, color: '#9A9490', marginTop: 4 }}>LIVE ROLES</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: 52, fontWeight: 700, fontFamily: 'Fraunces', color: '#1A1A1A' }}>436</span>
+          <span style={{ fontSize: 52, fontWeight: 700, color: '#1A1A1A' }}>436</span>
           <span style={{ fontSize: 14, color: '#9A9490', marginTop: 4 }}>LOCATIONS</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end' }}>
@@ -36,9 +35,6 @@ export async function GET() {
         </div>
       </div>
     </div>,
-    {
-      width: 1200, height: 630,
-      fonts: [{ name: 'Fraunces', data: frauncesBold, weight: 700, style: 'normal' }],
-    }
+    { width: 1200, height: 630 }
   )
 }
