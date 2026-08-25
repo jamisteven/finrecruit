@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og'
 
 export async function GET(req: Request) {
   const host = new URL(req.url).origin
-  const fraunces = await fetch(`${host}/fraunces.woff2`).then(r => r.arrayBuffer())
+  const fraunces = await fetch(`${host}/fraunces-bold.woff2`).then(r => r.arrayBuffer())
 
   return new ImageResponse(
     <div style={{
