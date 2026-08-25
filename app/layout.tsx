@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'RoleRadar — Hidden Jobs from LinkedIn',
+  title: 'BackchannelJobs — Hidden Jobs from LinkedIn',
   description: 'Surface jobs posted by recruiters on LinkedIn that never make it to job boards. Finance, Tech, Legal, Marketing.',
 }
 
