@@ -1,4 +1,3 @@
-cat > ~/finrecruit/app/og/route.tsx << 'EOF'
 import { ImageResponse } from 'next/og'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
@@ -22,7 +21,7 @@ export async function GET() {
           display: 'flex', flexDirection: 'column',
         }}>
           <span>The jobs LinkedIn</span>
-          <span style={{ fontStyle: 'italic' }}>doesn't show you.</span>
+          <span style={{ fontStyle: 'italic' }}>{"doesn't show you."}</span>
         </div>
         <div style={{ fontSize: 22, color: '#6B6560', marginTop: 28, display: 'flex' }}>
           Roles recruiters post in the feed — classified by AI, refreshed twice a day.
@@ -48,4 +47,3 @@ export async function GET() {
     }
   )
 }
-EOF
