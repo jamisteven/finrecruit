@@ -7,6 +7,7 @@ import { normaliseLocation } from '@/lib/normaliseLocation'
 export const maxDuration = 300
 
 const HASHTAG_QUERIES = [
+  // English
   '#hiring',
   '#nowhiring',
   '#jobopening',
@@ -15,6 +16,15 @@ const HASHTAG_QUERIES = [
   '#jobopportunity',
   '#werehiring',
   '#careeropportunity',
+  // German - targets Switzerland, Germany, Austria
+  '#stellenangebot',
+  '#jobsuche',
+  '#neuejobs',
+  '#karriere',
+  '#jobboerse',
+  '#jobangebot',
+  '#stellen',
+  '#wirstellenein',
 ]
 
 const INDIA_LOCATIONS = [
