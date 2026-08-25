@@ -5,7 +5,7 @@ import { join } from 'path'
 export const runtime = 'nodejs'
 
 export async function GET() {
-  const fontBuffer = readFileSync(join(process.cwd(), 'public/fraunces-700.woff2'))
+  const fontBuffer = readFileSync(join(process.cwd(), 'public/fraunces-700.ttf'))
 
   return new ImageResponse(
     <div style={{
