@@ -28,7 +28,7 @@ const HASHTAG_QUERIES = [
 ]
 
 const INDIA_LOCATIONS = [
-  'bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'pune',
+  'bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'pune', 'karachi', 'lahore', 'pakistan', 'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat', 'surat', 'nashik', 'visakhapatnam',
   'chennai', 'noida', 'gurugram', 'gurgaon', 'delhi', 'kolkata',
   'ahmedabad', 'jaipur', 'chandigarh', 'indore', 'india'
 ]
