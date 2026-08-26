@@ -3,13 +3,15 @@ import { readFile } from 'node:fs/promises'
 
 export const runtime = 'nodejs'
 
+// Static instances cut from Fraunces' variable font at the same axis values the
+// site resolves to (wght 500/600, opsz 40, SOFT/WONK at default). Regenerate with:
+//   fonttools varLib.instancer "Fraunces-VariableFont_SOFT,WONK,opsz,wght.ttf" \
+//     wght=500 opsz=40 SOFT=0 WONK=0 -o app/og/fraunces-500.ttf
+// Must be real TrueType — satori rejects woff/woff2.
 export async function GET() {
-  // Static Fraunces TTFs live in this folder, next to route.tsx.
-  // They MUST be real TrueType (magic bytes 00 01 00 00) — satori rejects woff/woff2.
-  const [regular, bold, boldItalic] = await Promise.all([
-    readFile(new URL('./Fraunces_72pt-Regular.ttf', import.meta.url)),
-    readFile(new URL('./Fraunces_72pt-Bold.ttf', import.meta.url)),
-    readFile(new URL('./Fraunces_72pt-BoldItalic.ttf', import.meta.url)),
+  const [w500, w600] = await Promise.all([
+    readFile(new URL('./fraunces-500.ttf', import.meta.url)),
+    readFile(new URL('./fraunces-600.ttf', import.meta.url)),
   ])
 
   const rendered = new ImageResponse(
@@ -28,13 +30,20 @@ export async function GET() {
       >
         {/* Main Content */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ fontSize: 28, color: '#1A1A1A', display: 'flex' }}>
+          <div
+            style={{
+              fontSize: 28,
+              fontWeight: 600,
+              color: '#1A1A1A',
+              display: 'flex',
+            }}
+          >
             backchannel.jobs
           </div>
           <div
             style={{
               fontSize: 76,
-              fontWeight: 700,
+              fontWeight: 500,
               color: '#1A1A1A',
               marginTop: 60,
               lineHeight: 1.1,
@@ -43,9 +52,10 @@ export async function GET() {
             }}
           >
             <span style={{ display: 'flex' }}>The jobs LinkedIn</span>
-            <span style={{ display: 'flex', fontStyle: 'italic' }}>
-              {"doesn't show you."}
-            </span>
+            {/* Site slants the roman rather than using Fraunces' true italic.
+                Once you've confirmed the angle in your CSS, mirror it here:
+                style={{ display: 'flex', transform: 'skewX(-10deg)' }} */}
+            <span style={{ display: 'flex' }}>{"doesn't show you."}</span>
           </div>
           <div
             style={{
@@ -65,7 +75,7 @@ export async function GET() {
             <span
               style={{
                 fontSize: 52,
-                fontWeight: 700,
+                fontWeight: 500,
                 color: '#1A1A1A',
                 display: 'flex',
               }}
@@ -87,7 +97,7 @@ export async function GET() {
             <span
               style={{
                 fontSize: 52,
-                fontWeight: 700,
+                fontWeight: 500,
                 color: '#1A1A1A',
                 display: 'flex',
               }}
@@ -117,15 +127,14 @@ export async function GET() {
       width: 1200,
       height: 630,
       fonts: [
-        { name: 'Fraunces', data: regular, weight: 400, style: 'normal' },
-        { name: 'Fraunces', data: bold, weight: 700, style: 'normal' },
-        { name: 'Fraunces', data: boldItalic, weight: 700, style: 'italic' },
+        { name: 'Fraunces', data: w500, weight: 500, style: 'normal' },
+        { name: 'Fraunces', data: w600, weight: 600, style: 'normal' },
       ],
     }
   )
 
-  // Render eagerly instead of streaming: satori errors surface here, where they can
-  // be seen and handled, rather than crashing the function mid-response.
+  // Render eagerly instead of streaming: satori errors surface here rather than
+  // crashing the function mid-response, where try/catch can never see them.
   const png = await rendered.arrayBuffer()
 
   return new Response(png, {
