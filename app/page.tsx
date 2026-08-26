@@ -53,13 +53,6 @@ function dropsAround(now: number): { prev: Drop | null; next: Drop | null; curre
   }
 }
 
-const DEMO_JOBS: JobPost[] = [
-  { id: '1', title: 'Equity Research Analyst — TMT', company: 'Tier 1 Hedge Fund', location: 'London', seniority: 'Senior', salary: '£120k–£160k + carry', apply_method: 'DM recruiter', summary: 'Long/short equity fund seeking a TMT-focused analyst with 4–7 years buyside experience.', tags: ['hedge-fund', 'equities', 'london'], sector: 'finance', post_url: '#', author_name: 'Sarah Mitchell', author_headline: 'Executive Search | Hedge Funds & Asset Management', author_linkedin_url: '#', raw_text: '', posted_at: new Date(Date.now() - 7200000).toISOString(), extracted_at: new Date().toISOString(), is_verified_job: true },
-  { id: '2', title: 'Senior Software Engineer — AI Platform', company: 'Series B Startup', location: 'New York', seniority: 'Senior', salary: '$180k–$220k + equity', apply_method: 'Email CV', summary: 'Fast-growing AI startup hiring a senior engineer to build core inference infrastructure.', tags: ['ai', 'backend', 'new-york'], sector: 'tech', post_url: '#', author_name: 'James Park', author_headline: 'Tech Recruiter | AI & Engineering', author_linkedin_url: '#', raw_text: '', posted_at: new Date(Date.now() - 10800000).toISOString(), extracted_at: new Date().toISOString(), is_verified_job: true },
-  { id: '3', title: 'Corporate Associate — M&A', company: 'Magic Circle Law Firm', location: 'London', seniority: 'Mid', salary: '£95k–£120k', apply_method: 'Apply via link', summary: 'Top-tier law firm seeking a 3–5 PQE corporate associate for a busy M&A practice.', tags: ['legal', 'corporate', 'ma', 'london'], sector: 'legal', post_url: '#', author_name: 'Claire Hughes', author_headline: 'Legal Recruiter | City Law Firms', author_linkedin_url: '#', raw_text: '', posted_at: new Date(Date.now() - 18000000).toISOString(), extracted_at: new Date().toISOString(), is_verified_job: true },
-  { id: '4', title: 'Head of Performance Marketing', company: 'DTC Scale-up', location: 'Remote', seniority: 'Director', salary: '$130k–$160k', apply_method: 'DM recruiter', summary: 'High-growth consumer brand hiring a performance marketing lead to own paid acquisition.', tags: ['performance-marketing', 'paid-social', 'remote'], sector: 'marketing', post_url: '#', author_name: 'Priya Nair', author_headline: 'Marketing Recruiter | Growth & Brand', author_linkedin_url: '#', raw_text: '', posted_at: new Date(Date.now() - 28800000).toISOString(), extracted_at: new Date().toISOString(), is_verified_job: true },
-]
-
 // Country/region groups so "Switzerland" catches Zurich, Geneva, Basel, …
 // Keywords ≤3 chars are matched as whole words to avoid e.g. "us" matching "Austin".
 const REGIONS: Record<string, string[]> = {
@@ -153,11 +146,10 @@ const initials = (name: string) =>
 
 export default function HomePage() {
   const [dark, setDark] = useState(false)
-  const [allJobs, setAllJobs] = useState<JobPost[]>(DEMO_JOBS)
+  const [allJobs, setAllJobs] = useState<JobPost[]>([])
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
   const [loading, setLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [usingDemo, setUsingDemo] = useState(true)
   const [saved, setSaved] = useState<Set<string>>(new Set())
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const [locQuery, setLocQuery] = useState('')
@@ -183,15 +175,10 @@ export default function HomePage() {
 
       if (data.jobs?.length > 0) {
         setAllJobs(data.jobs)
-        setUsingDemo(false)
       } else {
-        setAllJobs(DEMO_JOBS)
-        setUsingDemo(true)
       }
       setLastUpdated(new Date())
     } catch {
-      setAllJobs(DEMO_JOBS)
-      setUsingDemo(true)
     } finally { setLoading(false) }
   }, [filters.search, filters.sortBy])
 
@@ -465,7 +452,6 @@ export default function HomePage() {
           </div>
 
           <div className="mast-actions">
-            {usingDemo && <span className="demo-badge">Demo data</span>}
 
             <button className="icon-btn" onClick={() => setDark(!dark)} aria-label="Toggle dark mode" title="Toggle dark mode">
               {dark
