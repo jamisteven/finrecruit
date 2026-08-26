@@ -3,12 +3,67 @@ import { readFile } from 'node:fs/promises'
 
 export const runtime = 'nodejs'
 
-export async function GET() {
-  try {
-    // fraunces-700.ttf sits in this same folder, next to route.tsx
-    const fraunces = await readFile(new URL('./fraunces-700.ttf', import.meta.url))
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams
+  const skipFont = params.get('nofont') === '1'
+  const debug = params.get('debug') === '1'
 
-    return new ImageResponse(
+  const text = (body: string) =>
+    new Response(body, {
+      status: 200,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    })
+
+  try {
+    let fontData: Buffer | null = null
+    let report = 'font: skipped (nofont=1)'
+
+    if (!skipFont) {
+      fontData = await readFile(new URL('./fraunces-700.ttf', import.meta.url))
+      const magic = fontData.subarray(0, 4)
+      const asAscii = magic.toString('latin1').replace(/[^\x20-\x7e]/g, '.')
+      const asHex = magic.toString('hex').match(/../g)!.join(' ')
+      report = [
+        `bytes:  ${fontData.byteLength}`,
+        `magic:  ${asHex}  (${asAscii})`,
+        `verdict: ${
+          asHex === '00 01 00 00'
+            ? 'TrueType — satori should accept this'
+            : asAscii === 'OTTO'
+              ? 'CFF/OpenType — satori REJECTS this'
+              : asAscii === 'wOFF'
+                ? 'WOFF — satori REJECTS this'
+                : asAscii === 'wOF2'
+                  ? 'WOFF2 — satori REJECTS this (renamed woff2)'
+                  : asAscii === 'true' || asAscii === 'ttcf'
+                    ? 'TrueType variant — probably fine'
+                    : 'NOT A FONT (HTML error page? truncated file?)'
+        }`,
+      ].join('\n')
+    }
+
+    if (debug) {
+      return text(
+        [
+          'OG DEBUG',
+          '',
+          `cwd:      ${process.cwd()}`,
+          `resolved: ${new URL('./fraunces-700.ttf', import.meta.url).href}`,
+          '',
+          report,
+        ].join('\n')
+      )
+    }
+
+    const options: Record<string, unknown> = { width: 1200, height: 630 }
+    if (fontData) {
+      options.fonts = [
+        { name: 'Fraunces', data: fontData, weight: 400, style: 'normal' },
+        { name: 'Fraunces', data: fontData, weight: 700, style: 'normal' },
+      ]
+    }
+
+    const rendered = new ImageResponse(
       (
         <div
           style={{
@@ -19,7 +74,7 @@ export async function GET() {
             flexDirection: 'column',
             justifyContent: 'space-between',
             padding: '60px',
-            fontFamily: 'Fraunces',
+            fontFamily: skipFont ? 'sans-serif' : 'Fraunces',
           }}
         >
           {/* Main Content */}
@@ -108,33 +163,24 @@ export async function GET() {
           </div>
         </div>
       ),
-      {
-        width: 1200,
-        height: 630,
-        fonts: [
-          { name: 'Fraunces', data: fraunces, weight: 400, style: 'normal' },
-          { name: 'Fraunces', data: fraunces, weight: 700, style: 'normal' },
-        ],
-        headers: {
-          'Cache-Control': 'public, immutable, no-transform, max-age=31536000',
-        },
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      options as any
     )
+
+    // Force rendering to happen HERE, inside the try, instead of during streaming.
+    // Without this, satori errors escape the catch and kill the function.
+    const png = await rendered.arrayBuffer()
+
+    return new Response(png, {
+      status: 200,
+      headers: {
+        'content-type': 'image/png',
+        'cache-control': 'public, immutable, no-transform, max-age=31536000',
+      },
+    })
   } catch (e) {
-    // TEMPORARY: surface the real error as plain text instead of a 500 page.
-    // Remove this catch once the image renders.
+    // TEMPORARY: remove once the image renders.
     const detail = e instanceof Error ? (e.stack ?? e.message) : String(e)
-    return new Response(
-      [
-        'OG IMAGE FAILED',
-        '',
-        `cwd:        ${process.cwd()}`,
-        `import.meta.url: ${import.meta.url}`,
-        `resolved font:   ${new URL('./fraunces-700.ttf', import.meta.url).href}`,
-        '',
-        detail,
-      ].join('\n'),
-      { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8' } }
-    )
+    return text(`OG IMAGE FAILED\n\n${detail}`)
   }
 }
