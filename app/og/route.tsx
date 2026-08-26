@@ -1,12 +1,19 @@
 import { ImageResponse } from 'next/og'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 
 export const runtime = 'nodejs'
 
+// Static TTFs committed to the repo, e.g. assets/fonts/
+// Download from https://fonts.google.com/specimen/Fraunces (static, not variable)
+const fontDir = join(process.cwd(), 'assets', 'fonts')
+
 export async function GET() {
-  // Fetch Fraunces TTF direct from Google Fonts CDN
-  const fontData = await fetch(
-    'https://fonts.gstatic.com/s/fraunces/v32/6NUv81yM7341izC2p_9_s956w30t12zO0OflXbgqI0_A2A.ttf'
-  ).then((res) => res.arrayBuffer())
+  const [regular, bold, boldItalic] = await Promise.all([
+    readFile(join(fontDir, 'Fraunces-Regular.ttf')),
+    readFile(join(fontDir, 'Fraunces-Bold.ttf')),
+    readFile(join(fontDir, 'Fraunces-BoldItalic.ttf')),
+  ])
 
   return new ImageResponse(
     (
@@ -80,13 +87,13 @@ export async function GET() {
       width: 1200,
       height: 630,
       fonts: [
-        {
-          name: 'Fraunces',
-          data: fontData,
-          weight: 700,
-          style: 'normal',
-        },
+        { name: 'Fraunces', data: regular, weight: 400, style: 'normal' },
+        { name: 'Fraunces', data: bold, weight: 700, style: 'normal' },
+        { name: 'Fraunces', data: boldItalic, weight: 700, style: 'italic' },
       ],
+      headers: {
+        'Cache-Control': 'public, immutable, no-transform, max-age=31536000',
+      },
     }
   )
 }
