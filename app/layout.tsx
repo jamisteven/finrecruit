@@ -4,6 +4,14 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'BackchannelJobs — Hidden Jobs from LinkedIn',
   description: 'Surface jobs posted by recruiters on LinkedIn that never make it to job boards. Finance, Tech, Legal, Marketing.',
+  icons: {
+    icon: [
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon.ico' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
   openGraph: {
     title: "BackchannelJobs — The jobs LinkedIn doesn't show you",
     description: 'Roles recruiters post in the feed and never list — pulled from public posts, classified by AI, refreshed twice a day.',
