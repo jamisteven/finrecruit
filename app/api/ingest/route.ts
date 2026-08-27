@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
 
   const MAX_POST_AGE_DAYS = 60  // ignore hiring posts older than this — role is long filled
   const result = { sector, total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0, skipped_off_sector: 0, skipped_stale: 0 }
+  const queryStats: Record<string, { posts: number, inserted: number, duplicates: number }> = {}
 
   try {
     const db = createServerClient()
@@ -73,7 +74,14 @@ export async function POST(req: NextRequest) {
           .eq('post_url', post.postUrl)
           .single()
 
-        if (existing) { result.duplicates_skipped++; continue }
+        if (existing) { 
+          result.duplicates_skipped++
+          const q = (rawPost as any)._query || 'unknown'
+          if (!queryStats[q]) queryStats[q] = { posts: 0, inserted: 0, duplicates: 0 }
+          queryStats[q].posts++
+          queryStats[q].duplicates++
+          continue 
+        }
 
         // Pre-filter: skip posts with no hiring-signal words to save Claude tokens
         // (English + German + French — German/French queries return German/French posts)
@@ -133,7 +141,13 @@ export async function POST(req: NextRequest) {
         })
 
         if (error) { console.error('[ingest] DB error:', error); result.errors++ }
-        else result.inserted++
+        else {
+          result.inserted++
+          const q = (rawPost as any)._query || 'unknown'
+          if (!queryStats[q]) queryStats[q] = { posts: 0, inserted: 0, duplicates: 0 }
+          queryStats[q].posts++
+          queryStats[q].inserted++
+        }
 
       } catch (err) {
         console.error('[ingest] Post error:', err)
@@ -141,6 +155,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Log per-query performance
+    const db2 = createServerClient()
+    for (const [query, stats] of Object.entries(queryStats)) {
+      await db2.from('query_performance').insert({
+        query,
+        sector,
+        posts_returned: stats.posts,
+        jobs_inserted: stats.inserted,
+        duplicates_skipped: stats.duplicates,
+      })
+    }
     console.log('[ingest] Done:', result)
     return NextResponse.json({ success: true, result })
   } catch (err) {

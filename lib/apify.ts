@@ -336,7 +336,7 @@ export async function runApifyScraperForSector(
       )
       const items: ApifyPost[] = await resultsRes.json()
       console.log(`[apify] "${query}" → ${items.length} posts`)
-      allPosts.push(...items)
+      allPosts.push(...items.map(p => ({ ...p, _query: query })))
 
     } catch (err) {
       console.error(`[apify] Error on "${query}":`, err)
