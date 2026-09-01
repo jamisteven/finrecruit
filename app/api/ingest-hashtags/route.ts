@@ -16,7 +16,7 @@ const HASHTAG_QUERIES = [
   '#jobopportunity',
   '#werehiring',
   '#careeropportunity',
-  // German - targets Switzerland, Germany, Austria
+  // German
   '#stellenangebot',
   '#jobsuche',
   '#neuejobs',
@@ -25,12 +25,23 @@ const HASHTAG_QUERIES = [
   '#jobangebot',
   '#stellen',
   '#wirstellenein',
+  // Swiss location searches
+  'hiring zurich',
+  'hiring switzerland',
+  'hiring bern',
+  'hiring schaffhausen',
+  'hiring basel',
+  'hiring geneva',
 ]
 
+const GERMAN_HASHTAGS = ['stellenangebot', 'jobsuche', 'neuejobs', 'karriere', 'jobboerse', 'jobangebot', 'stellen', 'wirstellenein']
+
 const INDIA_LOCATIONS = [
-  'bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'pune', 'karachi', 'lahore', 'pakistan', 'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat', 'surat', 'nashik', 'visakhapatnam',
+  'bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'pune', 'karachi', 'lahore', 'pakistan',
+  'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat',
   'chennai', 'noida', 'gurugram', 'gurgaon', 'delhi', 'kolkata',
-  'ahmedabad', 'jaipur', 'chandigarh', 'indore', 'india'
+  'ahmedabad', 'jaipur', 'chandigarh', 'indore', 'india',
+  'surat', 'nashik', 'visakhapatnam',
 ]
 
 function guessSector(text: string, headline: string): string {
@@ -40,6 +51,10 @@ function guessSector(text: string, headline: string): string {
   if (/property|leasing|real estate|landlord|tenant|facilities|hoa/.test(combined)) return 'realestate'
   if (/engineer|developer|software|tech|devops|cloud|data|ai|ml|product manager|cto/.test(combined)) return 'tech'
   return 'finance'
+}
+
+function isGerman(hashtag: string): boolean {
+  return GERMAN_HASHTAGS.some(g => hashtag.toLowerCase().includes(g))
 }
 
 export async function POST(req: NextRequest) {
@@ -55,13 +70,21 @@ export async function POST(req: NextRequest) {
   const db = createServerClient()
   const result = { total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0 }
 
-  const hour = new Date().getUTCHours()
-  const offset = (hour * 2) % HASHTAG_QUERIES.length
-  const batch = [...HASHTAG_QUERIES, ...HASHTAG_QUERIES].slice(offset, offset + 2)
+  // Support manual offset param to target specific queries
+  const url = new URL(req.url)
+  const offsetParam = url.searchParams.get('offset')
+  const offset = offsetParam !== null
+    ? parseInt(offsetParam)
+    : (new Date().getUTCHours() * 2) % HASHTAG_QUERIES.length
 
-  console.log(`[ingest-hashtags] Running: ${batch.join(', ')}`)
+  const batch = [...HASHTAG_QUERIES, ...HASHTAG_QUERIES].slice(offset, offset + 2)
+  console.log(`[ingest-hashtags] Running: ${batch.join(', ')} (offset ${offset})`)
 
   for (const query of batch) {
+    let queryInserted = 0
+    let queryDuplicates = 0
+    let queryPosts = 0
+
     try {
       const startRes = await fetch(
         `https://api.apify.com/v2/acts/harvestapi~linkedin-post-search/runs?token=${apiToken}`,
@@ -90,9 +113,10 @@ export async function POST(req: NextRequest) {
       if (status !== 'SUCCEEDED') continue
 
       const items: ApifyPost[] = await (await fetch(
-        `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=20`
+        `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=50`
       )).json()
 
+      queryPosts = items.length
       result.total += items.length
 
       for (const rawPost of items) {
@@ -101,10 +125,11 @@ export async function POST(req: NextRequest) {
           if (!post.postUrl || !post.text || post.text.length < 20) continue
 
           const { data: existing } = await db.from('jobs').select('id').eq('post_url', post.postUrl).single()
-          if (existing) { result.duplicates_skipped++; continue }
+          if (existing) { result.duplicates_skipped++; queryDuplicates++; continue }
 
           const HIRING_SIGNALS = ['hiring', 'recruit', 'looking for', 'seeking', 'vacancy',
-            'opening', 'mandate', 'apply', 'candidate', 'now hiring', 'join our', 'come work']
+            'opening', 'mandate', 'apply', 'candidate', 'now hiring', 'join our', 'come work',
+            'suchen', 'stelle', 'gesucht', 'einstellen', 'bewerben']
           if (!HIRING_SIGNALS.some((s) => post.text.toLowerCase().includes(s))) continue
 
           const sector = guessSector(post.text, post.authorHeadline || '')
@@ -138,6 +163,7 @@ export async function POST(req: NextRequest) {
 
           if (!error) {
             result.inserted++
+            queryInserted++
             if (post.authorLinkedinUrl?.includes('/in/')) {
               const cleanUrl = post.authorLinkedinUrl.split('?')[0]
               await db.from('recruiters').upsert({
@@ -155,8 +181,18 @@ export async function POST(req: NextRequest) {
           result.errors++
         }
       }
+
+      // Log performance
+      await db.from('hashtag_performance').insert({
+        hashtag: query,
+        language: isGerman(query) ? 'de' : 'en',
+        posts_returned: queryPosts,
+        jobs_inserted: queryInserted,
+        duplicates_skipped: queryDuplicates,
+      })
+
     } catch (err) {
-      console.error(`[ingest-hashtags] Error for "${query}":`, err)
+      console.error(`[ingest-hashtags] Error for query:`, err)
     }
   }
 
