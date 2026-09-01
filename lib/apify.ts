@@ -36,6 +36,10 @@ export type Sector = 'finance' | 'tech' | 'legal' | 'marketing' | 'realestate'
 
 export const SECTOR_QUERIES: Record<Sector, string[]> = {
   finance: [
+    'hiring geneva',
+    'hiring zurich finance',
+    'wir suchen zürich finance',
+    'stelle frei zürich banking',
     'finance recruiter now hiring',
     'investment banking analyst associate hiring',
     'hedge fund role recruiter',
