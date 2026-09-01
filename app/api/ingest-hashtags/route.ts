@@ -38,7 +38,7 @@ const GERMAN_HASHTAGS = ['stellenangebot', 'jobsuche', 'neuejobs', 'karriere', '
 
 const INDIA_LOCATIONS = [
   'bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'pune', 'karachi', 'lahore', 'pakistan',
-  'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat',
+  'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat', 'alabama', 'abernathy', 'new bern',
   'chennai', 'noida', 'gurugram', 'gurgaon', 'delhi', 'kolkata',
   'ahmedabad', 'jaipur', 'chandigarh', 'indore', 'india',
   'surat', 'nashik', 'visakhapatnam',

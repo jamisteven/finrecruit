@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
         if (!classified.isJob) continue
 
         // Skip India-based roles
-        const INDIA_LOCATIONS = ['bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'karachi', 'lahore', 'pakistan', 'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat', 'surat', 'nashik', 'visakhapatnam',
+        const INDIA_LOCATIONS = ['bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'karachi', 'lahore', 'pakistan', 'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat', 'alabama', 'abernathy', 'new bern', 'surat', 'nashik', 'visakhapatnam',
           'pune', 'chennai', 'noida', 'gurugram', 'gurgaon', 'delhi', 'kolkata',
           'ahmedabad', 'jaipur', 'chandigarh', 'indore', 'india']
         const loc = (classified.location || '').toLowerCase()
