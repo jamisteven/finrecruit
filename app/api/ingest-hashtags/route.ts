@@ -32,6 +32,21 @@ const HASHTAG_QUERIES = [
   'hiring schaffhausen',
   'hiring basel',
   'hiring geneva',
+  // UK
+  'hiring london',
+  'hiring manchester',
+  // APAC
+  'hiring singapore',
+  'hiring hong kong',
+  // Middle East
+  'hiring dubai',
+  // Canada
+  'hiring toronto',
+  'hiring switzerland',
+  'hiring bern',
+  'hiring schaffhausen',
+  'hiring basel',
+  'hiring geneva',
 ]
 
 const GERMAN_HASHTAGS = ['stellenangebot', 'jobsuche', 'neuejobs', 'karriere', 'jobboerse', 'jobangebot', 'stellen', 'wirstellenein']
