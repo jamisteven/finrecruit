@@ -79,6 +79,11 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'financial controller CFO recruiter hiring',
   ],
   tech: [
+    'hiring switzerland',
+    'hiring zurich',
+    'hiring geneva',
+    'wir suchen zürich',
+    'stelle frei schweiz',
     'software engineer recruiter now hiring',
     'software engineer recruiter hiring Zurich',
     'AI ML engineer recruiter opportunity',
