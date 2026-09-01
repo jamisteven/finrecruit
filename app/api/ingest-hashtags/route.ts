@@ -32,6 +32,11 @@ const HASHTAG_QUERIES = [
   'hiring schaffhausen',
   'hiring basel',
   'hiring geneva',
+  // US cities
+  'hiring new york',
+  'hiring chicago',
+  'hiring boston',
+  'hiring los angeles',
   // UK
   'hiring london',
   'hiring manchester',
