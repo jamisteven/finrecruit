@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   let query = db
     .from('jobs')
-    .select('*')
+    .select('id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, posted_at, extracted_at, is_verified_job')
     .eq('is_verified_job', true)
     .range(offset, offset + limit - 1)
     .order('extracted_at', { ascending: sortBy === 'oldest' })
