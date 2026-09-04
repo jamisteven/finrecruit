@@ -50,11 +50,11 @@
     },
     {
       "path": "/api/ingest-hashtags",
-      "schedule": "0 13 * * 1-5"
+      "schedule": "5 14 * * 1-5"
     },
     {
       "path": "/api/ingest-hashtags",
-      "schedule": "0 16 * * 1-5"
+      "schedule": "5 17 * * 1-5"
     }
   ]
 }
