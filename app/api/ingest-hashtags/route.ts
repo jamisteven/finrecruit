@@ -243,12 +243,14 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error(`[ingest-hashtags] Error for query "${query}":`, err)
     } finally {
-      const { error: perfError } = await db.from('hashtag_performance').insert({
-        hashtag: query,
-        language: isGerman(query) ? 'de' : 'en',
+      const { error: perfError } = await db.from('ingest_runs').insert({
+        pipeline: 'hashtag',
+        query,
+        sector: isGerman(query) ? 'de' : 'en',
         posts_returned: queryPosts,
         jobs_inserted: queryInserted,
         duplicates_skipped: queryDuplicates,
+        triggered_by: req.headers.get('user-agent')?.includes('vercel-cron') ? 'cron' : 'manual',
       })
       if (perfError) {
         console.error(`[hashtag-perf] insert failed for "${query}":`, perfError.message)

@@ -240,6 +240,17 @@ export async function POST(req: NextRequest) {
       }, { onConflict: 'linkedin_url', ignoreDuplicates: true })
     }
 
+    const { error: perfError } = await db.from('ingest_runs').insert({
+      pipeline: 'recruiter',
+      query: `batch of ${recruiters.length}`,
+      posts_returned: result.total,
+      jobs_inserted: result.inserted,
+      duplicates_skipped: result.duplicates_skipped,
+      errors: result.errors,
+      triggered_by: req.headers.get('user-agent')?.includes('vercel-cron') ? 'cron' : 'manual',
+    })
+    if (perfError) console.error('[recruiter-perf] insert failed:', perfError.message)
+
     console.log('[ingest-recruiters] Done:', result)
     return NextResponse.json({ success: true, result })
 

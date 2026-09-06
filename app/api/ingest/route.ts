@@ -158,13 +158,16 @@ export async function POST(req: NextRequest) {
     // Log per-query performance
     const db2 = createServerClient()
     for (const [query, stats] of Object.entries(queryStats)) {
-      await db2.from('query_performance').insert({
+      const { error: perfError } = await db2.from('ingest_runs').insert({
+        pipeline: 'keyword',
         query,
         sector,
         posts_returned: stats.posts,
         jobs_inserted: stats.inserted,
         duplicates_skipped: stats.duplicates,
+        triggered_by: req.headers.get('user-agent')?.includes('vercel-cron') ? 'cron' : 'manual',
       })
+      if (perfError) console.error('[ingest-perf] insert failed:', perfError.message)
     }
     console.log('[ingest] Done:', result)
     return NextResponse.json({ success: true, result })
