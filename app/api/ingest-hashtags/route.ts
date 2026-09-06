@@ -126,9 +126,13 @@ export async function POST(req: NextRequest) {
   const offsetParam = url.searchParams.get('offset')
   const offset = offsetParam !== null
     ? parseInt(offsetParam)
-    : (new Date().getUTCHours() * 2) % HASHTAG_QUERIES.length
+    : (() => {
+        const now = new Date()
+        const day = Math.floor((now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 0)) / 86400000)
+        return (day * 16 + now.getUTCHours() * 4) % HASHTAG_QUERIES.length
+      })()
 
-  const batch = [...HASHTAG_QUERIES, ...HASHTAG_QUERIES].slice(offset, offset + 2)
+  const batch = [...HASHTAG_QUERIES, ...HASHTAG_QUERIES].slice(offset, offset + 4)
   console.log(`[ingest-hashtags] Running: ${batch.join(', ')} (offset ${offset})`)
 
   for (const query of batch) {

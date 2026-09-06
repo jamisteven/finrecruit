@@ -1,68 +1,24 @@
 {
   "crons": [
-    {
-      "path": "/api/ingest-hashtags",
-      "schedule": "0 6 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=finance",
-      "schedule": "15 6 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=tech",
-      "schedule": "30 6 * * 1-5"
-    },
-    {
-      "path": "/api/ingest-hashtags",
-      "schedule": "0 10 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=legal",
-      "schedule": "15 10 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=marketing",
-      "schedule": "30 10 * * 1-5"
-    },
-    {
-      "path": "/api/ingest-recruiters",
-      "schedule": "45 10 * * 1-5"
-    },
-    {
-      "path": "/api/ingest-hashtags",
-      "schedule": "0 14 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=finance",
-      "schedule": "15 14 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=tech",
-      "schedule": "30 14 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=realestate",
-      "schedule": "45 14 * * 1-5"
-    },
-    {
-      "path": "/api/ingest-hashtags",
-      "schedule": "0 18 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=legal",
-      "schedule": "15 18 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=marketing",
-      "schedule": "30 18 * * 1-5"
-    },
-    {
-      "path": "/api/ingest-recruiters",
-      "schedule": "45 18 * * 1-5"
-    },
-    {
-      "path": "/api/ingest-hashtags",
-      "schedule": "0 10 * * 6,0"
-    }
+    { "path": "/api/ingest-hashtags", "schedule": "0 5 * * 1-5" },
+    { "path": "/api/ingest-hashtags", "schedule": "0 8 * * 1-5" },
+    { "path": "/api/ingest-hashtags", "schedule": "0 11 * * 1-5" },
+    { "path": "/api/ingest-hashtags", "schedule": "0 13 * * 1-5" },
+    { "path": "/api/ingest-hashtags", "schedule": "0 15 * * 1-5" },
+    { "path": "/api/ingest-hashtags", "schedule": "0 17 * * 1-5" },
+    { "path": "/api/ingest-hashtags", "schedule": "0 19 * * 1-5" },
+    { "path": "/api/ingest-hashtags", "schedule": "0 21 * * 1-5" },
+
+    { "path": "/api/ingest?sector=finance", "schedule": "20 12 * * 1-5" },
+    { "path": "/api/ingest?sector=tech", "schedule": "30 12 * * 1-5" },
+    { "path": "/api/ingest?sector=legal", "schedule": "40 12 * * 1-5" },
+    { "path": "/api/ingest?sector=marketing", "schedule": "50 12 * * 1-5" },
+    { "path": "/api/ingest?sector=realestate", "schedule": "55 12 * * 1-5" },
+
+    { "path": "/api/ingest-recruiters", "schedule": "30 9 * * 1-5" },
+    { "path": "/api/ingest-recruiters", "schedule": "30 18 * * 1-5" },
+
+    { "path": "/api/ingest-hashtags?offset=0", "schedule": "0 10 * * 6,0" },
+    { "path": "/api/ingest-hashtags?offset=4", "schedule": "0 15 * * 6,0" }
   ]
 }
