@@ -126,10 +126,13 @@ export async function POST(req: NextRequest) {
   const offsetParam = url.searchParams.get('offset')
   const offset = offsetParam !== null
     ? parseInt(offsetParam)
-    : (() => {
-        const now = new Date()
-        const day = Math.floor((now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 0)) / 86400000)
-        return (day * 16 + now.getUTCHours() * 4) % HASHTAG_QUERIES.length
+    : await (async () => {
+        const { data } = await db.from('ingest_state').select('current_offset').eq('sector', 'hashtags').single()
+        const cur = data?.current_offset ?? 0
+        await db.from('ingest_state')
+          .update({ current_offset: (cur + 4) % HASHTAG_QUERIES.length, last_run_at: new Date().toISOString() })
+          .eq('sector', 'hashtags')
+        return cur % HASHTAG_QUERIES.length
       })()
 
   const batch = [...HASHTAG_QUERIES, ...HASHTAG_QUERIES].slice(offset, offset + 4)
