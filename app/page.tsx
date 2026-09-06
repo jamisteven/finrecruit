@@ -149,6 +149,7 @@ export default function HomePage() {
   const [allJobs, setAllJobs] = useState<JobPost[]>([])
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
   const [loading, setLoading] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(150)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [saved, setSaved] = useState<Set<string>>(new Set())
   const [highlightId, setHighlightId] = useState<string | null>(null)
@@ -187,6 +188,21 @@ export default function HomePage() {
     const t = setTimeout(fetchJobs, 250)
     return () => clearTimeout(t)
   }, [fetchJobs])
+
+  // Infinite scroll — load more jobs as user scrolls
+  useEffect(() => {
+    const onScroll = () => {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
+        setVisibleCount((c) => c + 150)
+      }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  // Reset visible count when filters change
+  useEffect(() => { setVisibleCount(150) }, [filters])
+
 
   // "/" focuses search
   useEffect(() => {
@@ -622,7 +638,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="cards">
-              {displayJobs.map((job) => {
+              {displayJobs.slice(0, visibleCount).map((job) => {
                 const wt = inferWorkType(job)
                 return (
                   <article key={job.id} id={`job-${job.id}`} className={`card${highlightId === job.id ? ' flash' : ''}`} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
