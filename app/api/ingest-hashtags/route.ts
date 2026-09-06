@@ -233,17 +233,21 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Log performance
-      await db.from('hashtag_performance').insert({
+    } catch (err) {
+      console.error(`[ingest-hashtags] Error for query "${query}":`, err)
+    } finally {
+      const { error: perfError } = await db.from('hashtag_performance').insert({
         hashtag: query,
         language: isGerman(query) ? 'de' : 'en',
         posts_returned: queryPosts,
         jobs_inserted: queryInserted,
         duplicates_skipped: queryDuplicates,
       })
-
-    } catch (err) {
-      console.error(`[ingest-hashtags] Error for query:`, err)
+      if (perfError) {
+        console.error(`[hashtag-perf] insert failed for "${query}":`, perfError.message)
+      } else {
+        console.log(`[hashtag-perf] logged "${query}": ${queryPosts} posts, ${queryInserted} inserted`)
+      }
     }
   }
 
