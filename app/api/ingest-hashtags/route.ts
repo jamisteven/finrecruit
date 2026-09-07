@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ searchQueries: [query], maxPosts: 20, sortBy: 'date', postedLimit: 'week', scrapeComments: false, scrapeReactions: false }),
+          body: JSON.stringify({ searchQueries: [query], maxPosts: 20, sortBy: 'date', scrapeComments: false, scrapeReactions: false }),
         }
       )
 
