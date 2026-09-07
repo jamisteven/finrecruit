@@ -24,22 +24,22 @@ const sectorLabel = (s: string) =>
 
 // ── Drop schedule (UTC) — mirrors the crons in vercel.json ──
 const DROP_SECTORS_FULL = ['finance', 'tech', 'legal', 'marketing', 'realestate']
-const DROP_BATCHES: { days: number[]; utcHour: number; utcMin: number; sectors: string[] }[] = [
-  { days: [1, 2, 3, 4, 5], utcHour: 14, utcMin: 0, sectors: DROP_SECTORS_FULL },
-  { days: [1, 2, 3, 4, 5], utcHour: 19, utcMin: 0, sectors: DROP_SECTORS_FULL },
-  { days: [1],             utcHour: 7,  utcMin: 0, sectors: ['finance', 'tech'] },
+type DropBatch = { days: number[]; utcHour: number; utcMin: number; sectors: string[] }
+// Fallback only — the live schedule comes from /api/schedule, derived from vercel.json
+const DROP_BATCHES_FALLBACK: DropBatch[] = [
+  { days: [1, 2, 3, 4, 5], utcHour: 13, utcMin: 0, sectors: DROP_SECTORS_FULL },
 ]
 const SLOT_MS = 10 * 60_000  // sectors fire 10 minutes apart
 const TAIL_MS = 5 * 60_000   // grace period after the last sector's slot
 
 type Drop = { start: number; end: number; sectors: string[] }
 
-function dropsAround(now: number): { prev: Drop | null; next: Drop | null; current: Drop | null } {
+function dropsAround(now: number, dropBatches: DropBatch[]): { prev: Drop | null; next: Drop | null; current: Drop | null } {
   const drops: Drop[] = []
   const base = new Date(now)
   for (let d = -8; d <= 8; d++) {
     const day = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate() + d))
-    for (const b of DROP_BATCHES) {
+    for (const b of dropBatches) {
       if (!b.days.includes(day.getUTCDay())) continue
       const start = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), b.utcHour, b.utcMin)
       drops.push({ start, end: start + (b.sectors.length - 1) * SLOT_MS + TAIL_MS, sectors: b.sectors })
@@ -150,6 +150,13 @@ export default function HomePage() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
   const [loading, setLoading] = useState(false)
   const [visibleCount, setVisibleCount] = useState(150)
+  const [dropBatches, setDropBatches] = useState<DropBatch[]>(DROP_BATCHES_FALLBACK)
+  useEffect(() => {
+    fetch('/api/schedule')
+      .then((r) => r.json())
+      .then((d) => { if (d.drops?.length) setDropBatches(d.drops) })
+      .catch(() => {})
+  }, [])
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [saved, setSaved] = useState<Set<string>>(new Set())
   const [highlightId, setHighlightId] = useState<string | null>(null)
@@ -254,7 +261,7 @@ export default function HomePage() {
   useEffect(() => {
     const update = () => {
       const t = Date.now()
-      const { next, current } = dropsAround(t)
+      const { next, current } = dropsAround(t, dropBatches)
       const fine = !!current || (next !== null && next.start - t < 11 * 60_000)
       setNowTs(fine ? t : Math.floor(t / 60_000) * 60_000)
     }
@@ -266,7 +273,7 @@ export default function HomePage() {
   // Auto-refresh the feed as each sector's slot completes during a drop
   useEffect(() => {
     if (nowTs == null) return
-    const { current } = dropsAround(nowTs)
+    const { current } = dropsAround(nowTs, dropBatches)
     const key = current
       ? `ing:${Math.min(Math.floor((nowTs - current.start) / SLOT_MS), current.sectors.length - 1)}`
       : 'idle'
@@ -278,7 +285,7 @@ export default function HomePage() {
   type ClockPart = { v: string | number; u?: string }
   const press = useMemo((): { cls: string; barW: number | null; label: string; detail: string; clock: ClockPart[] } | null => {
     if (nowTs == null) return null
-    const { prev, next, current } = dropsAround(nowTs)
+    const { prev, next, current } = dropsAround(nowTs, dropBatches)
 
     if (current) {
       const idx = Math.min(Math.floor((nowTs - current.start) / SLOT_MS), current.sectors.length - 1)
@@ -322,7 +329,7 @@ export default function HomePage() {
       detail: `${startsLocal} · ${names[0]} first, then ${names.slice(1).join(', ')}`,
       clock: h > 0 ? [{ v: h, u: 'h' }, { v: m, u: 'm' }] : [{ v: m, u: 'm' }],
     }
-  }, [nowTs])
+  }, [nowTs, dropBatches])
 
   const displayJobs = useMemo(() => {
     const list = allJobs.filter((job) => {
