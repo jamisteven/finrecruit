@@ -264,6 +264,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, result })
 }
 
-export async function GET() {
-  return NextResponse.json({ status: 'ok' })
+export async function GET(req: NextRequest) {
+  return POST(req)
 }
