@@ -109,7 +109,10 @@ function isGerman(hashtag: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const isVercelCron = req.headers.get('x-vercel-cron') === '1'
+  const authHeader = req.headers.get('authorization')
+  const isVercelCron =
+    (!!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`) ||
+    req.headers.get('x-vercel-cron') === '1'
   const secret = req.headers.get('x-ingest-secret')
   if (!isVercelCron && secret !== process.env.INGEST_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
