@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
   const MAX_POST_AGE_DAYS = 60  // ignore hiring posts older than this — role is long filled
   const result = { sector, total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0, skipped_off_sector: 0, skipped_stale: 0 }
-  const queryStats: Record<string, { posts: number, inserted: number, duplicates: number }> = {}
+  const queryStats: Record<string, { posts: number, inserted: number, duplicates: number, rejected: number }> = {}
 
   try {
     const db = createServerClient()
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
         if (existing) { 
           result.duplicates_skipped++
           const q = (rawPost as any)._query || 'unknown'
-          if (!queryStats[q]) queryStats[q] = { posts: 0, inserted: 0, duplicates: 0 }
+          if (!queryStats[q]) queryStats[q] = { posts: 0, inserted: 0, duplicates: 0, rejected: 0 }
           queryStats[q].posts++
           queryStats[q].duplicates++
           continue 
@@ -96,7 +96,13 @@ export async function POST(req: NextRequest) {
         }
 
         const classified = await classifyPost(post.text, post.authorHeadline, sector)
-        if (!classified.isJob) continue
+        if (!classified.isJob) {
+          const q = (rawPost as any)._query || 'unknown'
+          if (!queryStats[q]) queryStats[q] = { posts: 0, inserted: 0, duplicates: 0, rejected: 0 }
+          queryStats[q].posts++
+          queryStats[q].rejected++
+          continue
+        }
 
         // Skip India-based roles
         const INDIA_LOCATIONS = ['bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'karachi', 'lahore', 'pakistan', 'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat', 'alabama', 'abernathy', 'new bern', 'surat', 'nashik', 'visakhapatnam', 
@@ -144,7 +150,7 @@ export async function POST(req: NextRequest) {
         else {
           result.inserted++
           const q = (rawPost as any)._query || 'unknown'
-          if (!queryStats[q]) queryStats[q] = { posts: 0, inserted: 0, duplicates: 0 }
+          if (!queryStats[q]) queryStats[q] = { posts: 0, inserted: 0, duplicates: 0, rejected: 0 }
           queryStats[q].posts++
           queryStats[q].inserted++
         }
@@ -165,6 +171,7 @@ export async function POST(req: NextRequest) {
         posts_returned: stats.posts,
         jobs_inserted: stats.inserted,
         duplicates_skipped: stats.duplicates,
+        rejected: stats.rejected,
         triggered_by: req.headers.get('user-agent')?.includes('vercel-cron') ? 'cron' : 'manual',
       })
       if (perfError) console.error('[ingest-perf] insert failed:', perfError.message)

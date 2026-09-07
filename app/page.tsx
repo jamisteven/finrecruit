@@ -19,8 +19,14 @@ const SECTORS: { id: Sector; label: string }[] = [
 const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
 
 // JobPost.sector is a plain string in the API payload, so accept any string
+const PIPELINE_LABELS: Record<string, string> = {
+  hashtags: 'Fresh roles',
+  recruiters: 'Recruiter posts',
+}
 const sectorLabel = (s: string) =>
-  SECTORS.find((x) => x.id === s)?.label ?? (s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Other')
+  PIPELINE_LABELS[s] ??
+  SECTORS.find((x) => x.id === s)?.label ??
+  (s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Other')
 
 // ── Drop schedule (UTC) — mirrors the crons in vercel.json ──
 const DROP_SECTORS_FULL = ['finance', 'tech', 'legal', 'marketing', 'realestate']
@@ -324,9 +330,13 @@ export default function HomePage() {
       }
     }
     const names = next.sectors.map(sectorLabel)
+    const lineup =
+      names.length === 1 ? names[0]
+      : names.length === 2 ? `${names[0]} then ${names[1]}`
+      : `${names[0]} first, then ${names.slice(1).join(', ')}`
     return {
       cls: '', barW, label: 'Next drop',
-      detail: `${startsLocal} · ${names[0]} first, then ${names.slice(1).join(', ')}`,
+      detail: `${startsLocal} · ${lineup}`,
       clock: h > 0 ? [{ v: h, u: 'h' }, { v: m, u: 'm' }] : [{ v: m, u: 'm' }],
     }
   }, [nowTs, dropBatches])

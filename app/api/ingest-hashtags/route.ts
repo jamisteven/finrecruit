@@ -144,6 +144,7 @@ export async function POST(req: NextRequest) {
   for (const query of batch) {
     let queryInserted = 0
     let queryDuplicates = 0
+    let queryRejected = 0
     let queryPosts = 0
 
     try {
@@ -195,7 +196,7 @@ export async function POST(req: NextRequest) {
 
           const sector = guessSector(post.text, post.authorHeadline || '')
           const classified = await classifyPost(post.text, post.authorHeadline, sector)
-          if (!classified.isJob) continue
+          if (!classified.isJob) { queryRejected++; continue }
 
           const loc = (classified.location || '').toLowerCase()
           if (INDIA_LOCATIONS.some(l => loc.includes(l))) continue
@@ -253,6 +254,7 @@ export async function POST(req: NextRequest) {
         posts_returned: queryPosts,
         jobs_inserted: queryInserted,
         duplicates_skipped: queryDuplicates,
+        rejected: queryRejected,
         triggered_by: req.headers.get('user-agent')?.includes('vercel-cron') ? 'cron' : 'manual',
       })
       if (perfError) {

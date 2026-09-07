@@ -42,6 +42,8 @@ export async function POST(req: NextRequest) {
   console.log(`[ingest-recruiters] ${recruiters.length} recruiters due for scraping`)
 
   const profileUrls = recruiters.map((r) => r.linkedin_url)
+  let queryRejected = 0
+  let queryRejected = 0
   const result = { 
     total: 0, 
     classified_as_jobs: 0, 
@@ -133,7 +135,7 @@ export async function POST(req: NextRequest) {
         const hintSector = recruiter?.sector || guessSector(post.authorHeadline || '')
 
         const classified = await classifyPost(post.text, post.authorHeadline, hintSector)
-        if (!classified.isJob) continue
+        if (!classified.isJob) { queryRejected++; continue }
 
         // Skip India-based roles
         const INDIA_LOCATIONS = ['bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'karachi', 'lahore', 'pakistan', 'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat', 'alabama', 'abernathy', 'new bern', 'surat', 'nashik', 'visakhapatnam',
@@ -246,6 +248,7 @@ export async function POST(req: NextRequest) {
       posts_returned: result.total,
       jobs_inserted: result.inserted,
       duplicates_skipped: result.duplicates_skipped,
+      rejected: result.rejected ?? 0,
       errors: result.errors,
       triggered_by: req.headers.get('user-agent')?.includes('vercel-cron') ? 'cron' : 'manual',
     })
