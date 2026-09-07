@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
 
   const profileUrls = recruiters.map((r) => r.linkedin_url)
   let queryRejected = 0
-  let queryRejected = 0
   const result = { 
     total: 0, 
     classified_as_jobs: 0, 
@@ -248,7 +247,7 @@ export async function POST(req: NextRequest) {
       posts_returned: result.total,
       jobs_inserted: result.inserted,
       duplicates_skipped: result.duplicates_skipped,
-      rejected: result.rejected ?? 0,
+      rejected: queryRejected,
       errors: result.errors,
       triggered_by: req.headers.get('user-agent')?.includes('vercel-cron') ? 'cron' : 'manual',
     })
