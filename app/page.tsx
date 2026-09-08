@@ -187,10 +187,7 @@ export default function HomePage() {
       if (!res.ok) throw new Error('API error')
       const data = await res.json()
 
-      if (data.jobs?.length > 0) {
-        setAllJobs(data.jobs)
-      } else {
-      }
+      setAllJobs(data.jobs ?? [])
       setLastUpdated(new Date())
     } catch {
     } finally { setLoading(false) }
