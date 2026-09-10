@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   if (sector && sector !== 'all') query = query.eq('sector', sector)
   if (search) {
     query = query.or(
-      `title.ilike.%${search}%,company.ilike.%${search}%`
+      `title.ilike.%${search}%,company.ilike.%${search}%,summary.ilike.%${search}%,tags.cs.{${search.toLowerCase()}}`
     )
   }
 
