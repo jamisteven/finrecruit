@@ -18,12 +18,7 @@ const HASHTAG_QUERIES = [
   '#careeropportunity',
   // German
   '#stellenangebot',
-  '#jobsuche',
-  '#neuejobs',
-  '#karriere',
-  '#jobboerse',
   '#jobangebot',
-  '#stellen',
   '#wirstellenein',
   // Swiss location searches
   'hiring zurich',

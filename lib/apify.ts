@@ -224,7 +224,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
   ],
   realestate: [
     'property manager recruiter hiring',
-    'leasing agent recruiter hiring',
     'real estate recruiter now hiring',
     'property management recruiter now hiring',
     'real estate recruiter hiring London',
