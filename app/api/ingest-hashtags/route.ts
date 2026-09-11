@@ -152,12 +152,12 @@ export async function POST(req: NextRequest) {
         }
       )
 
-      if (!startRes.ok) continue
+      if (!startRes.ok) { console.error(`[ingest-hashtags] "${query}" start failed ${startRes.status}: ${await startRes.text()}`); continue }
 
       const runData = await startRes.json()
       const runId = runData.data?.id
       const datasetId = runData.data?.defaultDatasetId
-      if (!runId || !datasetId) continue
+      if (!runId || !datasetId) { console.error(`[ingest-hashtags] "${query}" no runId/datasetId`); continue }
 
       let status = ''
       for (let i = 0; i < 38; i++) {
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
         if (['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) break
       }
 
-      if (status !== 'SUCCEEDED') continue
+      if (status !== 'SUCCEEDED') { console.error(`[ingest-hashtags] "${query}" ended as ${status}`); continue }
 
       const items: ApifyPost[] = await (await fetch(
         `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=50`
