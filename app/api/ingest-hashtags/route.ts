@@ -164,9 +164,16 @@ export async function POST(req: NextRequest) {
 
       if (status !== 'SUCCEEDED') { console.error(`[ingest-hashtags] "${query}" ended as ${status}`); continue }
 
-      const items: ApifyPost[] = await (await fetch(
-        `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=50`
-      )).json()
+      // Apify can report SUCCEEDED before the dataset is readable — retry briefly
+      let items: ApifyPost[] = []
+      for (let attempt = 0; attempt < 4; attempt++) {
+        items = await (await fetch(
+          `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=50`
+        )).json()
+        if (items.length > 0) break
+        console.log(`[ingest-hashtags] "${query}" dataset empty, retry ${attempt + 1}`)
+        await new Promise((r) => setTimeout(r, 8000))
+      }
 
       console.log(`[ingest-hashtags] "${query}" dataset ${datasetId} returned ${items.length} items`)
       queryPosts = items.length
