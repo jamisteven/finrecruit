@@ -168,6 +168,7 @@ export async function POST(req: NextRequest) {
         `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=50`
       )).json()
 
+      console.log(`[ingest-hashtags] "${query}" dataset ${datasetId} returned ${items.length} items`)
       queryPosts = items.length
       result.total += items.length
 
