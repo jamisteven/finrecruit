@@ -73,11 +73,6 @@ const HASHTAG_QUERIES = [
   'hiring dubai',
   // Canada
   'hiring toronto',
-  'hiring switzerland',
-  'hiring bern',
-  'hiring schaffhausen',
-  'hiring basel',
-  'hiring geneva',
 ]
 
 const GERMAN_HASHTAGS = ['stellenangebot', 'jobsuche', 'neuejobs', 'karriere', 'jobboerse', 'jobangebot', 'stellen', 'wirstellenein']
@@ -148,7 +143,7 @@ export async function POST(req: NextRequest) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ searchQueries: [query], maxPosts: 10, sortBy: 'date', postedLimit: 'month', scrapeComments: false, scrapeReactions: false }),
+          body: JSON.stringify({ searchQueries: [query], maxPosts: 20, sortBy: 'date', postedLimit: 'month', scrapeComments: false, scrapeReactions: false }),
         }
       )
 
@@ -176,67 +171,76 @@ export async function POST(req: NextRequest) {
       queryPosts = items.length
       result.total += items.length
 
-      for (const rawPost of items) {
-        try {
-          const post = normalisePost(rawPost)
-          if (!post.postUrl || !post.text || post.text.length < 20) continue
+      // Process posts in concurrent chunks — the per-post work is all IO-bound
+      const CHUNK = 5
+      for (let i = 0; i < items.length; i += CHUNK) {
+        const chunk = items.slice(i, i + CHUNK)
+        await Promise.all(chunk.map(async (rawPost) => {
+          try {
+            const post = normalisePost(rawPost)
+            if (!post.postUrl || !post.text || post.text.length < 20) return
 
-          const { data: existing } = await db.from('jobs').select('id').eq('post_url', post.postUrl).single()
-          if (existing) { result.duplicates_skipped++; queryDuplicates++; continue }
+            const { data: existing } = await db.from('jobs').select('id').eq('post_url', post.postUrl).maybeSingle()
+            if (existing) { result.duplicates_skipped++; queryDuplicates++; return }
 
-          const HIRING_SIGNALS = ['hiring', 'recruit', 'looking for', 'seeking', 'vacancy',
-            'opening', 'mandate', 'apply', 'candidate', 'now hiring', 'join our', 'come work',
-            'suchen', 'stelle', 'gesucht', 'einstellen', 'bewerben']
-          if (!HIRING_SIGNALS.some((s) => post.text.toLowerCase().includes(s))) continue
+            const HIRING_SIGNALS = ['hiring', 'recruit', 'looking for', 'seeking', 'vacancy',
+              'opening', 'mandate', 'apply', 'candidate', 'now hiring', 'join our', 'come work',
+              'suchen', 'stelle', 'gesucht', 'einstellen', 'bewerben']
+            if (!HIRING_SIGNALS.some((s) => post.text.toLowerCase().includes(s))) return
 
-          const sector = guessSector(post.text, post.authorHeadline || '')
-          const classified = await classifyPost(post.text, post.authorHeadline, sector)
-          if (!classified.isJob) { queryRejected++; continue }
+            const sector = guessSector(post.text, post.authorHeadline || '')
+            const classified = await classifyPost(post.text, post.authorHeadline, sector)
+            if (!classified.isJob) { queryRejected++; return }
 
-          const loc = (classified.location || '').toLowerCase()
-          if (INDIA_LOCATIONS.some(l => loc.includes(l))) continue
+            const loc = (classified.location || '').toLowerCase()
+            if (INDIA_LOCATIONS.some(l => loc.includes(l))) return
 
-          result.classified_as_jobs++
+            result.classified_as_jobs++
 
-          const { error } = await db.from('jobs').insert({
-            title: classified.title,
-            company: classified.company,
-            location: normaliseLocation(classified.location),
-            seniority: classified.seniority,
-            salary: classified.salary,
-            apply_method: classified.apply_method,
-            summary: classified.summary,
-            tags: classified.tags,
-            sector,
-            post_url: post.postUrl,
-            author_name: post.authorName,
-            author_headline: post.authorHeadline,
-            author_linkedin_url: post.authorLinkedinUrl,
-            raw_text: post.text,
-            posted_at: post.postedAt,
-            extracted_at: new Date().toISOString(),
-            is_verified_job: true,
-          })
+            const { error } = await db.from('jobs').insert({
+              title: classified.title,
+              company: classified.company,
+              location: normaliseLocation(classified.location),
+              seniority: classified.seniority,
+              salary: classified.salary,
+              apply_method: classified.apply_method,
+              summary: classified.summary,
+              tags: classified.tags,
+              sector,
+              post_url: post.postUrl,
+              author_name: post.authorName,
+              author_headline: post.authorHeadline,
+              author_linkedin_url: post.authorLinkedinUrl,
+              raw_text: post.text,
+              posted_at: post.postedAt,
+              extracted_at: new Date().toISOString(),
+              is_verified_job: true,
+            })
 
-          if (!error) {
-            result.inserted++
-            queryInserted++
-            if (post.authorLinkedinUrl?.includes('/in/')) {
-              const cleanUrl = post.authorLinkedinUrl.split('?')[0]
-              await db.from('recruiters').upsert({
-                linkedin_url: cleanUrl,
-                name: post.authorName,
-                headline: post.authorHeadline,
-                sector,
-                source: 'hashtag',
-                next_scrape_at: new Date().toISOString(),
-              }, { onConflict: 'linkedin_url', ignoreDuplicates: true })
+            if (!error) {
+              result.inserted++
+              queryInserted++
+              if (post.authorLinkedinUrl?.includes('/in/')) {
+                const cleanUrl = post.authorLinkedinUrl.split('?')[0]
+                await db.from('recruiters').upsert({
+                  linkedin_url: cleanUrl,
+                  name: post.authorName,
+                  headline: post.authorHeadline,
+                  sector,
+                  source: 'hashtag',
+                  next_scrape_at: new Date().toISOString(),
+                }, { onConflict: 'linkedin_url', ignoreDuplicates: true })
+              }
+            } else if (error.code === '23505') {
+              // lost a race within the chunk — another post inserted the same url
+              result.duplicates_skipped++; queryDuplicates++
+            } else {
+              result.errors++
             }
-          } else result.errors++
-
-        } catch (err) {
-          result.errors++
-        }
+          } catch (err) {
+            result.errors++
+          }
+        }))
       }
 
     } catch (err) {
