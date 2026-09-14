@@ -8,7 +8,6 @@ export const maxDuration = 300
 
 const HASHTAG_QUERIES = [
   // English
-  '#hiring',
   '#nowhiring',
   '#jobopening',
   '#jobalert',
