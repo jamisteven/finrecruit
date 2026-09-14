@@ -8,6 +8,7 @@ export const maxDuration = 300
 
 const HASHTAG_QUERIES = [
   // English
+  '#hiring',
   '#nowhiring',
   '#jobopening',
   '#jobalert',
@@ -142,7 +143,15 @@ export async function POST(req: NextRequest) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ searchQueries: [query], maxPosts: 20, sortBy: 'date', postedLimit: 'month', scrapeComments: false, scrapeReactions: false }),
+          body: JSON.stringify({
+            searchQueries: [query],
+            maxPosts: 20,
+            // LinkedIn returns nothing for very high-volume tags when sorted by date
+            ...(query === '#hiring' ? {} : { sortBy: 'date' }),
+            postedLimit: 'month',
+            scrapeComments: false,
+            scrapeReactions: false,
+          }),
         }
       )
 
