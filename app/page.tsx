@@ -447,6 +447,7 @@ export default function HomePage() {
     const next = filters.workTypes.includes(wt)
       ? filters.workTypes.filter((w) => w !== wt)
       : [...filters.workTypes, wt]
+    track('filter_worktype', { work_types: next.join(',') || 'cleared' })
     setFilters({ ...filters, workTypes: next })
   }
 
@@ -454,8 +455,27 @@ export default function HomePage() {
     const next = filters.locations.includes(loc)
       ? filters.locations.filter((l) => l !== loc)
       : [...filters.locations, loc]
+    track('filter_location', { locations: next.join(',') || 'cleared' })
     setFilters({ ...filters, locations: next })
   }
+
+  const track = (name: string, params: Record<string, unknown> = {}) => {
+    try {
+      const w = window as unknown as { gtag?: (...a: unknown[]) => void }
+      w.gtag?.('event', name, params)
+    } catch { /* analytics must never break the page */ }
+  }
+
+  const trackJobClick = (job: JobPost, index: number) => track('job_click', {
+    sector: job.sector,
+    location: job.location ?? 'unknown',
+    seniority: job.seniority ?? 'unknown',
+    company: job.company ?? 'unknown',
+    list_position: index + 1,
+    age_days: job.posted_at
+      ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000)
+      : null,
+  })
 
   const resetAll = () => setFilters(DEFAULT_FILTERS)
 
@@ -547,7 +567,7 @@ export default function HomePage() {
                   key={s.id}
                   className={`sector-row${active ? ' active' : ''}`}
                   style={{ ['--dot' as string]: s.id === 'all' ? 'var(--ink-3)' : `var(--sec-${s.id})` }}
-                  onClick={() => setFilters({ ...filters, sector: s.id })}
+                  onClick={() => { track('filter_sector', { sector: s.id }); setFilters({ ...filters, sector: s.id }) }}
                 >
                   <span className="dot" />{s.label}<span className="cnt">{count}</span>
                 </button>
@@ -652,7 +672,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="cards">
-              {displayJobs.slice(0, visibleCount).map((job) => {
+              {displayJobs.slice(0, visibleCount).map((job, jobIndex) => {
                 const wt = inferWorkType(job)
                 return (
                   <article key={job.id} id={`job-${job.id}`} className={`card${highlightId === job.id ? ' flash' : ''}`} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
@@ -667,7 +687,7 @@ export default function HomePage() {
                       {job.posted_at && <span className={`ago${isFresh(job.posted_at) ? ' fresh' : ''}`}>{timeAgo(job.posted_at)}</span>}
                     </div>
 
-                    <h3><a href={job.post_url} target="_blank" rel="noopener noreferrer">{job.title}</a></h3>
+                    <h3><a href={job.post_url} target="_blank" rel="noopener noreferrer" onClick={() => trackJobClick(job, jobIndex)}>{job.title}</a></h3>
                     <p className="meta">
                       <b>{job.company}</b>
                       {job.location && <><span className="sep">·</span>{job.location}</>}
@@ -694,7 +714,7 @@ export default function HomePage() {
                         <button className={`ghost-btn${saved.has(job.id) ? ' saved' : ''}`} onClick={() => toggleSaved(job.id)}>
                           {saved.has(job.id) ? '★ Saved' : '☆ Save'}
                         </button>
-                        <a className="apply-btn" href={job.post_url} target="_blank" rel="noopener noreferrer">
+                        <a className="apply-btn" href={job.post_url} target="_blank" rel="noopener noreferrer" onClick={() => trackJobClick(job, jobIndex)}>
                           View post
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7 17 17 7M7 7h10v10" /></svg>
                         </a>
