@@ -466,16 +466,36 @@ export default function HomePage() {
     } catch { /* analytics must never break the page */ }
   }
 
-  const trackJobClick = (job: JobPost, index: number) => track('job_click', {
+  const trackJobClick = (job: JobPost, index: number) => {
+    const ageDays = job.posted_at
+      ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000)
+      : null
+    // fire-and-forget; keepalive lets it survive the tab navigating away
+    try {
+      fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({
+          job_id: job.id,
+          sector: job.sector,
+          location: job.location,
+          seniority: job.seniority,
+          quality: (job as unknown as { quality?: string }).quality ?? null,
+          list_position: index + 1,
+          age_days: ageDays,
+        }),
+      }).catch(() => {})
+    } catch { /* never break the click */ }
+    return track('job_click', {
     sector: job.sector,
     location: job.location ?? 'unknown',
     seniority: job.seniority ?? 'unknown',
     company: job.company ?? 'unknown',
     list_position: index + 1,
-    age_days: job.posted_at
-      ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000)
-      : null,
-  })
+    age_days: ageDays,
+    })
+  }
 
   const resetAll = () => setFilters(DEFAULT_FILTERS)
 

@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   let query = db
     .from('jobs')
-    .select('id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, posted_at, extracted_at, is_verified_job')
+    .select('id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, posted_at, extracted_at, is_verified_job, quality')
     .eq('is_verified_job', true)
     .or(`posted_at.gte.${new Date(Date.now() - maxAgeDays * 86400000).toISOString()},posted_at.is.null`)
     .range(offset, offset + limit - 1)
