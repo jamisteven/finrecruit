@@ -501,7 +501,7 @@ export default function HomePage() {
       <section className="hero">
         <div>
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
-          <p className="sub">Roles recruiters post in the feed and never list — pulled from public posts, classified by AI, refreshed twice a day.</p>
+          <p className="sub">Stop competing with 1,000 people on official job boards. Access hidden, high-signal roles posted directly by hiring managers in their daily feed.</p>
         </div>
         <div className="stats">
           <div className="stat"><div className="num">{allJobs.length}</div><div className="lbl">Live roles</div></div>
