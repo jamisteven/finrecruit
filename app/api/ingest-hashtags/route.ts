@@ -123,12 +123,12 @@ export async function POST(req: NextRequest) {
         const { data } = await db.from('ingest_state').select('current_offset').eq('sector', 'hashtags').single()
         const cur = data?.current_offset ?? 0
         await db.from('ingest_state')
-          .update({ current_offset: (cur + 2) % HASHTAG_QUERIES.length, last_run_at: new Date().toISOString() })
+          .update({ current_offset: (cur + 4) % HASHTAG_QUERIES.length, last_run_at: new Date().toISOString() })
           .eq('sector', 'hashtags')
         return cur % HASHTAG_QUERIES.length
       })()
 
-  const batch = [...HASHTAG_QUERIES, ...HASHTAG_QUERIES].slice(offset, offset + 2)
+  const batch = [...HASHTAG_QUERIES, ...HASHTAG_QUERIES].slice(offset, offset + 4)
   console.log(`[ingest-hashtags] Running: ${batch.join(', ')} (offset ${offset})`)
 
   for (const query of batch) {
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
 
       // Apify can report SUCCEEDED before the dataset is readable — retry briefly
       let items: ApifyPost[] = []
-      for (let attempt = 0; attempt < 4; attempt++) {
+      for (let attempt = 0; attempt < 2; attempt++) {
         items = await (await fetch(
           `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=50`
         )).json()
