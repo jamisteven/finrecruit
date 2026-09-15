@@ -223,6 +223,7 @@ export async function POST(req: NextRequest) {
               summary: classified.summary,
               tags: classified.tags,
               sector,
+              quality: classified.quality ?? 'medium',
               post_url: post.postUrl,
               author_name: post.authorName,
               author_headline: post.authorHeadline,

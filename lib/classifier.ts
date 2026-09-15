@@ -8,6 +8,9 @@ export type ClassifiedJob = {
   apply_method: string | null
   summary: string
   tags: string[]
+  // high = a named person or firm hiring for a role you could act on directly.
+  // low = platform funnel, roundup, or a poster with no plausible link to the role.
+  quality: 'high' | 'medium' | 'low'
   // Claude's own judgment of which sector the ROLE belongs to (may differ from
   // the query sector that found the post). 'other' = real job, but off-vertical.
   sector: string
@@ -32,7 +35,7 @@ export async function classifyPost(
   const FALLBACK: ClassifiedJob = {
     isJob: false, title: '', company: null, location: null,
     seniority: 'Unknown', salary: null, apply_method: null, summary: '', tags: [],
-    sector: 'other',
+    sector: 'other', quality: 'low',
   }
 
   const sectorContext = SECTOR_CONTEXT[sector] || sector
@@ -43,7 +46,6 @@ Cast a WIDE net — include any post where someone is hiring for a specific open
 Posts may be in English OR German (including Swiss German). For German posts, key hiring phrases include: 'wir suchen', 'gesucht', 'Stelle frei', 'Stellenangebot', 'einstellen', 'wir stellen ein', 'jetzt bewerben', 'zur Verstärkung'. Extract all fields in English regardless of the post language.
 - Core ${sector} roles
 - Recruiter posts listing specific open positions with requirements
-- "HOT JOBS" style lists — extract the most senior/interesting one
 - Reposts sharing a job opportunity
 
 Only exclude:
@@ -51,6 +53,17 @@ Only exclude:
 - Thought leadership / articles
 - Posts asking for job lists or resources
 - Self-promotion with no specific open role
+- Roundup posts listing several different roles (set isJob false — one post, many jobs, cannot be stored correctly)
+- Posts whose main purpose is driving signups to a jobs platform or talent network
+
+Also rate quality, judged on whether a jobseeker could act on this directly:
+- "high": a named individual or identifiable firm hiring for a specific role, with a
+  direct way to reach them (their DM, their company email, their own careers link).
+- "medium": a real opening but thin — no company named, vague detail, or an
+  agency posting without naming the client.
+- "low": the post funnels to a third-party jobs platform rather than the employer;
+  the poster has no evident connection to the role's market or employer; the post is
+  template-generated filler; or the named "company" is really the posting platform.
 
 INDEPENDENTLY of whether it is a job, decide which sector the ROLE itself belongs to,
 judged by the role's function — NOT the employer's industry:
@@ -66,9 +79,9 @@ ${rawText.slice(0, 2500)}
 ---
 
 Reply ONLY with JSON, no markdown, no backticks:
-{"isJob":true,"title":"job title","company":"company or null","location":"primary city only (e.g. London, New York, Remote) — do NOT list multiple cities, do NOT include Indian cities (Bangalore, Mumbai, Hyderabad, Delhi, Chennai, Pune, Noida, Gurugram etc) — return null for India-based roles","seniority":"one of: Intern/Junior/Mid/Senior/VP/Director/MD/Partner/C-Suite/Unknown","salary":"range or null","apply_method":"DM/email/link/etc or null","summary":"1-2 sentences about the role","tags":["tag1","tag2"],"sector":"one of: finance/tech/legal/marketing/realestate/other"}
+{"isJob":true,"title":"job title","company":"company or null","location":"primary city only (e.g. London, New York, Remote) — do NOT list multiple cities, do NOT include Indian cities (Bangalore, Mumbai, Hyderabad, Delhi, Chennai, Pune, Noida, Gurugram etc) — return null for India-based roles","seniority":"one of: Intern/Junior/Mid/Senior/VP/Director/MD/Partner/C-Suite/Unknown","salary":"range or null","apply_method":"DM/email/link/etc or null","summary":"1-2 sentences about the role","tags":["tag1","tag2"],"sector":"one of: finance/tech/legal/marketing/realestate/other","quality":"one of: high/medium/low"}
 
-Or if not a job: {"isJob":false,"title":"","company":null,"location":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[],"sector":"other"}`
+Or if not a job: {"isJob":false,"title":"","company":null,"location":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[],"sector":"other","quality":"low"}`
 
   try {
     const controller = new AbortController()
@@ -106,7 +119,7 @@ Or if not a job: {"isJob":false,"title":"","company":null,"location":null,"senio
       // Normalize; fall back to the query's sector if the model omitted it
       sector: typeof parsed.sector === 'string' && parsed.sector ? parsed.sector.toLowerCase().trim() : sector,
     }
-    console.log(`[classifier] [query:${sector}] isJob=${out.isJob} sector=${out.sector} title="${out.title}"`)
+    console.log(`[classifier] [query:${sector}] isJob=${out.isJob} quality=${out.quality} sector=${out.sector} title="${out.title}"`)
     return out
 
   } catch (e) {
