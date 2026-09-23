@@ -156,6 +156,7 @@ export default function HomePage() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
   const [loading, setLoading] = useState(false)
   const [visibleCount, setVisibleCount] = useState(150)
+  const [totalJobs, setTotalJobs] = useState(0)
   const [dropBatches, setDropBatches] = useState<DropBatch[]>(DROP_BATCHES_FALLBACK)
   useEffect(() => {
     fetch('/api/schedule')
@@ -188,6 +189,7 @@ export default function HomePage() {
       const data = await res.json()
 
       setAllJobs(data.jobs ?? [])
+      setTotalJobs(data.total ?? data.jobs?.length ?? 0)
       setLastUpdated(new Date())
     } catch {
     } finally { setLoading(false) }
@@ -544,7 +546,7 @@ export default function HomePage() {
           <p className="sub">Roles recruiters post exclusively to their personal connections and never list - tracked by AI and delivered in real time.</p>
         </div>
         <div className="stats">
-          <div className="stat"><div className="num">{allJobs.length}</div><div className="lbl">Live roles</div></div>
+          <div className="stat"><div className="num">{totalJobs || allJobs.length}</div><div className="lbl">Live roles</div></div>
           <div className="stat"><div className="num">{availableLocations.length}</div><div className="lbl">Locations</div></div>
           <div className="stat"><div className="num">{todayCount}</div><div className="lbl">Added today</div></div>
         </div>

@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search')
   const sector = searchParams.get('sector')
   const sortBy = searchParams.get('sortBy') || 'newest'
-  const limit = parseInt(searchParams.get('limit') || '5000')
+  const limit = parseInt(searchParams.get('limit') || '20000')
   const maxAgeDays = parseInt(searchParams.get('maxAge') || '30')
   const offset = parseInt(searchParams.get('offset') || '0')
 
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   let query = db
     .from('jobs')
-    .select('id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, posted_at, extracted_at, is_verified_job, quality')
+    .select('id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, posted_at, extracted_at, is_verified_job, quality', { count: 'exact' })
     .eq('is_verified_job', true)
     .or(`posted_at.gte.${new Date(Date.now() - maxAgeDays * 86400000).toISOString()},posted_at.is.null`)
     .range(offset, offset + limit - 1)
@@ -29,8 +29,8 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const { data, error } = await query
+  const { data, error, count } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ jobs: data })
+  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0 })
 }
