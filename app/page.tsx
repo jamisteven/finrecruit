@@ -159,6 +159,7 @@ export default function HomePage() {
   const [totalJobs, setTotalJobs] = useState(0)
   const [hasPass, setHasPass] = useState(false)
   const [withheld, setWithheld] = useState(0)
+  const [lockedSample, setLockedSample] = useState<Partial<JobPost> | null>(null)
   const [dropBatches, setDropBatches] = useState<DropBatch[]>(DROP_BATCHES_FALLBACK)
   useEffect(() => {
     fetch('/api/schedule')
@@ -194,6 +195,7 @@ export default function HomePage() {
       setTotalJobs(data.total ?? data.jobs?.length ?? 0)
       setHasPass(!!data.hasPass)
       setWithheld(data.withheld ?? 0)
+      setLockedSample(data.lockedSample ?? null)
       setLastUpdated(new Date())
     } catch {
     } finally { setLoading(false) }
@@ -699,10 +701,22 @@ export default function HomePage() {
           ) : (
             <div className="cards">
               {!hasPass && withheld > 0 && (
-                <article className="card locked">
-                  <div className="locked-body">
+                <article className="card locked" style={{ ['--sec' as string]: `var(--sec-${lockedSample?.sector ?? 'tech'}, var(--ink-3))` }}>
+                  <div className="locked-peek">
+                    <div className="card-top">
+                      <span className="sec-tag"><span className="dot" />{sectorLabel(lockedSample?.sector ?? 'tech')}</span>
+                      <span className="ago fresh">just now</span>
+                    </div>
+                    <h3>{lockedSample?.title ?? 'Senior role at a growing team'}</h3>
+                    <p className="meta">
+                      <b>{lockedSample?.company ?? 'Hiring company'}</b>
+                      {lockedSample?.location && <><span className="sep">·</span>{lockedSample.location}</>}
+                      {lockedSample?.seniority && lockedSample.seniority !== 'Unknown' && <><span className="sep">·</span>{lockedSample.seniority}</>}
+                    </p>
+                  </div>
+                  <div className="locked-veil">
                     <div className="locked-count">{withheld} more roles landed today</div>
-                    <p className="locked-sub">Free members see roles after 24 hours. Get them as they drop.</p>
+                    <p className="locked-sub">Most roles fill inside 48 hours. Free members see them tomorrow.</p>
                     <a className="locked-cta" href="/pricing">Unlock for 14 days — $9</a>
                   </div>
                 </article>
@@ -759,6 +773,14 @@ export default function HomePage() {
                 )
               })}
             </div>
+          )}
+
+          {!hasPass && (
+            <section className="convert">
+              <h2>Most roles fill inside 48 hours.</h2>
+              <p>Free members see yesterday&apos;s. Pass holders see them as they drop.</p>
+              <a className="convert-cta" href="/pricing">See what a pass costs</a>
+            </section>
           )}
 
           <footer className="colophon">
@@ -1041,7 +1063,16 @@ export default function HomePage() {
         }
         .ulj .card:hover { box-shadow: var(--shadow-lift); translate: 0 -2px; border-color: var(--hairline-2); }
         .ulj .card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .ulj .card.locked { border-left: 3px solid var(--ink-3); background: var(--card); }
+        .ulj .card.locked { position: relative; overflow: hidden; }
+        .ulj .locked-peek { filter: blur(4px); pointer-events: none; user-select: none; }
+        .ulj .locked-veil { position: absolute; inset: 0; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; text-align: center; gap: 4px;
+          background: color-mix(in srgb, var(--page) 76%, transparent); }
+        .ulj .convert { margin: 34px 0 0; padding: 28px 26px; border-radius: 14px; background: var(--ink); }
+        .ulj .convert h2 { font-family: 'Fraunces', Georgia, serif; font-size: 21px; font-weight: 500; color: var(--page); margin: 0 0 6px; }
+        .ulj .convert p { font-size: 13.5px; color: var(--ink-3); margin: 0 0 16px; }
+        .ulj .convert-cta { display: inline-block; background: var(--page); color: var(--ink); font-size: 13px; padding: 10px 18px; border-radius: 8px; text-decoration: none; }
+        .ulj .card.locked-unused { border-left: 3px solid var(--ink-3); background: var(--card); }
         .ulj .locked-body { padding: 22px 4px; text-align: center; }
         .ulj .locked-count { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 500; color: var(--ink); }
         .ulj .locked-sub { font-size: 13px; color: var(--ink-2); margin: 6px 0 14px; }

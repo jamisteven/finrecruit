@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
 
   // how many roles the free tier is not being shown
   let withheld = 0
+  let lockedSample: Record<string, unknown> | null = null
   if (!hasPass) {
     const { count: recent } = await db
       .from('jobs')
@@ -63,10 +64,20 @@ export async function GET(req: NextRequest) {
       .eq('is_verified_job', true)
       .gte('posted_at', new Date(Date.now() - 24 * 3600_000).toISOString())
     withheld = recent ?? 0
+
+    // one withheld role, blurred in the UI as a teaser
+    const { data: sample } = await db
+      .from('jobs')
+      .select('title, company, location, sector, seniority, posted_at')
+      .eq('is_verified_job', true)
+      .gte('posted_at', new Date(Date.now() - 24 * 3600_000).toISOString())
+      .order('posted_at', { ascending: false })
+      .limit(1)
+    lockedSample = sample?.[0] ?? null
   }
 
   const { data, error, count } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0, hasPass, withheld })
+  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0, hasPass, withheld, lockedSample })
 }
