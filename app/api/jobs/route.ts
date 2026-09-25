@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { getSessionClient } from '@/lib/supabase-session'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -13,6 +14,18 @@ export async function GET(req: NextRequest) {
 
   const db = createServerClient()
 
+  // Pass holders see roles as they land; everyone else waits 24 hours
+  let hasPass = false
+  try {
+    const session = await getSessionClient()
+    const { data: { user } } = await session.auth.getUser()
+    if (user) {
+      const { data: profile } = await createServerClient()
+        .from('profiles').select('pass_expires_at').eq('id', user.id).maybeSingle()
+      hasPass = !!profile?.pass_expires_at && new Date(profile.pass_expires_at) > new Date()
+    }
+  } catch { /* treat any failure as free tier */ }
+
   let query = db
     .from('jobs')
     .select('id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, posted_at, extracted_at, is_verified_job, quality', { count: 'exact' })
@@ -20,6 +33,11 @@ export async function GET(req: NextRequest) {
     .or(`posted_at.gte.${new Date(Date.now() - maxAgeDays * 86400000).toISOString()},posted_at.is.null`)
     .range(offset, offset + limit - 1)
     .order('extracted_at', { ascending: sortBy === 'oldest' })
+
+  if (!hasPass) {
+    query = query.lt('posted_at', new Date(Date.now() - 24 * 3600_000).toISOString())
+  }
+
 
   if (seniority && seniority !== 'All') query = query.eq('seniority', seniority)
   if (sector && sector !== 'all') query = query.eq('sector', sector)
@@ -32,5 +50,5 @@ export async function GET(req: NextRequest) {
   const { data, error, count } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0 })
+  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0, hasPass })
 }
