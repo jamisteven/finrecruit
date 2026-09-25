@@ -20,9 +20,10 @@ export async function GET(req: NextRequest) {
     const session = await getSessionClient()
     const { data: { user } } = await session.auth.getUser()
     if (user) {
-      const { data: profile } = await createServerClient()
+      const { data: profile, error: profErr } = await createServerClient()
         .from('profiles').select('pass_expires_at').eq('id', user.id).maybeSingle()
       hasPass = !!profile?.pass_expires_at && new Date(profile.pass_expires_at) > new Date()
+      if (profErr) console.error('[jobs] profile query error:', profErr.message)
       console.log('[jobs] user', user.id, 'expires', profile?.pass_expires_at, 'hasPass', hasPass)
     } else {
       console.log('[jobs] no user on request')
