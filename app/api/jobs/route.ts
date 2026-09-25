@@ -23,6 +23,9 @@ export async function GET(req: NextRequest) {
       const { data: profile } = await createServerClient()
         .from('profiles').select('pass_expires_at').eq('id', user.id).maybeSingle()
       hasPass = !!profile?.pass_expires_at && new Date(profile.pass_expires_at) > new Date()
+      console.log('[jobs] user', user.id, 'expires', profile?.pass_expires_at, 'hasPass', hasPass)
+    } else {
+      console.log('[jobs] no user on request')
     }
   } catch { /* treat any failure as free tier */ }
 
