@@ -1065,9 +1065,12 @@ export default function HomePage() {
         .ulj .card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         .ulj .card.locked { position: relative; overflow: hidden; }
         .ulj .locked-peek { filter: blur(4px); pointer-events: none; user-select: none; }
+        .ulj .card.locked { min-height: 210px; }
         .ulj .locked-veil { position: absolute; inset: 0; display: flex; flex-direction: column;
-          align-items: center; justify-content: center; text-align: center; gap: 4px;
-          background: color-mix(in srgb, var(--page) 76%, transparent); }
+          align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 24px;
+          background: color-mix(in srgb, var(--page) 78%, transparent); }
+        .ulj .locked-veil .locked-count { margin: 0; }
+        .ulj .locked-veil .locked-sub { margin: 0; max-width: 42ch; }
         .ulj .convert { margin: 34px 0 0; padding: 28px 26px; border-radius: 14px; background: var(--ink); }
         .ulj .convert h2 { font-family: 'Fraunces', Georgia, serif; font-size: 21px; font-weight: 500; color: var(--page); margin: 0 0 6px; }
         .ulj .convert p { font-size: 13.5px; color: var(--ink-3); margin: 0 0 16px; }
