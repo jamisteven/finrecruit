@@ -555,13 +555,13 @@ export default function HomePage() {
                     <>
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Pass active</div>}
-                      {!hasPass && <a href="/pricing">Get a 14-day pass</a>}
+                      {!hasPass && <a href="/login">Get a 14-day pass</a>}
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
                     <>
                       <a href="/login">Sign in</a>
-                      <a href="/pricing">Pricing</a>
+                      <a href="/login">Pricing</a>
                     </>
                   )}
                 </div>
@@ -753,7 +753,7 @@ export default function HomePage() {
                   <div className="locked-veil">
                     <div className="locked-count">{withheld} more roles landed today</div>
                     <p className="locked-sub">Most roles fill inside 48 hours. Pass holders see them the moment they land.</p>
-                    <a className="locked-cta" href="/pricing">Unlock for 14 days — $9</a>
+                    <a className="locked-cta" href="/login">Unlock for 14 days — $9</a>
                   </div>
                 </article>
               )}
@@ -815,7 +815,7 @@ export default function HomePage() {
             <section className="convert">
               <h2>Most roles fill inside 48 hours.</h2>
               <p>Free members see yesterday&apos;s. Pass holders see them as they drop.</p>
-              <a className="convert-cta" href="/pricing">See what a pass costs</a>
+              <a className="convert-cta" href="/login">See what a pass costs</a>
             </section>
           )}
 
