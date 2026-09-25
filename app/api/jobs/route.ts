@@ -47,8 +47,19 @@ export async function GET(req: NextRequest) {
     )
   }
 
+  // how many roles the free tier is not being shown
+  let withheld = 0
+  if (!hasPass) {
+    const { count: recent } = await db
+      .from('jobs')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_verified_job', true)
+      .gte('posted_at', new Date(Date.now() - 24 * 3600_000).toISOString())
+    withheld = recent ?? 0
+  }
+
   const { data, error, count } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0, hasPass })
+  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0, hasPass, withheld })
 }

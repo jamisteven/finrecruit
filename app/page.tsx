@@ -182,7 +182,7 @@ export default function HomePage() {
       // NOTE: sector is deliberately NOT sent to the API — it's filtered client-side
       // so the sidebar counts always reflect the full dataset.
       params.set('sortBy', filters.sortBy)
-      params.set('limit', '5000')
+      params.set('limit', '20000')
 
       const res = await fetch(`/api/jobs?${params}`)
       if (!res.ok) throw new Error('API error')
