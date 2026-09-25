@@ -20,6 +20,9 @@ export async function GET(req: NextRequest) {
     const session = await getSessionClient()
     const { data: { user } } = await session.auth.getUser()
     if (user) {
+      const { count: profCount } = await createServerClient()
+        .from('profiles').select('*', { count: 'exact', head: true })
+      console.log('[jobs] profiles visible:', profCount)
       const { data: profile, error: profErr } = await createServerClient()
         .from('profiles').select('pass_expires_at').eq('id', user.id).maybeSingle()
       hasPass = !!profile?.pass_expires_at && new Date(profile.pass_expires_at) > new Date()
