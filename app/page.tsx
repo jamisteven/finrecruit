@@ -1,4 +1,6 @@
 'use client'
+
+import { createClient } from '@/lib/supabase-browser'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Analytics } from '@vercel/analytics/next'
 import { JobPost, FilterState, Sector, WorkType } from '@/types'
@@ -152,6 +154,18 @@ const initials = (name: string) =>
 
 export default function HomePage() {
   const [dark, setDark] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  useEffect(() => {
+    const sb = createClient()
+    sb.auth.getUser().then(({ data }) => setUserEmail(data.user?.email ?? null)).catch(() => {})
+    const { data: sub } = sb.auth.onAuthStateChange((_e, s) => setUserEmail(s?.user?.email ?? null))
+    return () => sub.subscription.unsubscribe()
+  }, [])
+  const signOut = async () => {
+    try { await createClient().auth.signOut() } catch {}
+    window.location.reload()
+  }
   const [allJobs, setAllJobs] = useState<JobPost[]>([])
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
   const [loading, setLoading] = useState(false)
@@ -531,6 +545,28 @@ export default function HomePage() {
 
           <div className="mast-actions">
 
+            <div className="acct-wrap">
+              <button className="icon-btn" onClick={() => setMenuOpen(!menuOpen)} aria-label="Account menu" title="Account">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+              </button>
+              {menuOpen && (
+                <div className="acct-menu">
+                  {userEmail ? (
+                    <>
+                      <div className="acct-email">{userEmail}</div>
+                      {hasPass && <div className="acct-badge">Pass active</div>}
+                      {!hasPass && <a href="/pricing">Get a 14-day pass</a>}
+                      <button onClick={signOut}>Sign out</button>
+                    </>
+                  ) : (
+                    <>
+                      <a href="/login">Sign in</a>
+                      <a href="/pricing">Pricing</a>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
             <button className="icon-btn" onClick={() => setDark(!dark)} aria-label="Toggle dark mode" title="Toggle dark mode">
               {dark
                 ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
@@ -716,7 +752,7 @@ export default function HomePage() {
                   </div>
                   <div className="locked-veil">
                     <div className="locked-count">{withheld} more roles landed today</div>
-                    <p className="locked-sub">Most roles fill inside 48 hours. Free members see them tomorrow.</p>
+                    <p className="locked-sub">Most roles fill inside 48 hours. Pass holders see them the moment they land.</p>
                     <a className="locked-cta" href="/pricing">Unlock for 14 days — $9</a>
                   </div>
                 </article>
@@ -1065,6 +1101,17 @@ export default function HomePage() {
         .ulj .card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         .ulj .card.locked { position: relative; overflow: hidden; }
         .ulj .locked-peek { filter: blur(4px); pointer-events: none; user-select: none; }
+        .ulj .acct-wrap { position: relative; }
+        .ulj .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30;
+          min-width: 190px; background: var(--card); border: 1px solid var(--line);
+          border-radius: 10px; padding: 6px; display: flex; flex-direction: column;
+          box-shadow: var(--shadow-lift); }
+        .ulj .acct-menu a, .ulj .acct-menu button { display: block; width: 100%; text-align: left;
+          font: 500 13px 'Inter', sans-serif; color: var(--ink); background: none; border: none;
+          padding: 8px 10px; border-radius: 7px; cursor: pointer; text-decoration: none; }
+        .ulj .acct-menu a:hover, .ulj .acct-menu button:hover { background: var(--page); }
+        .ulj .acct-email { font-size: 11.5px; color: var(--ink-2); padding: 7px 10px 4px; word-break: break-all; }
+        .ulj .acct-badge { font-size: 11px; color: var(--ink-2); padding: 0 10px 7px; }
         .ulj .card.locked { min-height: 210px; }
         .ulj .locked-veil { position: absolute; inset: 0; display: flex; flex-direction: column;
           align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 24px;
