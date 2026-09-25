@@ -157,6 +157,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false)
   const [visibleCount, setVisibleCount] = useState(150)
   const [totalJobs, setTotalJobs] = useState(0)
+  const [hasPass, setHasPass] = useState(false)
+  const [withheld, setWithheld] = useState(0)
   const [dropBatches, setDropBatches] = useState<DropBatch[]>(DROP_BATCHES_FALLBACK)
   useEffect(() => {
     fetch('/api/schedule')
@@ -190,6 +192,8 @@ export default function HomePage() {
 
       setAllJobs(data.jobs ?? [])
       setTotalJobs(data.total ?? data.jobs?.length ?? 0)
+      setHasPass(!!data.hasPass)
+      setWithheld(data.withheld ?? 0)
       setLastUpdated(new Date())
     } catch {
     } finally { setLoading(false) }
@@ -694,6 +698,15 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="cards">
+              {!hasPass && withheld > 0 && (
+                <article className="card locked">
+                  <div className="locked-body">
+                    <div className="locked-count">{withheld} more roles landed today</div>
+                    <p className="locked-sub">Free members see roles after 24 hours. Get them as they drop.</p>
+                    <a className="locked-cta" href="/pricing">Unlock for 14 days — $9</a>
+                  </div>
+                </article>
+              )}
               {displayJobs.slice(0, visibleCount).map((job, jobIndex) => {
                 const wt = inferWorkType(job)
                 return (
@@ -1028,6 +1041,11 @@ export default function HomePage() {
         }
         .ulj .card:hover { box-shadow: var(--shadow-lift); translate: 0 -2px; border-color: var(--hairline-2); }
         .ulj .card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .ulj .card.locked { border-left: 3px solid var(--ink-3); background: var(--card); }
+        .ulj .locked-body { padding: 22px 4px; text-align: center; }
+        .ulj .locked-count { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 500; color: var(--ink); }
+        .ulj .locked-sub { font-size: 13px; color: var(--ink-2); margin: 6px 0 14px; }
+        .ulj .locked-cta { display: inline-block; background: var(--ink); color: var(--page); font-size: 13px; padding: 9px 18px; border-radius: 8px; text-decoration: none; }
         .ulj .sec-tag { display: inline-flex; align-items: center; gap: 7px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); }
         .ulj .sec-tag .dot { width: 8px; height: 8px; border-radius: 3px; background: var(--sec); }
         .ulj .verified { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-3); }
