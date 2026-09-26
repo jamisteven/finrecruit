@@ -53,7 +53,6 @@ export async function POST(req: NextRequest) {
   const { data, error } = await db.auth.admin.generateLink({
     type: 'magiclink',
     email,
-    options: { redirectTo: `${origin}/auth/callback` },
   })
 
   if (error || !data?.properties?.action_link) {
@@ -61,8 +60,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'could not sign in' }, { status: 500 })
   }
 
-  console.log("[claim] action_link:", data.properties.action_link)
-  return NextResponse.json({ url: data.properties.action_link })
+  return NextResponse.json({ email, token_hash: data.properties.hashed_token })
   } catch (e) {
     console.error('[claim] unhandled:', (e as Error).message)
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })

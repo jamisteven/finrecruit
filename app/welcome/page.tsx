@@ -15,7 +15,16 @@ function Welcome() {
       body: JSON.stringify({ session_id: sid }),
     })
       .then((r) => r.json())
-      .then((d) => {
+      .then(async (d) => {
+        if (d.token_hash) {
+          const { createClient } = await import('@/lib/supabase-browser')
+          const { error } = await createClient().auth.verifyOtp({
+            token_hash: d.token_hash, type: 'magiclink',
+          })
+          if (error) { setMsg(`Sign-in failed: ${error.message}. Your pass is active — sign in at /login.`); return }
+          window.location.href = '/'
+          return
+        }
         if (d.url) window.location.href = d.url
         else setMsg(`Could not sign you in automatically: ${d.error ?? 'unknown'}. Your pass is active — sign in at /login with the email you paid with.`)
       })
