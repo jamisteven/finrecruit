@@ -77,8 +77,9 @@ export default function PricingPage() {
       <p className="foot">Payment handled by Stripe. We never see your card details.</p>
 
       <style>{`
+        html, body { background: #F6F3EC; margin: 0; }
         .pricing { max-width: 720px; margin: 0 auto; padding: 48px 22px 70px;
-          font-family: 'Inter', system-ui, sans-serif; color: #191713; background: #F6F3EC; min-height: 100vh; }
+          font-family: 'Inter', system-ui, sans-serif; color: #191713; min-height: 100vh; }
         .pricing .back { font-size: 13px; color: #6B6862; text-decoration: none; }
         .pricing h1 { font-family: 'Fraunces', Georgia, serif; font-size: 31px; font-weight: 500;
           line-height: 1.2; margin: 26px 0 10px; }
