@@ -757,6 +757,24 @@ export default function HomePage() {
                 <div className="sec-head"><span>Today&apos;s roles</span><i /></div>
                 <div className="cards today-cards">
                   {todayJobs.map((job, i) => (
+                    <>
+                    {i === 3 && !hasPass && withheld > 0 && (
+                      <article key="teaser" className="card locked" style={{ ['--sec' as string]: `var(--sec-${lockedSample?.sector ?? 'tech'}, var(--ink-3))` }}>
+                        <div className="locked-peek">
+                          <div className="card-top">
+                            <span className="sec-tag"><span className="dot" />{sectorLabel(lockedSample?.sector ?? 'tech')}</span>
+                            <span className="ago fresh">just now</span>
+                          </div>
+                          <h3>{lockedSample?.title ?? 'Senior role at a growing team'}</h3>
+                          <p className="meta"><b>{lockedSample?.company ?? 'Hiring company'}</b></p>
+                        </div>
+                        <div className="locked-veil">
+                          <div className="locked-count">{withheld} more landed today</div>
+                          <p className="locked-sub">Most fill inside 48 hours. Pass holders see them the moment they land.</p>
+                          <a className="locked-cta" href="/pricing">Unlock for 14 days — $9</a>
+                        </div>
+                      </article>
+                    )}
                     <article key={job.id} className="card" style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
                       <div className="card-top">
                         <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}{job.location && <> · {job.location}</>}</span>
@@ -793,6 +811,7 @@ export default function HomePage() {
                         </div>
                       </div>
                     </article>
+                    </>
                   ))}
                 </div>
               </div>
