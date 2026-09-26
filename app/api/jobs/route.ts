@@ -41,8 +41,25 @@ export async function GET(req: NextRequest) {
     .range(offset, offset + limit - 1)
     .order('extracted_at', { ascending: sortBy === 'oldest' })
 
+  // Free tier: everything older than 24h, plus a preview of 2 fresh roles per sector
+  let previewIds: string[] = []
   if (!hasPass) {
-    query = query.lt('posted_at', new Date(Date.now() - 24 * 3600_000).toISOString())
+    const cutoff = new Date(Date.now() - 24 * 3600_000).toISOString()
+    const sectors = ['finance', 'tech', 'legal', 'marketing', 'realestate']
+    const picks = await Promise.all(sectors.map((s) =>
+      db.from('jobs')
+        .select('id')
+        .eq('is_verified_job', true)
+        .eq('sector', s)
+        .gte('posted_at', cutoff)
+        .order('posted_at', { ascending: false })
+        .limit(2)
+    ))
+    previewIds = picks.flatMap((p) => (p.data ?? []).map((r) => r.id as string))
+
+    query = previewIds.length
+      ? query.or(`posted_at.lt.${cutoff},id.in.(${previewIds.join(',')})`)
+      : query.lt('posted_at', cutoff)
   }
 
 
@@ -63,7 +80,7 @@ export async function GET(req: NextRequest) {
       .select('*', { count: 'exact', head: true })
       .eq('is_verified_job', true)
       .gte('posted_at', new Date(Date.now() - 24 * 3600_000).toISOString())
-    withheld = recent ?? 0
+    withheld = Math.max(0, (recent ?? 0) - previewIds.length)
 
     // one withheld role, blurred in the UI as a teaser
     const { data: sample } = await db
@@ -71,6 +88,7 @@ export async function GET(req: NextRequest) {
       .select('title, company, location, sector, seniority, posted_at')
       .eq('is_verified_job', true)
       .gte('posted_at', new Date(Date.now() - 24 * 3600_000).toISOString())
+      .not('id', 'in', `(${previewIds.join(',') || 'null'})`)
       .order('posted_at', { ascending: false })
       .limit(1)
     lockedSample = sample?.[0] ?? null
@@ -79,5 +97,5 @@ export async function GET(req: NextRequest) {
   const { data, error, count } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0, hasPass, withheld, lockedSample })
+  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0, hasPass, withheld, lockedSample, previewCount: previewIds.length })
 }
