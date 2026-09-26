@@ -208,6 +208,12 @@ export async function POST(req: NextRequest) {
             const classified = await classifyPost(post.text, post.authorHeadline, sector)
             if (!classified.isJob) { queryRejected++; return }
 
+            // Trust the classifier's sector over the regex hint, and drop
+            // roles that aren't in one of our verticals.
+            const jobSector = ['finance','tech','legal','marketing','realestate']
+              .includes(classified.sector) ? classified.sector : null
+            if (!jobSector) { queryRejected++; return }
+
             const loc = (classified.location || '').toLowerCase()
             if (INDIA_LOCATIONS.some(l => loc.includes(l))) return
 
@@ -222,7 +228,7 @@ export async function POST(req: NextRequest) {
               apply_method: classified.apply_method,
               summary: classified.summary,
               tags: classified.tags,
-              sector,
+              sector: jobSector,
               quality: classified.quality ?? 'medium',
               post_url: post.postUrl,
               author_name: post.authorName,
