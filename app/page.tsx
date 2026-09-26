@@ -1108,10 +1108,12 @@ export default function HomePage() {
         .ulj .card.locked { position: relative; overflow: hidden; }
         .ulj .locked-peek { filter: blur(4px); pointer-events: none; user-select: none; }
         .ulj .acct-wrap { position: relative; }
-        .ulj .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30;
-          min-width: 190px; background: var(--card); border: 1px solid var(--line);
+        .ulj .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
+          min-width: 200px; background: #FFFDF9; border: 1px solid #DDD6C8;
           border-radius: 10px; padding: 6px; display: flex; flex-direction: column;
-          box-shadow: var(--shadow-lift); }
+          box-shadow: 0 8px 28px -6px rgba(25,23,19,0.22); }
+        .ulj.dark .acct-menu { background: #1C1A17; border-color: #35322C;
+          box-shadow: 0 8px 28px -6px rgba(0,0,0,0.55); }
         .ulj .acct-menu a, .ulj .acct-menu button { display: block; width: 100%; text-align: left;
           font: 500 13px 'Inter', sans-serif; color: var(--ink); background: none; border: none;
           padding: 8px 10px; border-radius: 7px; cursor: pointer; text-decoration: none; }
@@ -1124,6 +1126,7 @@ export default function HomePage() {
           background: color-mix(in srgb, var(--page) 78%, transparent); }
         .ulj .locked-veil .locked-count { margin: 0; }
         .ulj .locked-veil .locked-sub { margin: 0; max-width: 42ch; }
+        .ulj .cards { padding-bottom: 92px; }
         .ulj .convert-bar { position: fixed; left: 50%; transform: translateX(-50%);
           bottom: 16px; z-index: 40; width: min(680px, calc(100vw - 28px));
           display: flex; align-items: center; gap: 16px; padding: 13px 16px;
