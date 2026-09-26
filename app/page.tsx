@@ -571,13 +571,13 @@ export default function HomePage() {
                     <>
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Pass active</div>}
-                      {!hasPass && <a href="/login">Get a 14-day pass</a>}
+                      {!hasPass && <a href="/pricing">Get a 14-day pass</a>}
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
                     <>
                       <a href="/login">Sign in</a>
-                      <a href="/login">Pricing</a>
+                      <a href="/pricing">Pricing</a>
                     </>
                   )}
                 </div>
@@ -835,7 +835,7 @@ export default function HomePage() {
 
             {splitFeed && <div className="sec-head"><span>Earlier roles</span><i /></div>}
             <div className="cards">
-              {!hasPass && withheld > 0 && !splitFeed && (
+              {!hasPass && withheld > 0 && (
                 <article className="card locked" style={{ ['--sec' as string]: `var(--sec-${lockedSample?.sector ?? 'tech'}, var(--ink-3))` }}>
                   <div className="locked-peek">
                     <div className="card-top">
@@ -1234,8 +1234,9 @@ export default function HomePage() {
           font-size: 17px; font-weight: 500; color: var(--ink); }
         .ulj .withheld-note span { font-size: 12.5px; color: var(--ink-2); }
         .ulj .card.mini h3 { font-size: 16px; margin: 2px 0 0; }
-        .ulj .tiers-inline { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        .ulj .tiers-inline { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 12px; margin: 4px 0 30px; }
+        @media (max-width: 560px) { .ulj .tiers-inline { grid-template-columns: 1fr; } }
         .ulj .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 17px; }
         .ulj .tile.featured { border: 2px solid var(--ink); }
         .ulj .tile-head { display: flex; justify-content: space-between; align-items: center; }
