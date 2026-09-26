@@ -757,7 +757,7 @@ export default function HomePage() {
                 <div className="sec-head"><span>Today&apos;s roles</span><i /></div>
                 <div className="cards today-cards">
                   {todayJobs.map((job, i) => (
-                    <article key={job.id} className="card mini" style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
+                    <article key={job.id} className="card" style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
                       <div className="card-top">
                         <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}{job.location && <> · {job.location}</>}</span>
                         {job.posted_at && <span className="ago fresh">{timeAgo(job.posted_at)}</span>}
@@ -767,6 +767,31 @@ export default function HomePage() {
                         <b>{job.company}</b>
                         {job.seniority && job.seniority !== 'Unknown' && <><span className="sep">·</span>{job.seniority}</>}
                       </p>
+                      {job.summary && <p className="summary">{job.summary}</p>}
+                      {(job.salary || job.apply_method) && (
+                        <p className="salary">
+                          {job.salary}
+                          {job.apply_method && <span className="via">via: {job.apply_method}</span>}
+                        </p>
+                      )}
+                      <div className="card-foot">
+                        <span className="avatar">{initials(job.author_name || '?')}</span>
+                        <span className="author">
+                          {job.author_linkedin_url && job.author_linkedin_url !== '#'
+                            ? <a href={job.author_linkedin_url} target="_blank" rel="noopener noreferrer"><b>{job.author_name}</b></a>
+                            : <b>{job.author_name}</b>}
+                          {job.author_headline && <> · {job.author_headline}</>}
+                        </span>
+                        <div className="card-actions">
+                          <button className={`ghost-btn${saved.has(job.id) ? ' saved' : ''}`} onClick={() => toggleSaved(job.id)}>
+                            {saved.has(job.id) ? '★ Saved' : '☆ Save'}
+                          </button>
+                          <a className="apply-btn" href={job.post_url} target="_blank" rel="noopener noreferrer" onClick={() => trackJobClick(job, i)}>
+                            View post
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7 17 17 7M7 7h10v10" /></svg>
+                          </a>
+                        </div>
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -775,6 +800,12 @@ export default function HomePage() {
 
             {!hasPass && (
               <div className="tiers-inline">
+                {withheld > 0 && (
+                  <div className="withheld-note">
+                    <b>{withheld} more roles landed today.</b>
+                    <span>Most fill inside 48 hours. Pass holders see them the moment they land.</span>
+                  </div>
+                )}
                 <div className="tile">
                   <div className="tile-name">Free</div>
                   <div className="tile-price">$0</div>
@@ -1197,7 +1228,11 @@ export default function HomePage() {
         .ulj .sec-head span { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
         .ulj .sec-head i { flex: 1; height: 1px; background: var(--line); }
         .ulj .today-wrap { margin-bottom: 26px; }
-        .ulj .card.mini { padding: 13px 16px; }
+        .ulj .today-cards { padding-bottom: 0; }
+        .ulj .withheld-note { grid-column: 1 / -1; padding: 2px 0 6px; }
+        .ulj .withheld-note b { display: block; font-family: 'Fraunces', Georgia, serif;
+          font-size: 17px; font-weight: 500; color: var(--ink); }
+        .ulj .withheld-note span { font-size: 12.5px; color: var(--ink-2); }
         .ulj .card.mini h3 { font-size: 16px; margin: 2px 0 0; }
         .ulj .tiers-inline { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
           gap: 12px; margin: 4px 0 30px; }
