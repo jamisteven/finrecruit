@@ -30,5 +30,6 @@ export async function POST(req: NextRequest) {
     cancel_url: `${origin}/pricing`,
   })
 
+  console.log("[stripe] session created, success_url:", session.success_url)
   return NextResponse.json({ url: session.url })
 }
