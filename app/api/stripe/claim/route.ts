@@ -5,6 +5,7 @@ import { createServerClient } from '@/lib/supabase'
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
+  try {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) return NextResponse.json({ error: 'not configured' }, { status: 500 })
 
@@ -12,9 +13,15 @@ export async function POST(req: NextRequest) {
   if (!session_id) return NextResponse.json({ error: 'missing session' }, { status: 400 })
 
   // The session id is the proof — only a real, paid session yields a link
-  const s = await new Stripe(key).checkout.sessions.retrieve(String(session_id))
+  let s: Stripe.Checkout.Session
+  try {
+    s = await new Stripe(key).checkout.sessions.retrieve(String(session_id))
+  } catch (e) {
+    console.error('[claim] session lookup failed:', (e as Error).message)
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 })
+  }
   if (s.payment_status !== 'paid') {
-    return NextResponse.json({ error: 'not paid' }, { status: 403 })
+    return NextResponse.json({ error: `payment_status is ${s.payment_status}` }, { status: 403 })
   }
 
   const email = s.customer_details?.email ?? s.customer_email
@@ -55,4 +62,8 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ url: data.properties.action_link })
+  } catch (e) {
+    console.error('[claim] unhandled:', (e as Error).message)
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+  }
 }
