@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'could not sign in' }, { status: 500 })
   }
 
+  console.log("[claim] action_link:", data.properties.action_link)
   return NextResponse.json({ url: data.properties.action_link })
   } catch (e) {
     console.error('[claim] unhandled:', (e as Error).message)
