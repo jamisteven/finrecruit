@@ -9,7 +9,11 @@ export async function GET(req: NextRequest) {
   const token = url.searchParams.get('token_hash')
   const res = NextResponse.redirect(new URL('/', req.url))
 
-  if (!code && !token) return res
+  console.log('[auth] callback params:', url.search || '(none)')
+  if (!code && !token) {
+    console.error('[auth] no code or token_hash in callback')
+    return res
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
