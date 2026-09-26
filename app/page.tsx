@@ -817,7 +817,7 @@ export default function HomePage() {
           {!hasPass && !bannerHidden && (
             <aside className="convert-bar">
               <div className="convert-copy">
-                <b>{withheld} roles landed today that you can&apos;t see yet.</b>
+                <b>Most roles fill inside 48 hours.</b>
                 <span>Pass holders get them the moment they drop.</span>
               </div>
               <a className="convert-cta" href="/pricing">Get a pass — $9</a>
