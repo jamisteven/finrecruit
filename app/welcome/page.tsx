@@ -17,9 +17,9 @@ function Welcome() {
       .then((r) => r.json())
       .then((d) => {
         if (d.url) window.location.href = d.url
-        else setMsg('Payment received. Check your email for a sign-in link.')
+        else setMsg(`Could not sign you in automatically: ${d.error ?? 'unknown'}. Your pass is active — sign in at /login with the email you paid with.`)
       })
-      .catch(() => setMsg('Payment received. Check your email for a sign-in link.'))
+      .catch((e) => setMsg(`Could not reach the sign-in service: ${String(e)}`))
   }, [sid])
 
   return (
