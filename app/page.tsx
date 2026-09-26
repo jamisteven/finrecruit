@@ -173,6 +173,7 @@ export default function HomePage() {
   const [totalJobs, setTotalJobs] = useState(0)
   const [hasPass, setHasPass] = useState(false)
   const [withheld, setWithheld] = useState(0)
+  const [bannerHidden, setBannerHidden] = useState(false)
   const [previewCount, setPreviewCount] = useState(0)
   const [lockedSample, setLockedSample] = useState<Partial<JobPost> | null>(null)
   const [dropBatches, setDropBatches] = useState<DropBatch[]>(DROP_BATCHES_FALLBACK)
@@ -813,12 +814,15 @@ export default function HomePage() {
             </div>
           )}
 
-          {!hasPass && (
-            <section className="convert">
-              <h2>Most roles fill inside 48 hours.</h2>
-              <p>Free members see yesterday&apos;s. Pass holders see them as they drop.</p>
-              <a className="convert-cta" href="/pricing">See what a pass costs</a>
-            </section>
+          {!hasPass && !bannerHidden && (
+            <aside className="convert-bar">
+              <div className="convert-copy">
+                <b>{withheld} roles landed today that you can&apos;t see yet.</b>
+                <span>Pass holders get them the moment they drop.</span>
+              </div>
+              <a className="convert-cta" href="/pricing">Get a pass — $9</a>
+              <button className="convert-x" onClick={() => setBannerHidden(true)} aria-label="Dismiss">×</button>
+            </aside>
           )}
 
           <footer className="colophon">
@@ -1120,7 +1124,23 @@ export default function HomePage() {
           background: color-mix(in srgb, var(--page) 78%, transparent); }
         .ulj .locked-veil .locked-count { margin: 0; }
         .ulj .locked-veil .locked-sub { margin: 0; max-width: 42ch; }
-        .ulj .convert { margin: 34px 0 0; padding: 28px 26px; border-radius: 14px; background: var(--ink); }
+        .ulj .convert-bar { position: fixed; left: 50%; transform: translateX(-50%);
+          bottom: 16px; z-index: 40; width: min(680px, calc(100vw - 28px));
+          display: flex; align-items: center; gap: 16px; padding: 13px 16px;
+          background: var(--ink); border-radius: 12px; box-shadow: 0 10px 34px -8px rgba(0,0,0,0.4); }
+        .ulj .convert-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        .ulj .convert-copy b { font-size: 13.5px; color: var(--page); font-weight: 500; }
+        .ulj .convert-copy span { font-size: 12px; color: var(--ink-3); }
+        .ulj .convert-bar .convert-cta { margin-left: auto; white-space: nowrap;
+          background: var(--page); color: var(--ink); font-size: 13px; padding: 9px 15px;
+          border-radius: 8px; text-decoration: none; }
+        .ulj .convert-x { background: none; border: none; color: var(--ink-3);
+          font-size: 19px; line-height: 1; padding: 0 2px; cursor: pointer; }
+        @media (max-width: 560px) {
+          .ulj .convert-copy span { display: none; }
+          .ulj .convert-bar { gap: 10px; }
+        }
+        .ulj .convert-old { margin: 34px 0 0; padding: 28px 26px; border-radius: 14px; background: var(--ink); }
         .ulj .convert h2 { font-family: 'Fraunces', Georgia, serif; font-size: 21px; font-weight: 500; color: var(--page); margin: 0 0 6px; }
         .ulj .convert p { font-size: 13.5px; color: var(--ink-3); margin: 0 0 16px; }
         .ulj .convert-cta { display: inline-block; background: var(--page); color: var(--ink); font-size: 13px; padding: 10px 18px; border-radius: 8px; text-decoration: none; }
