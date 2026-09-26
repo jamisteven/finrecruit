@@ -175,6 +175,7 @@ export default function HomePage() {
   const [withheld, setWithheld] = useState(0)
   const [bannerHidden, setBannerHidden] = useState(false)
   const [previewCount, setPreviewCount] = useState(0)
+  const [previewIds, setPreviewIds] = useState<string[]>([])
   const [lockedSample, setLockedSample] = useState<Partial<JobPost> | null>(null)
   const [dropBatches, setDropBatches] = useState<DropBatch[]>(DROP_BATCHES_FALLBACK)
   useEffect(() => {
@@ -212,6 +213,7 @@ export default function HomePage() {
       setHasPass(!!data.hasPass)
       setWithheld(data.withheld ?? 0)
       setPreviewCount(data.previewCount ?? 0)
+      setPreviewIds(data.previewIds ?? [])
       setLockedSample(data.lockedSample ?? null)
       setLastUpdated(new Date())
     } catch {
@@ -522,6 +524,17 @@ export default function HomePage() {
     })
   }
 
+  const filtersActive = !!filters.search || filters.sector !== 'all'
+    || filters.locations.length > 0 || filters.workTypes.length > 0
+  const splitFeed = !hasPass && !filtersActive && previewIds.length > 0
+  const previewSet = useMemo(() => new Set(previewIds), [previewIds])
+  const todayJobs = useMemo(
+    () => (splitFeed ? displayJobs.filter((j) => previewSet.has(j.id)) : []),
+    [splitFeed, displayJobs, previewSet])
+  const earlierJobs = useMemo(
+    () => (splitFeed ? displayJobs.filter((j) => !previewSet.has(j.id)) : displayJobs),
+    [splitFeed, displayJobs, previewSet])
+
   const resetAll = () => setFilters(DEFAULT_FILTERS)
 
   return (
@@ -738,8 +751,60 @@ export default function HomePage() {
               <button onClick={resetAll}>Reset all filters</button>
             </div>
           ) : (
+            <>
+            {splitFeed && todayJobs.length > 0 && (
+              <div className="today-wrap">
+                <div className="sec-head"><span>Today&apos;s roles</span><i /></div>
+                <div className="cards today-cards">
+                  {todayJobs.map((job, i) => (
+                    <article key={job.id} className="card mini" style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
+                      <div className="card-top">
+                        <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}{job.location && <> · {job.location}</>}</span>
+                        {job.posted_at && <span className="ago fresh">{timeAgo(job.posted_at)}</span>}
+                      </div>
+                      <h3><a href={job.post_url} target="_blank" rel="noopener noreferrer" onClick={() => trackJobClick(job, i)}>{job.title}</a></h3>
+                      <p className="meta">
+                        <b>{job.company}</b>
+                        {job.seniority && job.seniority !== 'Unknown' && <><span className="sep">·</span>{job.seniority}</>}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!hasPass && (
+              <div className="tiers-inline">
+                <div className="tile">
+                  <div className="tile-name">Free</div>
+                  <div className="tile-price">$0</div>
+                  <ul>
+                    <li>10 fresh roles every day</li>
+                    <li>Everything else after 24 hours</li>
+                    <li>All sectors and cities</li>
+                    <li>Save roles to revisit</li>
+                  </ul>
+                </div>
+                <div className="tile featured">
+                  <div className="tile-head">
+                    <span className="tile-name">14-day pass</span>
+                    <span className="tile-chip">No subscription</span>
+                  </div>
+                  <div className="tile-price">$9</div>
+                  <ul>
+                    <li>Every role the moment it lands</li>
+                    <li>All sectors and cities</li>
+                    <li>Save roles to revisit</li>
+                    <li>Expires on its own — nothing to cancel</li>
+                  </ul>
+                  <a className="tile-cta" href="/pricing">Get the pass — $9</a>
+                </div>
+              </div>
+            )}
+
+            {splitFeed && <div className="sec-head"><span>Earlier roles</span><i /></div>}
             <div className="cards">
-              {!hasPass && withheld > 0 && (
+              {!hasPass && withheld > 0 && !splitFeed && (
                 <article className="card locked" style={{ ['--sec' as string]: `var(--sec-${lockedSample?.sector ?? 'tech'}, var(--ink-3))` }}>
                   <div className="locked-peek">
                     <div className="card-top">
@@ -760,7 +825,7 @@ export default function HomePage() {
                   </div>
                 </article>
               )}
-              {displayJobs.slice(0, visibleCount).map((job, jobIndex) => {
+              {earlierJobs.slice(0, visibleCount).map((job, jobIndex) => {
                 const wt = inferWorkType(job)
                 return (
                   <article key={job.id} id={`job-${job.id}`} className={`card${highlightId === job.id ? ' flash' : ''}`} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
@@ -812,6 +877,7 @@ export default function HomePage() {
                 )
               })}
             </div>
+            </>
           )}
 
           {!hasPass && !bannerHidden && (
@@ -1127,8 +1193,27 @@ export default function HomePage() {
         .ulj .locked-veil .locked-count { margin: 0; }
         .ulj .locked-veil .locked-sub { margin: 0; max-width: 42ch; }
         .ulj .cards { padding-bottom: 92px; }
-        .ulj .convert-bar { position: fixed; left: 50%; transform: translateX(-50%);
-          bottom: 16px; z-index: 40; width: min(680px, calc(100vw - 28px));
+        .ulj .sec-head { display: flex; align-items: center; gap: 10px; padding: 4px 0 12px; }
+        .ulj .sec-head span { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+        .ulj .sec-head i { flex: 1; height: 1px; background: var(--line); }
+        .ulj .today-wrap { margin-bottom: 26px; }
+        .ulj .card.mini { padding: 13px 16px; }
+        .ulj .card.mini h3 { font-size: 16px; margin: 2px 0 0; }
+        .ulj .tiers-inline { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+          gap: 12px; margin: 4px 0 30px; }
+        .ulj .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 17px; }
+        .ulj .tile.featured { border: 2px solid var(--ink); }
+        .ulj .tile-head { display: flex; justify-content: space-between; align-items: center; }
+        .ulj .tile-name { font-size: 13.5px; color: var(--ink); }
+        .ulj .tile-chip { font-size: 10.5px; background: var(--surface-2); color: var(--ink-2); padding: 3px 9px; border-radius: 9px; }
+        .ulj .tile-price { font-family: 'Fraunces', Georgia, serif; font-size: 25px; margin: 3px 0 13px; color: var(--ink); }
+        .ulj .tile ul { list-style: none; padding: 0; margin: 0; }
+        .ulj .tile li { font-size: 12.5px; color: var(--ink-2); padding: 4px 0 4px 14px; position: relative; }
+        .ulj .tile li::before { content: '·'; position: absolute; left: 3px; color: var(--ink-3); }
+        .ulj .tile-cta { display: block; text-align: center; margin-top: 15px; background: var(--ink);
+          color: var(--page); font-size: 13px; padding: 10px; border-radius: 8px; text-decoration: none; }
+        .ulj .convert-bar { position: fixed; left: 0;
+          bottom: 0; z-index: 40; width: 100%; border-radius: 0; padding: 14px 22px;
           display: flex; align-items: center; gap: 16px; padding: 13px 16px;
           background: var(--ink); border-radius: 12px; box-shadow: 0 10px 34px -8px rgba(0,0,0,0.4); }
         .ulj .convert-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
