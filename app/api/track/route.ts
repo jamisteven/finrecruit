@@ -6,9 +6,18 @@ export const runtime = 'nodejs'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+    let userId: string | null = null
+    try {
+      const { getSessionClient } = await import('@/lib/supabase-session')
+      const { data: { user } } = await (await getSessionClient()).auth.getUser()
+      userId = user?.id ?? null
+    } catch { /* anonymous click */ }
+
     const db = createServerClient()
     const { error } = await db.from('job_clicks').insert({
       job_id: body.job_id ?? null,
+      user_id: userId,
+      visitor_id: body.visitor_id ?? null,
       sector: body.sector ?? null,
       location: body.location ?? null,
       seniority: body.seniority ?? null,
