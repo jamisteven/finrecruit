@@ -67,10 +67,8 @@ export default function PricingPage() {
 
           {hasPass ? (
             <div className="state">Your pass is active.</div>
-          ) : email ? (
-            <button onClick={buy} disabled={busy}>{busy ? 'Opening checkout…' : 'Get the pass — $9'}</button>
           ) : (
-            <a className="btn" href="/login">Sign in to continue</a>
+            <button onClick={buy} disabled={busy}>{busy ? 'Opening checkout…' : 'Get the pass — $9'}</button>
           )}
           {error && <div className="err">{error}</div>}
         </div>
