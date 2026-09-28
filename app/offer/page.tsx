@@ -46,6 +46,7 @@ export default function OfferPage() {
   const [today, setToday] = useState(0)
   const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [hasPass, setHasPass] = useState(false)
   const [err, setErr] = useState('')
 
   useEffect(() => {
