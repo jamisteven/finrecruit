@@ -234,7 +234,7 @@ export default function OfferPage() {
         .offer .cta { display: block; width: 100%; max-width: 420px; margin: 0 auto; background: #191713; color: #F5F2EB;
           border: none; font: 500 15px 'Inter', sans-serif; padding: 15px; border-radius: 10px; cursor: pointer; }
         .offer .cta:disabled { opacity: 0.6; cursor: default; }
-        .offer .cta-sub { font-size: 12px; color: #8B877F; text-align: center; margin-top: 9px; }
+        .offer .cta-sub { font-size: 12px; color: #8B877F; text-align: center; margin: 9px auto 0; max-width: none; }
         .offer .err { font-size: 13px; color: #A32D2D; text-align: center; margin-top: 10px; }
 
         .offer .proof-list { display: flex; flex-direction: column; gap: 8px; }
