@@ -55,6 +55,8 @@ export default function OfferPage() {
         setJobs((d.jobs ?? []).slice(0, 6))
         setWithheld(d.withheld ?? 0)
         setToday((d.previewCount ?? 0) + (d.withheld ?? 0))
+        setHasPass(!!d.hasPass)
+        setLoaded(true)
       })
       .catch(() => setLoaded(true))
   }, [])
