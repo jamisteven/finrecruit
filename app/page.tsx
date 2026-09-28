@@ -571,13 +571,13 @@ export default function HomePage() {
                     <>
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Pass active</div>}
-                      {!hasPass && <a href="/pricing">Get a 14-day pass</a>}
+                      {!hasPass && <a href="/offer">Get a 14-day pass</a>}
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
                     <>
                       <a href="/login">Sign in</a>
-                      <a href="/pricing">Pricing</a>
+                      <a href="/offer">Pricing</a>
                     </>
                   )}
                 </div>
@@ -771,7 +771,7 @@ export default function HomePage() {
                         <div className="locked-veil">
                           <div className="locked-count">{withheld} more landed today</div>
                           <p className="locked-sub">Most fill inside 48 hours. Pass holders see them the moment they land.</p>
-                          <a className="locked-cta" href="/pricing">Unlock for 14 days — $9</a>
+                          <a className="locked-cta" href="/offer">Unlock for 14 days — $9</a>
                         </div>
                       </article>
                     )}
@@ -847,7 +847,7 @@ export default function HomePage() {
                     <li>Save roles to revisit</li>
                     <li>Expires on its own — nothing to cancel</li>
                   </ul>
-                  <a className="tile-cta" href="/pricing">Get the pass — $9</a>
+                  <a className="tile-cta" href="/offer">Get the pass — $9</a>
                 </div>
               </div>
             )}
@@ -871,7 +871,7 @@ export default function HomePage() {
                   <div className="locked-veil">
                     <div className="locked-count">{withheld} more roles landed today</div>
                     <p className="locked-sub">Most roles fill inside 48 hours. Pass holders see them the moment they land.</p>
-                    <a className="locked-cta" href="/pricing">Unlock for 14 days — $9</a>
+                    <a className="locked-cta" href="/offer">Unlock for 14 days — $9</a>
                   </div>
                 </article>
               )}
@@ -936,7 +936,7 @@ export default function HomePage() {
                 <b>Most roles fill inside 48 hours.</b>
                 <span>Pass holders get them the moment they drop.</span>
               </div>
-              <a className="convert-cta" href="/pricing">Get a pass — $9</a>
+              <a className="convert-cta" href="/offer">Get a pass — $9</a>
               <button className="convert-x" onClick={() => setBannerHidden(true)} aria-label="Dismiss">×</button>
             </aside>
           )}
