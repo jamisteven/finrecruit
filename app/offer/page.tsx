@@ -222,7 +222,9 @@ export default function OfferPage() {
         .offer h2 { font-family: 'Fraunces', Georgia, serif; font-size: 23px; font-weight: 500;
           line-height: 1.25; margin: 0 0 10px; }
         .offer p { font-size: 14.5px; line-height: 1.7; color: #57544E; margin: 0; max-width: 68ch; }
-        .offer .lede { margin-bottom: 26px; max-width: 56ch; }
+        .offer .hero, .offer .guarantee, .offer .closing { text-align: center; }
+        .offer .hero p, .offer .guarantee p, .offer .closing p { margin-left: auto; margin-right: auto; }
+        .offer .lede { margin-bottom: 26px; max-width: 56ch; margin-left: auto; margin-right: auto; }
         .offer .sec-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
           color: #8B877F; margin-bottom: 16px; }
         .offer .pill { display: inline-flex; align-items: center; gap: 7px; background: #EDE8DF;
