@@ -601,12 +601,12 @@ export default function HomePage() {
       <section className="hero">
         <div>
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
-          <p className="sub">Roles recruiters post exclusively to their personal connections and never list - tracked by AI and delivered in real time.</p>
+          <p className="sub">Roles recruiters, hiring managers and internal talent teams post to their own connections and never list - tracked by AI and delivered in real time.</p>
         </div>
         <div className="stats">
           <div className="stat"><div className="num">{totalJobs || allJobs.length}</div><div className="lbl">Live roles</div></div>
           <div className="stat"><div className="num">{availableLocations.length}</div><div className="lbl">Locations</div></div>
-          <div className="stat"><div className="num">{hasPass ? todayCount : previewCount + withheld}</div><div className="lbl">{hasPass ? 'Added today' : `Added today · ${previewCount} unlocked`}</div></div>
+          <div className="stat"><div className="num">{hasPass ? todayCount : previewCount + withheld}</div><div className="lbl">Added today</div></div>
         </div>
       </section>
 

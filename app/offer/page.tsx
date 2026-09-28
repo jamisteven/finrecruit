@@ -10,6 +10,10 @@ type Job = {
   sector: string
   seniority: string | null
   posted_at: string | null
+  summary: string | null
+  post_url: string
+  author_name: string | null
+  author_headline: string | null
 }
 
 const SECTOR_LABEL: Record<string, string> = {
@@ -74,8 +78,9 @@ export default function OfferPage() {
         )}
         <h1>The jobs LinkedIn doesn&apos;t show you — for the next 14 days</h1>
         <p className="lede">
-          Recruiters post openings straight into their LinkedIn feed. Those posts never
-          become listings, so nobody can search them. We read them eight times a day.
+          Recruiters, hiring managers and internal talent teams post openings straight into
+          their LinkedIn feed. Those posts never become listings, so nobody can search
+          them. We read them eight times a day.
         </p>
         <Cta busy={busy} onClick={buy} />
         {err && <p className="err">{err}</p>}
@@ -90,11 +95,19 @@ export default function OfferPage() {
                 {SECTOR_LABEL[j.sector] ?? j.sector}
                 {j.location && <> · {j.location}</>}
               </div>
-              <div className="proof-title">{j.title}</div>
+              <div className="proof-title">
+                {i > 2 ? j.title : <a href={j.post_url} target="_blank" rel="noopener noreferrer">{j.title}</a>}
+              </div>
               <div className="proof-co">
                 {j.company}
                 {j.seniority && j.seniority !== 'Unknown' && <> · {j.seniority}</>}
               </div>
+              {j.summary && <p className="proof-sum">{j.summary}</p>}
+              {j.author_name && (
+                <div className="proof-by">
+                  {j.author_name}{j.author_headline && <> · {j.author_headline}</>}
+                </div>
+              )}
               <span className="proof-ago">{ago(j.posted_at)}</span>
             </div>
           ))}
@@ -107,8 +120,9 @@ export default function OfferPage() {
       <section className="pain">
         <h2>By the time a role reaches a job board, 400 people have applied</h2>
         <p>
-          The ones that never reach a board are different. A recruiter writes a post,
-          their network sees it, a handful of people reply, and it&apos;s filled. Most
+          The ones that never reach a board are different. A recruiter, a hiring manager or
+          someone on an internal talent team writes a post, their network sees it, a
+          handful of people reply, and it&apos;s filled. Most
           roles are gone inside 48 hours — usually before anyone outside that network
           knew they existed.
         </p>
@@ -117,7 +131,7 @@ export default function OfferPage() {
       <section className="steps">
         <div className="sec-label">How it works</div>
         <ol>
-          <li><b>Recruiters post to their feed</b><span>Not the jobs section. No listing, no search index, no queue.</span></li>
+          <li><b>Someone hiring posts to their feed</b><span>Not the jobs section. No listing, no search index, no queue.</span></li>
           <li><b>We read the feed eight times a day</b><span>Every post, classified and filed by sector and city within the hour.</span></li>
           <li><b>You reply while the list is short</b><span>Straight to the person hiring, before it becomes a numbers game.</span></li>
         </ol>
@@ -138,7 +152,7 @@ export default function OfferPage() {
           </div>
           <div className="col highlight">
             <div className="col-name">BackchannelJobs</div>
-            <ul><li>Named recruiter, same day</li><li>Posted hours ago, not weeks</li><li>Reply to a person</li></ul>
+            <ul><li>A named person, same day</li><li>Posted hours ago, not weeks</li><li>Reply to a person</li></ul>
           </div>
         </div>
       </section>
@@ -219,6 +233,10 @@ export default function OfferPage() {
         .offer .proof-meta { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #8B877F; }
         .offer .proof-title { font-family: 'Fraunces', Georgia, serif; font-size: 17px; margin-top: 3px; }
         .offer .proof-co { font-size: 12.5px; color: #57544E; margin-top: 2px; }
+        .offer .proof-title a { color: inherit; text-decoration: none; }
+        .offer .proof-title a:hover { text-decoration: underline; text-underline-offset: 3px; }
+        .offer .proof-sum { font-size: 13px; color: #57544E; line-height: 1.6; margin: 7px 0 0; }
+        .offer .proof-by { font-size: 11.5px; color: #8B877F; margin-top: 8px; }
         .offer .proof-ago { position: absolute; top: 13px; right: 15px; font-size: 11px; color: #8B877F; }
         .offer .proof-more { text-align: center; font-size: 13px; color: #57544E; padding: 6px 0 0; }
 
