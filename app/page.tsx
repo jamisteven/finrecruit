@@ -606,7 +606,7 @@ export default function HomePage() {
         <div className="stats">
           <div className="stat"><div className="num">{totalJobs || allJobs.length}</div><div className="lbl">Live roles</div></div>
           <div className="stat"><div className="num">{availableLocations.length}</div><div className="lbl">Locations</div></div>
-          <div className="stat"><div className="num">{hasPass ? todayCount : previewCount}</div><div className="lbl">Added today</div></div>
+          <div className="stat"><div className="num">{hasPass ? todayCount : previewCount + withheld}</div><div className="lbl">{hasPass ? 'Added today' : `Added today · ${previewCount} unlocked`}</div></div>
         </div>
       </section>
 
