@@ -212,7 +212,7 @@ export default function OfferPage() {
 
       <style>{`
         html, body { background: #F5F2EB; margin: 0; }
-        .offer { max-width: 660px; margin: 0 auto; padding: 34px 22px 90px;
+        .offer { max-width: 980px; margin: 0 auto; padding: 34px 26px 90px;
           font-family: 'Inter', system-ui, sans-serif; color: #191713; }
         .offer .back { font-size: 13px; color: #6B6862; text-decoration: none; }
         .offer section { padding: 46px 0; border-bottom: 1px solid #E2DCD0; }
@@ -221,15 +221,15 @@ export default function OfferPage() {
           line-height: 1.16; margin: 16px 0 12px; letter-spacing: -0.01em; }
         .offer h2 { font-family: 'Fraunces', Georgia, serif; font-size: 23px; font-weight: 500;
           line-height: 1.25; margin: 0 0 10px; }
-        .offer p { font-size: 14.5px; line-height: 1.7; color: #57544E; margin: 0; }
-        .offer .lede { margin-bottom: 26px; max-width: 52ch; }
+        .offer p { font-size: 14.5px; line-height: 1.7; color: #57544E; margin: 0; max-width: 68ch; }
+        .offer .lede { margin-bottom: 26px; max-width: 56ch; }
         .offer .sec-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
           color: #8B877F; margin-bottom: 16px; }
         .offer .pill { display: inline-flex; align-items: center; gap: 7px; background: #EDE8DF;
           border: 1px solid #DDD6C8; border-radius: 20px; padding: 4px 12px; font-size: 12px; color: #57544E; }
         .offer .pill i { width: 6px; height: 6px; border-radius: 50%; background: #1D9E75; }
         .offer .cta-wrap { margin: 26px 0 0; }
-        .offer .cta { display: block; width: 100%; background: #191713; color: #F5F2EB;
+        .offer .cta { display: block; width: 100%; max-width: 420px; margin: 0 auto; background: #191713; color: #F5F2EB;
           border: none; font: 500 15px 'Inter', sans-serif; padding: 15px; border-radius: 10px; cursor: pointer; }
         .offer .cta:disabled { opacity: 0.6; cursor: default; }
         .offer .cta-sub { font-size: 12px; color: #8B877F; text-align: center; margin-top: 9px; }
