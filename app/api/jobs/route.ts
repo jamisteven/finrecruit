@@ -20,9 +20,6 @@ export async function GET(req: NextRequest) {
     const session = await getSessionClient()
     const { data: { user } } = await session.auth.getUser()
     if (user) {
-      const { count: profCount } = await createServerClient()
-        .from('profiles').select('*', { count: 'exact', head: true })
-      console.log('[jobs] profiles visible:', profCount)
       const { data: profile, error: profErr } = await createServerClient()
         .from('profiles').select('pass_expires_at').eq('id', user.id).maybeSingle()
       hasPass = !!profile?.pass_expires_at && new Date(profile.pass_expires_at) > new Date()
@@ -35,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   let query = db
     .from('jobs')
-    .select('id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, posted_at, extracted_at, is_verified_job, quality', { count: 'exact' })
+    .select('id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, posted_at, extracted_at, is_verified_job, quality', { count: 'planned' })
     .eq('is_verified_job', true)
     .or('quality.is.null,quality.neq.low')
     .neq('sector', 'other')
@@ -81,7 +78,7 @@ export async function GET(req: NextRequest) {
   if (!hasPass) {
     const { count: recent } = await db
       .from('jobs')
-      .select('*', { count: 'exact', head: true })
+      .select('*', { count: 'estimated', head: true })
       .eq('is_verified_job', true)
     .or('quality.is.null,quality.neq.low')
     .neq('sector', 'other')
