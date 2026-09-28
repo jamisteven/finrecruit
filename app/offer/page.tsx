@@ -89,8 +89,8 @@ export default function OfferPage() {
       <section className="proof">
         <div className="sec-label">Landed today</div>
         <div className="proof-list">
-          {jobs.map((j, i) => (
-            <div key={j.id} className={`proof-row${i > 2 ? ' veiled' : ''}`}>
+          {jobs.slice(0, 3).map((j, i) => (
+            <div key={j.id} className="proof-row">
               <div className="proof-meta">
                 {SECTOR_LABEL[j.sector] ?? j.sector}
                 {j.location && <> · {j.location}</>}
@@ -111,8 +111,17 @@ export default function OfferPage() {
               <span className="proof-ago">{ago(j.posted_at)}</span>
             </div>
           ))}
-          {withheld > 0 && (
-            <div className="proof-more">and {withheld - 3} more you can&apos;t see yet</div>
+          {withheld > 0 && jobs[3] && (
+            <div className="proof-row teaser">
+              <div className="teaser-peek">
+                <div className="proof-meta">{SECTOR_LABEL[jobs[3].sector] ?? jobs[3].sector}{jobs[3].location && <> · {jobs[3].location}</>}</div>
+                <div className="proof-title">{jobs[3].title}</div>
+                <div className="proof-co">{jobs[3].company}</div>
+              </div>
+              <div className="teaser-veil">
+                <span>{withheld} more landed today</span>
+              </div>
+            </div>
           )}
         </div>
       </section>
@@ -140,7 +149,7 @@ export default function OfferPage() {
       <Cta busy={busy} onClick={buy} />
 
       <section className="compare">
-        <div className="sec-label">Where these roles aren&apos;t</div>
+        <div className="sec-label">How it compares</div>
         <div className="compare-grid">
           <div className="col">
             <div className="col-name">LinkedIn Jobs</div>
@@ -238,6 +247,11 @@ export default function OfferPage() {
         .offer .proof-sum { font-size: 13px; color: #57544E; line-height: 1.6; margin: 7px 0 0; }
         .offer .proof-by { font-size: 11.5px; color: #8B877F; margin-top: 8px; }
         .offer .proof-ago { position: absolute; top: 13px; right: 15px; font-size: 11px; color: #8B877F; }
+        .offer .proof-row.teaser { position: relative; overflow: hidden; min-height: 92px; }
+        .offer .teaser-peek { filter: blur(4.5px); user-select: none; pointer-events: none; }
+        .offer .teaser-veil { position: absolute; inset: 0; display: flex; align-items: center;
+          justify-content: center; background: rgba(245,242,235,0.78); }
+        .offer .teaser-veil span { font-family: 'Fraunces', Georgia, serif; font-size: 18px; color: #191713; }
         .offer .proof-more { text-align: center; font-size: 13px; color: #57544E; padding: 6px 0 0; }
 
         .offer .steps ol { list-style: none; counter-reset: s; padding: 0; margin: 0;
