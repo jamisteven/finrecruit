@@ -45,17 +45,18 @@ export default function OfferPage() {
   const [withheld, setWithheld] = useState(0)
   const [today, setToday] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState('')
 
   useEffect(() => {
-    fetch('/api/jobs?limit=400&sortBy=newest')
+    fetch('/api/jobs?limit=4&sortBy=newest')
       .then((r) => r.json())
       .then((d) => {
         setJobs((d.jobs ?? []).slice(0, 6))
         setWithheld(d.withheld ?? 0)
         setToday((d.previewCount ?? 0) + (d.withheld ?? 0))
       })
-      .catch(() => {})
+      .catch(() => setLoaded(true))
   }, [])
 
   const buy = async () => {
@@ -89,7 +90,14 @@ export default function OfferPage() {
       <section className="proof">
         <div className="sec-label">Landed today</div>
         <div className="proof-list">
-          {jobs.slice(0, 3).map((j, i) => (
+          {!loaded && [0, 1, 2].map((i) => (
+            <div key={`sk${i}`} className="proof-row skel">
+              <div className="skel-line w30" />
+              <div className="skel-line w70 tall" />
+              <div className="skel-line w45" />
+            </div>
+          ))}
+          {loaded && jobs.slice(0, 3).map((j, i) => (
             <div key={j.id} className="proof-row">
               <div className="proof-meta">
                 {SECTOR_LABEL[j.sector] ?? j.sector}
@@ -249,6 +257,14 @@ export default function OfferPage() {
         .offer .proof-sum { font-size: 13px; color: #57544E; line-height: 1.6; margin: 7px 0 0; }
         .offer .proof-by { font-size: 11.5px; color: #8B877F; margin-top: 8px; }
         .offer .proof-ago { position: absolute; top: 13px; right: 15px; font-size: 11px; color: #8B877F; }
+        .offer .proof-row.skel { display: flex; flex-direction: column; gap: 9px; }
+        .offer .skel-line { height: 11px; border-radius: 5px; background: #EDE8DF;
+          animation: skelpulse 1.4s ease-in-out infinite; }
+        .offer .skel-line.tall { height: 17px; }
+        .offer .skel-line.w30 { width: 30%; }
+        .offer .skel-line.w45 { width: 45%; }
+        .offer .skel-line.w70 { width: 70%; }
+        @keyframes skelpulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.45 } }
         .offer .proof-row.teaser { position: relative; overflow: hidden; min-height: 92px; }
         .offer .teaser-peek { filter: blur(4.5px); user-select: none; pointer-events: none; }
         .offer .teaser-veil { position: absolute; inset: 0; display: flex; align-items: center;
