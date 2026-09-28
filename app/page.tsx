@@ -543,7 +543,7 @@ export default function HomePage() {
       {/* ── Masthead ─────────────────────────── */}
       <header className="masthead">
         <div className="masthead-in">
-          <a className="wordmark" href="/">backchannel<em>.jobs</em></a>
+          <a className="wordmark" href="/"><span className="mark">B</span><span>backchannel<em>.jobs</em></span></a>
 
           <div className="search-wrap">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
@@ -1223,6 +1223,15 @@ export default function HomePage() {
         .ulj .card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         .ulj .card.locked { position: relative; overflow: hidden; }
         .ulj .locked-peek { filter: blur(4px); pointer-events: none; user-select: none; }
+        .ulj .wordmark { display: inline-flex; align-items: center; gap: 10px; }
+        .ulj .wordmark .mark { flex: none; width: 30px; height: 30px; border-radius: 7px;
+          background: #185FA5; color: #FFFFFF; display: inline-flex; align-items: center;
+          justify-content: center; font-family: 'Fraunces', Georgia, serif; font-size: 18px;
+          font-weight: 500; line-height: 1; }
+        @media (max-width: 560px) {
+          .ulj .wordmark .mark { width: 26px; height: 26px; font-size: 16px; border-radius: 6px; }
+          .ulj .wordmark { gap: 8px; }
+        }
         .ulj .acct-wrap { position: relative; }
         .ulj .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
           min-width: 200px; background: #FFFDF9; border: 1px solid #DDD6C8;
