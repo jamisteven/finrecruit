@@ -1385,13 +1385,16 @@ export default function HomePage() {
         .ulj .card-foot {
           margin: 16px -24px 0; padding: 12px 24px 14px 24px;
           border-top: 1px solid var(--hairline);
-          display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+          display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
         }
+        /* keeps a long headline from pushing the avatar onto its own line */
+        .ulj .card-foot .author { flex: 1; min-width: 0; overflow: hidden;
+          text-overflow: ellipsis; white-space: nowrap; }
         .ulj .avatar {
           position: relative; overflow: hidden;
-          width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+          width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
           background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--hairline-2);
-          display: grid; place-items: center; font: 600 10px 'Inter', sans-serif;
+          display: grid; place-items: center; font: 600 13px 'Inter', sans-serif;
         }
         /* Photo sits over the initials; if the signed LinkedIn url has expired
            the img hides itself on error and the initials show through. */
