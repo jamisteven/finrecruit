@@ -204,7 +204,10 @@ export default function HomePage() {
       params.set('sortBy', filters.sortBy)
       params.set('limit', '20000')
 
-      const res = await fetch(`/api/jobs?${params}`)
+      // Stage 1: a small page so the feed and stats paint immediately.
+      const fast = new URLSearchParams(params)
+      fast.set('limit', '400')
+      const res = await fetch(`/api/jobs?${fast}`)
       if (!res.ok) throw new Error('API error')
       const data = await res.json()
 
@@ -216,7 +219,16 @@ export default function HomePage() {
       setPreviewIds(data.previewIds ?? [])
       setLockedSample(data.lockedSample ?? null)
       setLastUpdated(new Date())
+      setLoading(false)
+
+      // Stage 2: the rest, in the background, so the sidebar facet counts
+      // reflect the whole dataset. Replaces the array once it lands.
+      fetch(`/api/jobs?${params}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((full) => { if (full?.jobs?.length) setAllJobs(full.jobs) })
+        .catch(() => {})
     } catch {
+      setLoading(false)
     } finally { setLoading(false) }
   }, [filters.search, filters.sortBy])
 
