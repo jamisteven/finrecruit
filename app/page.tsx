@@ -1376,8 +1376,8 @@ export default function HomePage() {
         .ulj .card h3 { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; }
         /* Titles carry the brand blue — they're the thing people scan, and it
            breaks up an otherwise all-black page. */
-        .ulj .card h3 a { color: #185FA5; text-decoration: none; }
-        .ulj.dark .card h3 a { color: #6BA8E8; }
+        .ulj .card h3 a { color: #1B4F82; text-decoration: none; }
+        .ulj.dark .card h3 a { color: #7FB3E3; }
         .ulj .card h3 a:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
         .ulj .meta { margin-top: 5px; font-size: 13px; color: var(--ink-2); }
         .ulj .meta b { color: var(--ink); font-weight: 600; }
