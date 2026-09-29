@@ -437,16 +437,26 @@ export default function HomePage() {
   // "New York / London" counts once under each city. Region names and work-mode
   // tokens (hybrid etc.) never appear as cities.
   const cityStats = useMemo(() => {
-    const names = locationStats(cityBase)
-      .map((l) => l.name)
-      .filter((n) => !REGION_NAMES_LC.has(n.toLowerCase()) && !CITY_STOP.has(n.toLowerCase()))
-    return names
-      .map((name) => {
-        const s = name.toLowerCase()
-        const count = cityBase.filter((j) => j.location && locParts(j.location).includes(s)).length
-        return { name, count }
-      })
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    // Single pass: parse each job's location once and tally every part it
+    // contains. The previous version re-parsed every job for every city name,
+    // which was ~1k names x ~6k jobs of regex work on each filter change.
+    const tally = new Map<string, { name: string; count: number }>()
+    for (const j of cityBase) {
+      if (!j.location) continue
+      const seen = new Set<string>()
+      for (const raw of j.location.replace(/[()]/g, ',').split(/[|,/]/)) {
+        const name = raw.trim()
+        if (!name || name.length >= 40) continue
+        const key = name.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        if (REGION_NAMES_LC.has(key) || CITY_STOP.has(key)) continue
+        const cur = tally.get(key)
+        if (cur) cur.count++
+        else tally.set(key, { name, count: 1 })
+      }
+    }
+    return [...tally.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
   }, [cityBase])
 
   // City chips: selected ones always visible (even at 0), then matches for the
