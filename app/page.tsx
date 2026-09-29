@@ -176,6 +176,7 @@ export default function HomePage() {
   const [bannerHidden, setBannerHidden] = useState(false)
   const [previewCount, setPreviewCount] = useState(0)
   const [previewIds, setPreviewIds] = useState<string[]>([])
+  const [addedToday, setAddedToday] = useState(0)
   const [lockedSample, setLockedSample] = useState<Partial<JobPost> | null>(null)
   const [dropBatches, setDropBatches] = useState<DropBatch[]>(DROP_BATCHES_FALLBACK)
   useEffect(() => {
@@ -226,6 +227,7 @@ export default function HomePage() {
       setWithheld(data.withheld ?? 0)
       setPreviewCount(data.previewCount ?? 0)
       setPreviewIds(data.previewIds ?? [])
+      setAddedToday(data.addedToday ?? 0)
       setLockedSample(data.lockedSample ?? null)
       setLastUpdated(new Date())
       setLoading(false)
@@ -660,7 +662,7 @@ export default function HomePage() {
         <div className="stats">
           <div className="stat"><div className="num">{totalJobs || allJobs.length}</div><div className="lbl">Live roles</div></div>
           <div className="stat"><div className="num">{availableLocations.length}</div><div className="lbl">Locations</div></div>
-          <div className="stat"><div className="num">{hasPass ? todayCount : previewCount + withheld}</div><div className="lbl">Added today</div></div>
+          <div className="stat"><div className="num">{addedToday}</div><div className="lbl">Added today</div></div>
         </div>
       </section>
 

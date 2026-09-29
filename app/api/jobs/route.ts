@@ -75,6 +75,15 @@ export async function GET(req: NextRequest) {
   // how many roles the free tier is not being shown
   let withheld = 0
   let lockedSample: Record<string, unknown> | null = null
+
+  // One authoritative "added today" figure, identical for every tier.
+  const { count: addedToday } = await db
+    .from('jobs')
+    .select('*', { count: 'estimated', head: true })
+    .eq('is_verified_job', true)
+    .neq('sector', 'other')
+    .or('quality.is.null,quality.neq.low')
+    .gte('posted_at', new Date(Date.now() - 24 * 3600_000).toISOString())
   if (!hasPass) {
     const { count: recent } = await db
       .from('jobs')
@@ -102,5 +111,5 @@ export async function GET(req: NextRequest) {
   const { data, error, count } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0, hasPass, withheld, lockedSample, previewCount: previewIds.length, previewIds })
+  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0, hasPass, withheld, lockedSample, previewCount: previewIds.length, previewIds, addedToday: addedToday ?? 0 })
 }
