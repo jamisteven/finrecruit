@@ -1345,11 +1345,13 @@ export default function HomePage() {
         .ulj .tile-cta { display: block; text-align: center; margin-top: 15px; background: var(--ink);
           color: var(--page); font-size: 13px; padding: 10px; border-radius: 8px; text-decoration: none; }
         .ulj .convert-bar {
-          position: fixed; left: 0; bottom: 0; width: 100%; z-index: 40;
+          position: fixed; left: 50%; transform: translateX(-50%);
+          bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+          width: min(720px, calc(100vw - 32px)); z-index: 40;
           display: flex; align-items: center; gap: 16px;
-          padding: 14px 22px calc(14px + env(safe-area-inset-bottom, 0px));
-          background: var(--ink); border-radius: 0;
-          box-shadow: 0 -6px 26px -10px rgba(0,0,0,0.35);
+          padding: 13px 18px;
+          background: var(--ink); border-radius: 12px;
+          box-shadow: 0 12px 32px -10px rgba(0,0,0,0.45);
         }
         .ulj .convert-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
         .ulj .convert-copy b { font-size: 13.5px; color: var(--page); font-weight: 500; }
