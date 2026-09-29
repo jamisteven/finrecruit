@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { inferWorkType } from '@/lib/workType'
 import { runApifyScraperForSector, normalisePost, Sector, SECTOR_QUERIES } from '@/lib/apify'
 import { classifyPost } from '@/lib/classifier'
 import { createServerClient } from '@/lib/supabase'
@@ -144,6 +145,7 @@ export async function POST(req: NextRequest) {
           raw_text: post.text,
           posted_at: post.postedAt,
           extracted_at: new Date().toISOString(),
+          work_type: inferWorkType(classified.location, classified.tags, classified.title),
           is_verified_job: true,
         })
 

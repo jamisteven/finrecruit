@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   let query = db
     .from('jobs')
-    .select('id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, posted_at, extracted_at, is_verified_job, quality', { count: 'exact' })
+    .select('id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, posted_at, extracted_at, is_verified_job, quality, work_type', { count: 'exact' })
     .eq('is_verified_job', true)
     .or('quality.is.null,quality.neq.low')
     .neq('sector', 'other')

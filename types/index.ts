@@ -22,6 +22,7 @@ export type JobPost = {
   extracted_at: string
   is_verified_job: boolean
   quality?: string | null
+  work_type?: WorkType | null
 }
 
 export type FilterState = {

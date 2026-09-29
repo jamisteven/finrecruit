@@ -382,7 +382,7 @@ export default function HomePage() {
         if (selCities.length > 0 && !selCities.some(matchCity)) return false
       }
       if (filters.workTypes.length > 0) {
-        const wt = inferWorkType(job)
+        const wt = job.work_type ?? inferWorkType(job)
         if (!wt || !filters.workTypes.includes(wt)) return false
       }
       return true
@@ -411,7 +411,7 @@ export default function HomePage() {
   const locBase = useMemo(() => allJobs.filter((job) => {
     if (filters.sector !== 'all' && job.sector !== filters.sector) return false
     if (filters.workTypes.length > 0) {
-      const wt = inferWorkType(job)
+      const wt = job.work_type ?? inferWorkType(job)
       if (!wt || !filters.workTypes.includes(wt)) return false
     }
     return true
