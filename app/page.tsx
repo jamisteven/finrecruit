@@ -838,7 +838,7 @@ export default function HomePage() {
                       </div>
                       <h3><a href={job.post_url} target="_blank" rel="noopener noreferrer" onClick={() => trackJobClick(job, i)}>{job.title}</a></h3>
                       <p className="meta">
-                        <b>{job.company}</b>
+                        <b>{job.company ?? 'Company not disclosed'}</b>
                         {job.seniority && job.seniority !== 'Unknown' && <><span className="sep">·</span>{job.seniority}</>}
                       </p>
                       {job.summary && <p className="summary">{job.summary}</p>}
@@ -954,7 +954,7 @@ export default function HomePage() {
 
                     <h3><a href={job.post_url} target="_blank" rel="noopener noreferrer" onClick={() => trackJobClick(job, jobIndex)}>{job.title}</a></h3>
                     <p className="meta">
-                      <b>{job.company}</b>
+                      <b>{job.company ?? 'Company not disclosed'}</b>
                       {job.location && <><span className="sep">·</span>{job.location}</>}
                       {wt && wt.toLowerCase() !== job.location?.trim().toLowerCase() && <><span className="sep">·</span>{wt}</>}
                       {job.seniority && job.seniority !== 'Unknown' && <><span className="sep">·</span>{job.seniority}</>}

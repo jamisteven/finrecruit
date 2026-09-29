@@ -211,6 +211,7 @@ export default function OfferPage() {
         <div className="sec-label">Before you buy</div>
         <div className="q"><b>Are these real openings?</b><span>Every card links to the original LinkedIn post. You can read it yourself and message the person who wrote it.</span></div>
         <div className="q"><b>What if I find something on day one?</b><span>Then it did its job. The pass expires by itself either way — there&apos;s nothing to cancel.</span></div>
+        <div className="q"><b>Why don&apos;t some roles name the company?</b><span>Because the recruiter chose not to. They want candidates to come through them rather than apply direct — which is exactly why these roles never reach a job board. Message the person who posted it.</span></div>
         <div className="q"><b>Does it renew?</b><span>No. It&apos;s a single $9 charge for 14 days. We can&apos;t charge you again without you buying again.</span></div>
         <div className="q"><b>Which sectors?</b><span>Finance, tech, legal, marketing and real estate, across {jobs.length > 0 ? 'every major market' : 'the US, UK, Europe, Canada and the Gulf'}.</span></div>
       </section>
