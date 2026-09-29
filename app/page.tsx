@@ -892,9 +892,7 @@ export default function HomePage() {
                   <div className="tile-price">$0</div>
                   <ul>
                     <li>10 fresh roles every day</li>
-                    <li>Everything else after 24 hours</li>
-                    <li>All sectors and cities</li>
-                    <li>Save roles to revisit</li>
+                    <li>Roles older than 24 hours</li>
                   </ul>
                 </div>
                 <div className="tile featured">
@@ -904,12 +902,12 @@ export default function HomePage() {
                   </div>
                   <div className="tile-price">$9</div>
                   <ul>
-                    <li>Every role the moment it lands</li>
+                    <li>Realtime roles the moment they land</li>
                     <li>All sectors and cities</li>
                     <li>Save roles to revisit</li>
-                    <li>Expires on its own — nothing to cancel</li>
+                    <li>Expires on its own - nothing to cancel</li>
                   </ul>
-                  <a className="tile-cta" href="/offer">Get the pass — $9</a>
+                  <a className="tile-cta" href="/offer">Get the pass - $9</a>
                 </div>
               </div>
             )}
