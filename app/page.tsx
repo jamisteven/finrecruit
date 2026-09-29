@@ -847,7 +847,13 @@ export default function HomePage() {
                         </p>
                       )}
                       <div className="card-foot">
-                        <span className="avatar">{initials(job.author_name || '?')}</span>
+                        <span className="avatar">
+                        {job.author_avatar
+                          ? <img src={job.author_avatar} alt="" loading="lazy"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                          : null}
+                        <i>{initials(job.author_name || '?')}</i>
+                      </span>
                         <span className="author">
                           {job.author_linkedin_url && job.author_linkedin_url !== '#'
                             ? <a href={job.author_linkedin_url} target="_blank" rel="noopener noreferrer"><b>{job.author_name}</b></a>
@@ -960,7 +966,13 @@ export default function HomePage() {
                     )}
 
                     <div className="card-foot">
-                      <span className="avatar">{initials(job.author_name || '?')}</span>
+                      <span className="avatar">
+                        {job.author_avatar
+                          ? <img src={job.author_avatar} alt="" loading="lazy"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                          : null}
+                        <i>{initials(job.author_name || '?')}</i>
+                      </span>
                       <span className="author">
                         {job.author_linkedin_url && job.author_linkedin_url !== '#'
                           ? <a href={job.author_linkedin_url} target="_blank" rel="noopener noreferrer"><b>{job.author_name}</b></a>
@@ -1376,10 +1388,16 @@ export default function HomePage() {
           display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
         }
         .ulj .avatar {
+          position: relative; overflow: hidden;
           width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
           background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--hairline-2);
           display: grid; place-items: center; font: 600 10px 'Inter', sans-serif;
         }
+        /* Photo sits over the initials; if the signed LinkedIn url has expired
+           the img hides itself on error and the initials show through. */
+        .ulj .avatar img { position: absolute; inset: 0; width: 100%; height: 100%;
+          object-fit: cover; border-radius: 50%; }
+        .ulj .avatar i { font-style: normal; }
         .ulj .author { font-size: 12px; color: var(--ink-2); line-height: 1.3; }
         .ulj .author b { color: var(--ink); font-weight: 600; }
         .ulj .author a { color: inherit; text-decoration: none; }

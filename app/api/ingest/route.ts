@@ -142,6 +142,7 @@ export async function POST(req: NextRequest) {
           author_name: post.authorName,
           author_headline: post.authorHeadline,
           author_linkedin_url: post.authorLinkedinUrl,
+          author_avatar: post.authorAvatar,
           raw_text: post.text,
           posted_at: post.postedAt,
           extracted_at: new Date().toISOString(),

@@ -16,6 +16,7 @@ export type ApifyPost = {
     linkedinUrl?: string
     url?: string
     profileUrl?: string
+    avatar?: { url?: string }
   }
   authorName?: string
   authorHeadline?: string
@@ -345,6 +346,7 @@ export function normalisePost(raw: ApifyPost): {
   authorName: string | null
   authorHeadline: string | null
   authorLinkedinUrl: string | null
+  authorAvatar: string | null
   postedAt: string | null
 } {
   const src: ApifyPost = raw.repost || raw
@@ -370,6 +372,9 @@ export function normalisePost(raw: ApifyPost): {
     authorName: src.author?.name || src.authorName || null,
     authorHeadline: src.author?.info || src.author?.headline || src.authorHeadline || null,
     authorLinkedinUrl: src.author?.linkedinUrl || src.author?.url || src.authorProfileUrl || null,
+    // LinkedIn CDN urls are signed and expire in ~2 weeks; the card falls back
+    // to initials when they do.
+    authorAvatar: src.author?.avatar?.url || null,
     postedAt,
   }
 }

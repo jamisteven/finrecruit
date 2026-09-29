@@ -16,6 +16,7 @@ export type JobPost = {
   post_url: string
   author_name: string | null
   author_headline: string | null
+  author_avatar?: string | null
   author_linkedin_url: string | null
   raw_text: string
   posted_at: string | null
