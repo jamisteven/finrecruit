@@ -916,7 +916,7 @@ export default function HomePage() {
 
             {splitFeed && <div className="sec-head"><span>Earlier roles</span><i /></div>}
             <div className="cards">
-              {!hasPass && withheld > 0 && (
+              {!hasPass && withheld > 0 && !splitFeed && (
                 <article className="card locked" style={{ ['--sec' as string]: `var(--sec-${lockedSample?.sector ?? 'tech'}, var(--ink-3))` }}>
                   <div className="locked-peek">
                     <div className="card-top">
