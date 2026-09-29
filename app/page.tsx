@@ -191,6 +191,15 @@ export default function HomePage() {
   const [cityExpanded, setCityExpanded] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)  // mobile filter accordion
   const [nowTs, setNowTs] = useState<number | null>(null)  // null until mounted — avoids SSR hydration mismatch
+  const visitorId = useRef<string | null>(null)
+  useEffect(() => {
+    try {
+      let id = localStorage.getItem('bcj_vid')
+      if (!id) { id = crypto.randomUUID(); localStorage.setItem('bcj_vid', id) }
+      visitorId.current = id
+    } catch { /* storage blocked */ }
+  }, [])
+
   const searchRef = useRef<HTMLInputElement>(null)
   const prevSlotKey = useRef<string | null>(null)
 
@@ -406,6 +415,28 @@ export default function HomePage() {
     })
   }, [allJobs, filters.sector, filters.locations, filters.workTypes, filters.sortBy])
 
+  // Log settled filter states — not every keystroke, and not the default view
+  useEffect(() => {
+    const active = filters.search || filters.sector !== 'all'
+      || filters.locations.length > 0 || filters.workTypes.length > 0
+    if (!active) return
+    const t = setTimeout(() => {
+      fetch('/api/track-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          visitor_id: visitorId.current,
+          term: filters.search,
+          sector: filters.sector,
+          locations: filters.locations,
+          work_types: filters.workTypes,
+          result_count: displayJobs.length,
+        }),
+      }).catch(() => {})
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [filters.search, filters.sector, filters.locations, filters.workTypes, displayJobs.length])
+
   const sectorCounts = useMemo(() => ({
     all: allJobs.length,
     finance: allJobs.filter((j) => j.sector === 'finance').length,
@@ -527,6 +558,7 @@ export default function HomePage() {
         keepalive: true,
         body: JSON.stringify({
           job_id: job.id,
+          visitor_id: visitorId.current,
           sector: job.sector,
           location: job.location,
           seniority: job.seniority,
