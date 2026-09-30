@@ -24,9 +24,9 @@ const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
 // The cutoff itself is enforced server-side in /api/jobs, so keep that in sync with this value.
 const FREE_DELAY_HOURS = 48
 
-// POST endpoint that creates the Stripe Checkout session and returns { url }.
-// Set this to the path of your checkout route, e.g. app/api/checkout/route.ts -> '/api/checkout'.
-const CHECKOUT_ENDPOINT = '/api/checkout'
+// POST endpoint that creates the Stripe Checkout session and returns { url }
+// (app/api/stripe/checkout/route.ts)
+const CHECKOUT_ENDPOINT = '/api/stripe/checkout'
 
 // JobPost.sector is a plain string in the API payload, so accept any string
 const PIPELINE_LABELS: Record<string, string> = {
@@ -166,6 +166,7 @@ export default function HomePage() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
+  const [checkoutError, setCheckoutError] = useState(false)
   useEffect(() => {
     const sb = createClient()
     sb.auth.getUser().then(({ data }) => setUserEmail(data.user?.email ?? null)).catch(() => {})
@@ -556,18 +557,24 @@ export default function HomePage() {
     } catch { /* analytics must never break the page */ }
   }
 
-  // Every early-access button goes straight to Stripe; if the session can't be created
-  // we fall back to the /offer page so a failed request never strands the visitor.
+  // Every early-access button goes straight to Stripe Checkout. If the session can't be
+  // created we say so and log why, rather than silently sending people to another page.
   const startCheckout = async (where: string) => {
     if (checkingOut) return
     track('cta_click', { where })
     setCheckingOut(true)
+    setCheckoutError(false)
     try {
       const res = await fetch(CHECKOUT_ENDPOINT, { method: 'POST' })
-      const data = await res.json()
-      if (data?.url) { window.location.href = data.url; return }
-    } catch { /* fall through to the fallback */ }
-    window.location.href = '/offer'
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.url) { window.location.href = data.url; return }
+      console.error('[checkout] failed', res.status, data)
+    } catch (err) {
+      console.error('[checkout] request error', err)
+    }
+    setCheckingOut(false)
+    setCheckoutError(true)
+    setTimeout(() => setCheckoutError(false), 6000)
   }
 
   const trackJobClick = (job: JobPost, index: number) => {
@@ -675,7 +682,7 @@ export default function HomePage() {
                     <>
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Early access active</div>}
-                      {!hasPass && <button onClick={() => { setMenuOpen(false); startCheckout('menu') }}>See new roles first — $9</button>}
+                      {!hasPass && <button onClick={() => { setMenuOpen(false); startCheckout('menu') }}>See new roles first - $9</button>}
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
@@ -700,7 +707,7 @@ export default function HomePage() {
 
             {!hasPass && (
               <button type="button" className="btn-primary" onClick={() => startCheckout('header')} disabled={checkingOut}>
-                <BoltIcon /><span className="cta-full">See new roles first — $9</span><span className="cta-short">See first — $9</span>
+                <BoltIcon /><span className="cta-full">See new roles first - $9</span><span className="cta-short">See first — $9</span>
               </button>
             )}
           </div>
@@ -715,7 +722,7 @@ export default function HomePage() {
           <div className="cta-row">
             {!hasPass && (
               <button type="button" className="btn-primary lg" onClick={() => startCheckout('hero')} disabled={checkingOut}>
-                <BoltIcon />See new roles first — $9
+                <BoltIcon />See new roles first - $9
               </button>
             )}
             <a className="btn-ghost lg" href="#feed">See today&apos;s roles <ArrowRight /></a>
@@ -866,7 +873,7 @@ export default function HomePage() {
               <span className="tagline">Most roles fill inside 48 hours</span>
               <h3>Don&apos;t wait {FREE_DELAY_HOURS} hours.</h3>
               <div className="price"><b>$9</b><span>14 days · one payment</span></div>
-              <button type="button" className="btn-primary block" onClick={() => startCheckout('sidebar')} disabled={checkingOut}>See new roles first — $9</button>
+              <button type="button" className="btn-primary block" onClick={() => startCheckout('sidebar')} disabled={checkingOut}>See new roles first - $9</button>
               <ul>
                 <li><CheckIcon />Every role the moment it drops</li>
                 <li><CheckIcon />No subscription, expires on its own</li>
@@ -978,7 +985,7 @@ export default function HomePage() {
                   <h3>{withheld > 0 ? `${withheld} newer roles are waiting.` : 'See these now, not in 48 hours.'}</h3>
                   <p>14 days of early access for $9. Every new role the moment it drops. No subscription.</p>
                 </div>
-                <button type="button" className="btn-primary lg" onClick={() => startCheckout('inline')} disabled={checkingOut}><BoltIcon />See new roles first — $9</button>
+                <button type="button" className="btn-primary lg" onClick={() => startCheckout('inline')} disabled={checkingOut}><BoltIcon />See new roles first - $9</button>
               </div>
             )}
 
@@ -1052,7 +1059,7 @@ export default function HomePage() {
                 <b>Most roles fill inside 48 hours.</b>
                 <span>Early access shows them the moment they drop.</span>
               </div>
-              <button type="button" className="btn-primary" onClick={() => startCheckout('bar')} disabled={checkingOut}>See new roles first — $9</button>
+              <button type="button" className="btn-primary" onClick={() => startCheckout('bar')} disabled={checkingOut}>See new roles first - $9</button>
               <button className="convert-x" onClick={() => setBannerHidden(true)} aria-label="Dismiss">×</button>
             </aside>
           )}
@@ -1238,6 +1245,8 @@ export default function HomePage() {
         }
         .ulj .btn-primary:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
         .ulj .btn-primary:disabled { opacity: .7; cursor: wait; }
+        .ulj .checkout-error { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 80; display: flex; align-items: center; gap: 14px; width: max-content; max-width: calc(100vw - 32px); padding: 12px 16px; border-radius: 12px; background: #8A1F1F; color: #fff; font-size: 13.5px; box-shadow: 0 12px 32px -10px rgba(0,0,0,.45); }
+        .ulj .checkout-error button { background: none; border: none; color: inherit; font-size: 18px; line-height: 1; cursor: pointer; opacity: .8; }
         .ulj .btn-primary.lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
         .ulj .btn-primary.block { width: 100%; }
         .ulj .btn-ghost {
@@ -1652,6 +1661,13 @@ export default function HomePage() {
           .ulj .hb-steps li:first-child { border-top: none; }
         }
       `}</style>
+
+      {checkoutError && (
+        <div className="checkout-error" role="alert">
+          We couldn&apos;t start checkout. Please try again in a moment.
+          <button onClick={() => setCheckoutError(false)} aria-label="Dismiss">×</button>
+        </div>
+      )}
 
       <Analytics />
     </div>
