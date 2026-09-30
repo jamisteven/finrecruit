@@ -20,10 +20,6 @@ const SECTORS: { id: Sector; label: string }[] = [
 
 const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
 
-// Free visitors see a role only after it is this old; a pass sees it the moment it lands.
-// The cutoff itself is enforced server-side in /api/jobs, so keep that in sync with this value.
-const FREE_DELAY_HOURS = 48
-
 // JobPost.sector is a plain string in the API payload, so accept any string
 const PIPELINE_LABELS: Record<string, string> = {
   hashtags: 'Fresh roles',
@@ -155,16 +151,6 @@ const isFresh = (iso?: string | null) => !!iso && Date.now() - new Date(iso).get
 
 const initials = (name: string) =>
   name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
-
-const BoltIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z" /></svg>
-)
-const ArrowRight = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-)
-const CheckIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
-)
 
 export default function HomePage() {
   const [dark, setDark] = useState(false)
@@ -635,7 +621,6 @@ export default function HomePage() {
           </div>
 
           <div className="mast-actions">
-            <a className="nav-link" href="#how">How it works</a>
 
             <div className="acct-wrap">
               <button className="icon-btn" onClick={() => setMenuOpen(!menuOpen)} aria-label="Account menu" title="Account">
@@ -669,70 +654,24 @@ export default function HomePage() {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg>
               <span>{loading ? 'Scanning…' : 'Refresh'}</span>
             </button>
-
-            {!hasPass && (
-              <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'header' })}>
-                <BoltIcon />Get a pass — $9
-              </a>
-            )}
           </div>
         </div>
       </header>
 
       {/* ── Hero ─────────────────────────────── */}
       <section className="hero">
-        <div className="hero-copy">
+        <div>
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
           <p className="sub">Roles recruiters, hiring managers and internal talent teams post to their own connections and never list - tracked by AI and delivered in real time.</p>
-          <div className="cta-row">
-            {!hasPass && (
-              <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'hero' })}>
-                <BoltIcon />Get a pass — $9
-              </a>
-            )}
-            <a className="btn-ghost lg" href="#feed">See today&apos;s roles <ArrowRight /></a>
-          </div>
-          {!hasPass && (
-            <div className="offer">
-              <div><b>Free</b>Roles older than {FREE_DELAY_HOURS} hours, plus 10 fresh roles a day.</div>
-              <div><b>$9 pass</b>Every role the moment it drops. 14 days, no subscription.</div>
-            </div>
-          )}
         </div>
-
-        <div className="art" role="img" aria-label="Example: a recruiter's LinkedIn post becomes a listing on backchannel.jobs">
-          <div className="art-post">
-            <div className="art-h"><span className="li">in</span><div><b>Senior Recruiter</b><small>2h ago · LinkedIn</small></div></div>
-            <p>I&apos;m working with a Series B SaaS company looking for a Senior Product Manager. Great team, remote friendly. DM me if interested!</p>
-          </div>
-          <div className="art-note">
-            <svg viewBox="0 0 60 40" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M52 8C40 6 24 10 10 26M10 26l1-11M10 26l11-3" /></svg>
-            <span>We find these posts and turn them into real opportunities.</span>
-          </div>
-          <div className="art-role">
-            <div className="art-top"><span className="new">New · 42m ago</span><span className="art-eg">Example</span></div>
-            <h3>Senior Product Manager</h3>
-            <div className="art-meta">Series B SaaS · San Francisco, CA (Hybrid)</div>
-            <ul className="art-facts">
-              <li>Posted by: Senior Recruiter at Redwood Talent</li>
-              <li>Source: LinkedIn personal post</li>
-            </ul>
-            <p className="art-quote">“I&apos;m helping a Series B SaaS company hire a Senior Product Manager. Great team, competitive comp, remote friendly…”</p>
-            <div className="art-tags"><span>Product</span><span>SaaS</span><span>Remote friendly</span></div>
-            <div className="art-actions"><a className="btn-ghost sm" href="#feed">See live roles <ArrowRight /></a></div>
-          </div>
-        </div>
-      </section>
-
-      <div className="statband-wrap">
-        <div className="statband">
-          <div className="stat"><div className="num">{(totalJobs || allJobs.length).toLocaleString('en-US')}</div><div className="lbl">Live roles</div></div>
+        <div className="stats">
+          <div className="stat"><div className="num">{totalJobs || allJobs.length}</div><div className="lbl">Live roles</div></div>
           <div className="stat"><div className="num">{availableLocations.length}</div><div className="lbl">Locations</div></div>
           <div className="stat"><div className="num">{addedToday}</div><div className="lbl">Added today</div></div>
         </div>
-      </div>
+      </section>
 
-      <div className="layout" id="feed">
+      <div className="layout">
         {/* ── Sidebar ─────────────────────────── */}
         <aside className={`filters${filtersOpen ? ' open' : ''}`}>
           {/* Mobile-only accordion header */}
@@ -830,19 +769,6 @@ export default function HomePage() {
             )}
           </div>
 
-          {!hasPass && (
-            <div className="pass pass-side">
-              <span className="tagline">Most roles fill inside 48 hours</span>
-              <h3>Don&apos;t wait {FREE_DELAY_HOURS} hours.</h3>
-              <div className="price"><b>$9</b><span>14 days · one payment</span></div>
-              <a className="btn-primary block" href="/offer" onClick={() => track('cta_click', { where: 'sidebar' })}>Get a pass — $9</a>
-              <ul>
-                <li><CheckIcon />Every role the moment it drops</li>
-                <li><CheckIcon />No subscription, expires on its own</li>
-              </ul>
-            </div>
-          )}
-
           <p className="side-note">Sourced from public posts. Always verify details with the recruiter before applying.</p>
         </aside>
 
@@ -904,16 +830,15 @@ export default function HomePage() {
                           <p className="meta"><b>{lockedSample?.company ?? 'Hiring company'}</b></p>
                         </div>
                         <div className="locked-veil">
-                          <div className="locked-count">{withheld} more roles landed in the last {FREE_DELAY_HOURS} hours</div>
-                          <p className="locked-sub">Free visitors see them after {FREE_DELAY_HOURS} hours. Pass holders see them the moment they land.</p>
-                          <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'locked_card' })}><BoltIcon />Unlock now — $9</a>
+                          <div className="locked-count">{withheld} more landed today</div>
+                          <p className="locked-sub">Most fill inside 48 hours. Pass holders see them the moment they land.</p>
+                          <a className="locked-cta" href="/offer">Unlock for 14 days — $9</a>
                         </div>
                       </article>
                     )}
                     <article key={job.id} className="card" style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
                       <div className="card-top">
                         <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}{job.location && <> · {job.location}</>}</span>
-                        <span className="sample-flag">Free sample</span>
                         {job.posted_at && <span className="ago fresh">{timeAgo(job.posted_at)}</span>}
                       </div>
                       <h3><a href={job.post_url} target="_blank" rel="noopener noreferrer" onClick={() => trackJobClick(job, i)}>{job.title}</a></h3>
@@ -960,16 +885,39 @@ export default function HomePage() {
             )}
 
             {!hasPass && (
-              <div className="inline-cta">
-                <div>
-                  <h3>{withheld > 0 ? `${withheld} newer roles are waiting.` : 'See these now, not in 48 hours.'}</h3>
-                  <p>14-day pass, $9. Every new role the moment it drops. No subscription.</p>
+              <div className="tiers-inline">
+                {withheld > 0 && (
+                  <div className="withheld-note">
+                    <b>{withheld} more roles landed today.</b>
+                    <span>Most fill inside 48 hours. Pass holders see them the moment they land.</span>
+                  </div>
+                )}
+                <div className="tile">
+                  <div className="tile-name">Free</div>
+                  <div className="tile-price">$0</div>
+                  <ul>
+                    <li>10 fresh roles every day</li>
+                    <li>Roles older than 24 hours</li>
+                  </ul>
                 </div>
-                <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'inline' })}><BoltIcon />Get a pass — $9</a>
+                <div className="tile featured">
+                  <div className="tile-head">
+                    <span className="tile-name">14-day pass</span>
+                    <span className="tile-chip">No subscription</span>
+                  </div>
+                  <div className="tile-price">$9</div>
+                  <ul>
+                    <li>Realtime roles the moment they land</li>
+                    <li>All sectors and cities</li>
+                    <li>Save roles to revisit</li>
+                    <li>Expires on its own - nothing to cancel</li>
+                  </ul>
+                  <a className="tile-cta" href="/offer">Get the pass - $9</a>
+                </div>
               </div>
             )}
 
-            {splitFeed && <div className="sec-head"><span>Earlier roles</span><i />{!hasPass && <em className="sec-note">Older than {FREE_DELAY_HOURS} hours</em>}</div>}
+            {splitFeed && <div className="sec-head"><span>Earlier roles</span><i /></div>}
             <div className="cards">
               {!hasPass && withheld > 0 && !splitFeed && (
                 <article className="card locked" style={{ ['--sec' as string]: `var(--sec-${lockedSample?.sector ?? 'tech'}, var(--ink-3))` }}>
@@ -986,9 +934,9 @@ export default function HomePage() {
                     </p>
                   </div>
                   <div className="locked-veil">
-                    <div className="locked-count">{withheld} more roles landed in the last {FREE_DELAY_HOURS} hours</div>
-                    <p className="locked-sub">Free visitors see them after {FREE_DELAY_HOURS} hours. Pass holders see them the moment they land.</p>
-                    <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'locked_card' })}><BoltIcon />Unlock now — $9</a>
+                    <div className="locked-count">{withheld} more roles landed today</div>
+                    <p className="locked-sub">Most roles fill inside 48 hours. Pass holders see them the moment they land.</p>
+                    <a className="locked-cta" href="/offer">Unlock for 14 days — $9</a>
                   </div>
                 </article>
               )}
@@ -1059,7 +1007,7 @@ export default function HomePage() {
                 <b>Most roles fill inside 48 hours.</b>
                 <span>Pass holders get them the moment they drop.</span>
               </div>
-              <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'bar' })}>Get a pass — $9</a>
+              <a className="convert-cta" href="/offer">Get a pass — $9</a>
               <button className="convert-x" onClick={() => setBannerHidden(true)} aria-label="Dismiss">×</button>
             </aside>
           )}
@@ -1071,34 +1019,10 @@ export default function HomePage() {
         </main>
       </div>
 
-      <section className="how" id="how">
-        <div className="how-in">
-          <div>
-            <h2>How it works</h2>
-            <p className="how-sub">Recruiters post roles to their networks long before they list them. We collect those posts so you don&apos;t have to be in the right network.</p>
-          </div>
-          <ol className="steps">
-            <li><h3>We monitor recruiter posts</h3><p>AI tracks public posts from recruiters, hiring managers and talent teams.</p></li>
-            <li><h3>We pick out real roles</h3><p>Genuine openings are separated from generic career content.</p></li>
-            <li><h3>You see them first</h3><p>New roles land here before they reach the job boards. Each links back to the original post.</p></li>
-          </ol>
-          {!hasPass && (
-            <div className="compare">
-              <div><h4>Free</h4><p>Browse roles older than {FREE_DELAY_HOURS} hours, plus 10 fresh roles a day. Save roles and open the original post.</p></div>
-              <div>
-                <h4>Pass <span className="num">$9</span></h4>
-                <p>See every role the moment it drops, for 14 days. One payment, no subscription, expires automatically.</p>
-                <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'how_it_works' })}>Get a pass — $9</a>
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
       <style>{`
         /* Roman only, no italic file — the em italics render as a synthetic slant
            of the roman, which is calmer than Fraunces' real (very calligraphic) italic. */
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&family=Caveat:wght@600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
 
         .ulj {
           /* light theme */
@@ -1118,14 +1042,6 @@ export default function HomePage() {
           --sec-legal:     #eda100;
           --sec-marketing: #e87ba4;
           --sec-realestate:#4a3aa7;
-          --link:      #1B4F82;
-          --accent:    #24468f;
-          --accent-soft:#E4EAF6;
-          --cta:       #2F6BF2;
-          --cta-hover: #2458D4;
-          --cta-fg:    #FFFFFF;
-          --line-strong:#B9B2A2;
-          --live-soft: #E2F0E6;
         }
         .ulj.dark {
           --page:      #131210;
@@ -1144,14 +1060,6 @@ export default function HomePage() {
           --sec-legal:     #c98500;
           --sec-marketing: #d55181;
           --sec-realestate:#b3a7f2;
-          --link:      #7FB3E3;
-          --accent:    #6F97EE;
-          --accent-soft:#212B45;
-          --cta:       #6B98FF;
-          --cta-hover: #85AAFF;
-          --cta-fg:    #0B1224;
-          --line-strong:#5A5649;
-          --live-soft: #1B2E22;
         }
 
         .ulj, .ulj * { box-sizing: border-box; margin: 0; }
@@ -1215,79 +1123,27 @@ export default function HomePage() {
         .ulj .icon-btn:hover { color: var(--ink); border-color: var(--ink-3); }
         .ulj .refresh-btn {
           height: 36px; padding: 0 16px; display: flex; align-items: center; gap: 8px;
-          background: var(--surface); color: var(--ink-2); border: 1px solid var(--hairline-2); border-radius: 10px;
-          font: 600 12.5px 'Inter', sans-serif; cursor: pointer; transition: .15s;
+          background: var(--ink); color: var(--page); border: none; border-radius: 10px;
+          font: 600 12.5px 'Inter', sans-serif; cursor: pointer; transition: opacity .15s;
         }
-        .ulj .refresh-btn:hover { color: var(--ink); border-color: var(--ink-3); }
+        .ulj .refresh-btn:hover { opacity: .85; }
         .ulj .refresh-btn:disabled { cursor: not-allowed; opacity: .7; }
         .ulj .refresh-btn.spinning svg { animation: ulj-spin 0.9s linear infinite; }
         @keyframes ulj-spin { to { transform: rotate(360deg); } }
 
         /* ── Hero ── */
-        .ulj .hero { max-width: 1200px; margin: 0 auto; padding: 40px 28px 30px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 32px 48px; align-items: center; }
+        .ulj .hero { max-width: 1200px; margin: 0 auto; padding: 44px 28px 30px; display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
         .ulj .hero h1 {
-          font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(38px, 5.4vw, 64px);
-          line-height: 1.04; letter-spacing: -0.025em; margin-bottom: 18px;
+          font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(28px, 4vw, 40px);
+          line-height: 1.12; letter-spacing: -0.015em; max-width: 560px;
         }
-        .ulj .hero h1 em { font-style: italic; font-weight: 400; }
-        .ulj .hero .sub { font-size: 17px; color: var(--ink-2); max-width: 54ch; margin-bottom: 24px; }
-        .ulj .cta-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-        .ulj .offer { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; max-width: 620px; border: 1px solid var(--hairline-2); background: var(--surface); border-radius: 12px; overflow: hidden; }
-        .ulj .offer > div { padding: 12px 16px; font-size: 13px; color: var(--ink-2); }
-        .ulj .offer > div + div { border-left: 1px solid var(--hairline-2); background: var(--accent-soft); color: var(--ink); }
-        .ulj .offer b { display: block; font-weight: 600; color: var(--ink); margin-bottom: 2px; font-size: 14px; }
-        .ulj .statband-wrap { max-width: 1200px; margin: 0 auto; padding: 0 28px; }
-        .ulj .statband { display: flex; border-block: 1px solid var(--hairline-2); margin-bottom: 32px; }
-        .ulj .stat { flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 12px; padding: 14px 24px; border-left: 1px solid var(--hairline-2); }
-        .ulj .stat:first-child { border-left: none; }
+        .ulj .hero h1 em { font-style: italic; }
+        .ulj .hero .sub { margin-top: 10px; font-size: 14px; color: var(--ink-2); max-width: 480px; }
+        .ulj .stats { display: flex; }
+        .ulj .stat { padding: 0 26px; border-left: 1px solid var(--hairline-2); }
+        .ulj .stat:first-child { border-left: none; padding-left: 0; }
         .ulj .stat .num { font-family: 'Fraunces', Georgia, serif; font-size: 34px; font-weight: 500; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
-        .ulj .stat .lbl { font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
-
-        /* Hero art: a recruiter post becoming a listing */
-        .ulj .art { position: relative; width: 100%; max-width: 520px; margin-left: auto; }
-        .ulj .art-post { position: relative; z-index: 2; width: 66%; background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
-        .ulj .art-h { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-        .ulj .art-h b { display: block; font-size: 14px; line-height: 1.2; }
-        .ulj .art-h small { display: block; font-size: 12px; color: var(--ink-2); }
-        .ulj .art .li { width: 30px; height: 30px; border-radius: 6px; background: #0A66C2; color: #fff; display: grid; place-items: center; font: 700 15px 'Inter', sans-serif; flex: none; }
-        .ulj .art-post p { font-size: 13.5px; color: var(--ink-2); }
-        .ulj .art-note { position: absolute; z-index: 3; top: 2px; right: 0; width: 31%; display: flex; flex-direction: column; font: 600 22px/1.02 'Caveat', 'Segoe Print', 'Bradley Hand', cursive; color: var(--ink); transform: rotate(-4deg); transform-origin: left center; }
-        .ulj .art-note svg { width: 54px; height: 36px; margin: 0 0 2px -34px; }
-        .ulj .art-role { position: relative; z-index: 1; margin-top: -12px; background: var(--surface); border: 1px solid var(--hairline); border-radius: 16px; padding: 30px 20px 18px; box-shadow: var(--shadow-lift); }
-        .ulj .art-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .ulj .art .new { font: 600 12px 'Inter', sans-serif; padding: 3px 10px; border-radius: 999px; background: var(--live-soft); color: var(--live); }
-        .ulj .art-eg { font: 500 11px 'Spline Sans Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
-        .ulj .art-role h3 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.15; letter-spacing: -.01em; margin-bottom: 4px; }
-        .ulj .art-meta { font-size: 14px; color: var(--ink-2); }
-        .ulj .art-facts { list-style: none; padding: 0; margin: 12px 0 10px; display: grid; gap: 2px; font-size: 13.5px; color: var(--ink-2); }
-        .ulj .art-quote { font-size: 13.5px; }
-        .ulj .art-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-        .ulj .art-tags span { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
-        .ulj .art-actions { display: flex; gap: 8px; margin-top: 14px; }
-
-        /* ── Buttons: solid blue is reserved for the pass CTA ── */
-        .ulj .btn-primary {
-          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-          height: 38px; padding: 0 16px; border-radius: 10px; white-space: nowrap;
-          background: var(--cta); color: var(--cta-fg); border: 1px solid var(--cta);
-          font: 600 13.5px 'Inter', sans-serif; text-decoration: none; cursor: pointer;
-          box-shadow: 0 4px 14px color-mix(in srgb, var(--cta) 32%, transparent);
-          transition: background .12s, border-color .12s;
-        }
-        .ulj .btn-primary:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
-        .ulj .btn-primary.lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
-        .ulj .btn-primary.block { width: 100%; }
-        .ulj .btn-ghost {
-          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-          height: 38px; padding: 0 16px; border-radius: 10px; white-space: nowrap;
-          background: transparent; color: var(--ink); border: 1.5px solid var(--line-strong);
-          font: 500 13.5px 'Inter', sans-serif; text-decoration: none; cursor: pointer; transition: .12s;
-        }
-        .ulj .btn-ghost:hover { background: var(--surface-2); border-color: var(--ink); }
-        .ulj .btn-ghost.lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
-        .ulj .btn-ghost.sm { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 9px; }
-        .ulj .nav-link { font-size: 14px; color: var(--ink-2); text-decoration: none; padding: 0 6px; }
-        .ulj .nav-link:hover { color: var(--ink); }
+        .ulj .stat .lbl { margin-top: 6px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
 
         /* ── Layout ── */
         .ulj .layout { max-width: 1200px; margin: 0 auto; padding: 8px 28px 60px; display: grid; grid-template-columns: 218px 1fr; gap: 40px; align-items: start; }
@@ -1320,10 +1176,11 @@ export default function HomePage() {
           cursor: pointer; text-align: left; transition: .12s;
         }
         .ulj .sector-row:hover { background: var(--surface-2); color: var(--ink); }
-        .ulj .sector-row.active { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--ink); font-weight: 600; }
+        .ulj .sector-row.active { background: var(--ink); color: var(--page); font-weight: 600; }
         .ulj .sector-row .dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; background: var(--dot, var(--ink-3)); }
-                .ulj .sector-row .cnt { margin-left: auto; font: 500 11.5px 'Spline Sans Mono', monospace; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-        .ulj .sector-row.active .cnt { color: var(--ink); }
+        .ulj .sector-row.active .dot { outline: 2px solid color-mix(in srgb, var(--page) 45%, transparent); }
+        .ulj .sector-row .cnt { margin-left: auto; font: 500 11.5px 'Spline Sans Mono', monospace; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+        .ulj .sector-row.active .cnt { color: color-mix(in srgb, var(--page) 75%, transparent); }
         .ulj .check-row {
           display: flex; align-items: center; gap: 10px; padding: 7px 0;
           background: none; border: none; width: 100%; cursor: pointer; text-align: left;
@@ -1336,7 +1193,7 @@ export default function HomePage() {
           display: grid; place-items: center; transition: .12s; color: var(--page);
         }
         .ulj .check-row.on { color: var(--ink); }
-        .ulj .check-row.on .box { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .ulj .check-row.on .box { background: var(--ink); border-color: var(--ink); }
         .ulj .chips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
         .ulj .chip {
           padding: 5px 11px; border-radius: 999px; cursor: pointer;
@@ -1344,9 +1201,9 @@ export default function HomePage() {
           font: 500 12px 'Inter', sans-serif; color: var(--ink-2); transition: .12s;
         }
         .ulj .chip:hover { border-color: var(--ink-3); color: var(--ink); }
-        .ulj .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+        .ulj .chip.on { background: var(--ink); border-color: var(--ink); color: var(--page); }
         .ulj .chip .n { margin-left: 6px; font: 500 10.5px 'Spline Sans Mono', monospace; color: var(--ink-3); }
-        .ulj .chip.on .n { color: var(--ink-2); }
+        .ulj .chip.on .n { color: color-mix(in srgb, var(--page) 70%, transparent); }
         .ulj .chips.regions { padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px dashed var(--hairline); }
         .ulj .loc-search {
           width: 100%; height: 30px; padding: 0 10px; margin-bottom: 8px;
@@ -1468,7 +1325,7 @@ export default function HomePage() {
         .ulj .cards { padding-bottom: 92px; }
         .ulj .sec-head { display: flex; align-items: center; gap: 10px; padding: 4px 0 12px; }
         .ulj .sec-head span { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
-        .ulj .sec-head i { flex: 1; height: 1px; background: var(--hairline); }
+        .ulj .sec-head i { flex: 1; height: 1px; background: var(--line); }
         .ulj .today-wrap { margin-bottom: 26px; }
         .ulj .today-cards { padding-bottom: 0; }
         .ulj .withheld-note { grid-column: 1 / -1; padding: 2px 0 6px; }
@@ -1476,6 +1333,20 @@ export default function HomePage() {
           font-size: 17px; font-weight: 500; color: var(--ink); }
         .ulj .withheld-note span { font-size: 12.5px; color: var(--ink-2); }
         .ulj .card.mini h3 { font-size: 16px; margin: 2px 0 0; }
+        .ulj .tiers-inline { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px; margin: 4px 0 30px; }
+        @media (max-width: 560px) { .ulj .tiers-inline { grid-template-columns: 1fr; } }
+        .ulj .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 17px; }
+        .ulj .tile.featured { border: 2px solid var(--ink); }
+        .ulj .tile-head { display: flex; justify-content: space-between; align-items: center; }
+        .ulj .tile-name { font-size: 13.5px; color: var(--ink); }
+        .ulj .tile-chip { font-size: 10.5px; background: var(--surface-2); color: var(--ink-2); padding: 3px 9px; border-radius: 9px; }
+        .ulj .tile-price { font-family: 'Fraunces', Georgia, serif; font-size: 25px; margin: 3px 0 13px; color: var(--ink); }
+        .ulj .tile ul { list-style: none; padding: 0; margin: 0; }
+        .ulj .tile li { font-size: 12.5px; color: var(--ink-2); padding: 4px 0 4px 14px; position: relative; }
+        .ulj .tile li::before { content: '·'; position: absolute; left: 3px; color: var(--ink-3); }
+        .ulj .tile-cta { display: block; text-align: center; margin-top: 15px; background: var(--ink);
+          color: var(--page); font-size: 13px; padding: 10px; border-radius: 8px; text-decoration: none; }
         .ulj .convert-bar {
           position: fixed; left: 50%; transform: translateX(-50%);
           bottom: calc(18px + env(safe-area-inset-bottom, 0px));
@@ -1488,7 +1359,9 @@ export default function HomePage() {
         .ulj .convert-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
         .ulj .convert-copy b { font-size: 13.5px; color: var(--page); font-weight: 500; }
         .ulj .convert-copy span { font-size: 12px; color: var(--ink-3); }
-        .ulj .convert-bar .btn-primary { margin-left: auto; height: 36px; }
+        .ulj .convert-bar .convert-cta { margin-left: auto; white-space: nowrap;
+          background: var(--page); color: var(--ink); font-size: 13px; padding: 9px 15px;
+          border-radius: 8px; text-decoration: none; }
         .ulj .convert-x { background: none; border: none; color: var(--ink-3);
           font-size: 19px; line-height: 1; padding: 0 2px; cursor: pointer; }
         @media (max-width: 560px) {
@@ -1503,6 +1376,7 @@ export default function HomePage() {
         .ulj .locked-body { padding: 22px 4px; text-align: center; }
         .ulj .locked-count { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 500; color: var(--ink); }
         .ulj .locked-sub { font-size: 13px; color: var(--ink-2); margin: 6px 0 14px; }
+        .ulj .locked-cta { display: inline-block; background: var(--ink); color: var(--page); font-size: 13px; padding: 9px 18px; border-radius: 8px; text-decoration: none; }
         .ulj .sec-tag { display: inline-flex; align-items: center; gap: 7px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); }
         .ulj .sec-tag .dot { width: 8px; height: 8px; border-radius: 3px; background: var(--sec); }
         .ulj .verified { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-3); }
@@ -1554,10 +1428,10 @@ export default function HomePage() {
         .ulj .ghost-btn.saved { color: var(--live); border-color: var(--live); }
         .ulj .apply-btn {
           height: 30px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px;
-          background: transparent; color: var(--ink); border: 1.5px solid var(--line-strong); border-radius: 8px;
-          font: 600 12px 'Inter', sans-serif; cursor: pointer; text-decoration: none; transition: .12s;
+          background: var(--ink); color: var(--page); border: none; border-radius: 8px;
+          font: 600 12px 'Inter', sans-serif; cursor: pointer; text-decoration: none;
         }
-        .ulj .apply-btn:hover { background: var(--surface-2); border-color: var(--ink); }
+        .ulj .apply-btn:hover { opacity: .85; }
 
         .ulj .empty {
           background: var(--surface); border: 1px dashed var(--hairline-2); border-radius: 16px;
@@ -1566,7 +1440,7 @@ export default function HomePage() {
         .ulj .empty h3 { font-family: 'Fraunces', Georgia, serif; font-size: 22px; font-weight: 500; }
         .ulj .empty p { margin: 8px 0 20px; color: var(--ink-2); font-size: 13.5px; }
         .ulj .empty button {
-          padding: 9px 18px; background: transparent; color: var(--ink); border: 1.5px solid var(--line-strong);
+          padding: 9px 18px; background: var(--ink); color: var(--page); border: none;
           border-radius: 9px; font: 600 13px 'Inter', sans-serif; cursor: pointer;
         }
 
@@ -1581,7 +1455,7 @@ export default function HomePage() {
         .ulj .filters-head { display: none; }
         .ulj .fbadge {
           min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px;
-          background: var(--accent); color: #fff;
+          background: var(--ink); color: var(--page);
           font: 600 10.5px 'Spline Sans Mono', monospace;
           display: inline-grid; place-items: center;
         }
@@ -1601,9 +1475,7 @@ export default function HomePage() {
           .ulj .filters .fgroup, .ulj .filters .side-note { display: none; }
           .ulj .filters.open .fgroup { display: block; margin-top: 18px; }
           .ulj .filters.open .side-note { display: block; margin-top: 14px; }
-          .ulj .hero { grid-template-columns: 1fr; align-items: start; }
-          .ulj .art { margin: 0 auto 0 0; }
-          .ulj .pass-side { display: none; }
+          .ulj .stats { width: 100%; justify-content: space-between; }
         }
 
         /* ── Phones: wrap masthead, compress hero & feed ── */
@@ -1615,24 +1487,14 @@ export default function HomePage() {
           .ulj .slash { display: none; }
           .ulj .refresh-btn { width: 36px; padding: 0; justify-content: center; }
           .ulj .refresh-btn span { display: none; }  /* icon-only so the top row fits one line */
-          .ulj .hero { padding: 26px 16px 16px; gap: 24px; }
-          .ulj .hero .sub { font-size: 15px; }
-          .ulj .statband-wrap { padding: 0 16px; }
-          .ulj .stat { flex-direction: column; align-items: center; gap: 2px; padding: 12px 6px; }
-          .ulj .stat .num { font-size: 26px; }
+          .ulj .hero { padding: 26px 16px 16px; gap: 18px; }
+          .ulj .hero .sub { font-size: 13px; }
+          .ulj .stat { padding: 0 12px; }
+          .ulj .stat .num { font-size: 24px; }
           .ulj .stat .lbl { font-size: 9.5px; }
-          .ulj .offer { grid-template-columns: 1fr; }
-          .ulj .offer > div + div { border-left: none; border-top: 1px solid var(--hairline-2); }
-          .ulj .art-post { width: 100%; }
-          .ulj .art-note { position: static; width: auto; transform: none; flex-direction: row; align-items: center; gap: 8px; margin: 8px 0 0 8px; font-size: 21px; }
-          .ulj .art-note svg { margin: 0; flex: none; transform: rotate(-90deg) scaleX(-1); }
-          .ulj .art-role { margin-top: 0; padding-top: 20px; }
-          .ulj .nav-link { display: none; }
           .ulj .layout { padding: 4px 16px 40px; }
           .ulj .chip { padding: 7px 13px; }  /* bigger tap targets */
         }
-
-        @media (max-width: 560px) { .ulj .refresh-btn { display: none; } }
 
         /* ── Small phones: tighter cards ── */
         @media (max-width: 640px) {
@@ -1647,55 +1509,6 @@ export default function HomePage() {
           .ulj .ghost-btn { padding: 0 10px; }
           .ulj .apply-btn { padding: 0 11px; }
           .ulj .colophon { flex-direction: column; gap: 4px; }
-        }
-
-        /* ── Free sample flag, section notes ── */
-        .ulj .sample-flag { font: 500 11px 'Spline Sans Mono', monospace; letter-spacing: .06em; text-transform: uppercase; background: var(--live-soft); color: var(--live); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
-        .ulj .sec-head .sec-note { font-style: normal; font-size: 11.5px; color: var(--ink-2); background: var(--accent-soft); padding: 3px 10px; border-radius: 999px; }
-        .ulj .sec-head span { white-space: nowrap; }
-
-        /* ── Sidebar pass card ── */
-        .ulj .pass { background: #14213D; color: #F3F1EA; border-radius: 16px; padding: 20px; }
-        .ulj.dark .pass { background: #0E1830; }
-        .ulj .pass .tagline { display: block; font: 500 11px 'Spline Sans Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: #A9B4CC; margin-bottom: 8px; }
-        .ulj .pass h3 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.1; letter-spacing: -.01em; margin-bottom: 6px; }
-        .ulj .pass .price { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; }
-        .ulj .pass .price b { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 46px; line-height: 1; }
-        .ulj .pass .price span { font-size: 13px; color: #A9B4CC; }
-        .ulj .pass ul { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; font-size: 13px; color: #A9B4CC; }
-        .ulj .pass li { display: flex; gap: 8px; align-items: center; }
-        .ulj .pass li svg { color: #7FD69B; flex: none; }
-
-        /* ── Inline pass CTA in the feed ── */
-        .ulj .inline-cta { display: grid; grid-template-columns: 1fr auto; gap: 16px 24px; align-items: center; background: #14213D; color: #F3F1EA; border-radius: 16px; padding: 22px 24px; margin: 4px 0 30px; }
-        .ulj.dark .inline-cta { background: #0E1830; }
-        .ulj .inline-cta h3 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.15; margin-bottom: 4px; }
-        .ulj .inline-cta p { font-size: 14px; color: #A9B4CC; }
-        @media (max-width: 640px) { .ulj .inline-cta { grid-template-columns: 1fr; } }
-
-        /* ── How it works ── */
-        .ulj .how { border-top: 1px solid var(--hairline); background: var(--surface-2); scroll-margin-top: 70px; padding-bottom: 40px; }
-        .ulj .how-in { max-width: 1200px; margin: 0 auto; padding: 44px 28px 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr); gap: 32px 56px; }
-        .ulj .how h2 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 34px; line-height: 1.1; letter-spacing: -.015em; margin-bottom: 8px; }
-        .ulj .how-sub { color: var(--ink-2); }
-        .ulj .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; list-style: none; padding: 0; counter-reset: s; }
-        .ulj .steps li { counter-increment: s; }
-        .ulj .steps li::before { content: counter(s); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); font: 500 13px 'Spline Sans Mono', monospace; margin-bottom: 12px; }
-        .ulj .steps h3 { font: 600 16px 'Inter', sans-serif; margin-bottom: 4px; }
-        .ulj .steps p { color: var(--ink-2); font-size: 14px; }
-        .ulj .compare { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--hairline-2); border-radius: 14px; overflow: hidden; background: var(--surface); }
-        .ulj .compare > div { padding: 18px 22px; }
-        .ulj .compare > div + div { border-left: 1px solid var(--hairline-2); background: var(--accent-soft); }
-        .ulj .compare h4 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 20px; display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
-        .ulj .compare h4 .num { font-size: 20px; }
-        .ulj .compare p { font-size: 14px; color: var(--ink-2); }
-        .ulj .compare .btn-primary { margin-top: 12px; }
-        @media (max-width: 900px) { .ulj .how-in { grid-template-columns: 1fr; } }
-        @media (max-width: 720px) {
-          .ulj .how-in { padding: 32px 16px 0; }
-          .ulj .steps { grid-template-columns: 1fr; }
-          .ulj .compare { grid-template-columns: 1fr; }
-          .ulj .compare > div + div { border-left: none; border-top: 1px solid var(--hairline-2); }
         }
       `}</style>
 

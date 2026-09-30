@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
 
+// Free visitors see a role only once it is this old. Keep in sync with FREE_DELAY_HOURS in app/page.tsx.
+const FREE_DELAY_HOURS = 48
+const FREE_DELAY_MS = FREE_DELAY_HOURS * 3600_000
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const seniority = searchParams.get('seniority')
@@ -14,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const db = createServerClient()
 
-  // Pass holders see roles as they land; everyone else waits 24 hours
+  // Pass holders see roles as they land; everyone else waits FREE_DELAY_HOURS
   let hasPass = false
   try {
     const session = await getSessionClient()
@@ -40,10 +44,10 @@ export async function GET(req: NextRequest) {
     .range(offset, offset + limit - 1)
     .order('extracted_at', { ascending: sortBy === 'oldest' })
 
-  // Free tier: everything older than 24h, plus a preview of 2 fresh roles per sector
+  // Free tier: everything older than FREE_DELAY_HOURS, plus a preview of 2 fresh roles per sector
   let previewIds: string[] = []
   if (!hasPass) {
-    const cutoff = new Date(Date.now() - 24 * 3600_000).toISOString()
+    const cutoff = new Date(Date.now() - FREE_DELAY_MS).toISOString()
     const sectors = ['finance', 'tech', 'legal', 'marketing', 'realestate']
     const picks = await Promise.all(sectors.map((s) =>
       db.from('jobs')
@@ -72,7 +76,7 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // how many roles the free tier is not being shown
+  // how many roles the free tier is not being shown (everything newer than the delay, minus the previews)
   let withheld = 0
   let lockedSample: Record<string, unknown> | null = null
 
@@ -91,7 +95,7 @@ export async function GET(req: NextRequest) {
       .eq('is_verified_job', true)
     .or('quality.is.null,quality.neq.low')
     .neq('sector', 'other')
-      .gte('posted_at', new Date(Date.now() - 24 * 3600_000).toISOString())
+      .gte('posted_at', new Date(Date.now() - FREE_DELAY_MS).toISOString())
     withheld = Math.max(0, (recent ?? 0) - previewIds.length)
 
     // one withheld role, blurred in the UI as a teaser
@@ -101,7 +105,7 @@ export async function GET(req: NextRequest) {
       .eq('is_verified_job', true)
     .or('quality.is.null,quality.neq.low')
     .neq('sector', 'other')
-      .gte('posted_at', new Date(Date.now() - 24 * 3600_000).toISOString())
+      .gte('posted_at', new Date(Date.now() - FREE_DELAY_MS).toISOString())
       .not('id', 'in', `(${previewIds.join(',') || 'null'})`)
       .order('posted_at', { ascending: false })
       .limit(1)
