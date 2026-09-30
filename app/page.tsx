@@ -198,6 +198,11 @@ export default function HomePage() {
       let id = localStorage.getItem('bcj_vid')
       if (!id) { id = crypto.randomUUID(); localStorage.setItem('bcj_vid', id) }
       visitorId.current = id
+      fetch('/api/visit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visitor_id: id, referrer: document.referrer }),
+      }).catch(() => {})
     } catch { /* storage blocked */ }
   }, [])
 
