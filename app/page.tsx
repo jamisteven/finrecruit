@@ -24,6 +24,10 @@ const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
 // The cutoff itself is enforced server-side in /api/jobs, so keep that in sync with this value.
 const FREE_DELAY_HOURS = 48
 
+// POST endpoint that creates the Stripe Checkout session and returns { url }.
+// Set this to the path of your checkout route, e.g. app/api/checkout/route.ts -> '/api/checkout'.
+const CHECKOUT_ENDPOINT = '/api/checkout'
+
 // JobPost.sector is a plain string in the API payload, so accept any string
 const PIPELINE_LABELS: Record<string, string> = {
   hashtags: 'Fresh roles',
@@ -122,6 +126,9 @@ function inferWorkType(job: JobPost): WorkType | null {
   return null
 }
 
+// A role the free tier can see only as a title; everything else stays on the server.
+type LockedJob = { title: string; sector: string; posted_at: string | null }
+
 const toTime = (iso?: string | null) => (iso ? new Date(iso).getTime() : 0)
 
 function timeAgo(iso?: string | null): string | null {
@@ -131,6 +138,16 @@ function timeAgo(iso?: string | null): string | null {
   const h = Math.round(m / 60)
   if (h < 24) return `${h}h ago`
   return `${Math.round(h / 24)}d ago`
+}
+
+// How long until a locked role becomes free (FREE_DELAY_HOURS after it was posted)
+function unlockIn(iso?: string | null): string | null {
+  if (!iso) return null
+  const ms = new Date(iso).getTime() + FREE_DELAY_HOURS * 3600_000 - Date.now()
+  if (ms <= 0) return 'soon'
+  const h = Math.floor(ms / 3600_000)
+  const m = Math.floor((ms % 3600_000) / 60_000)
+  return `${h}h ${String(m).padStart(2, '0')}m`
 }
 
 const isFresh = (iso?: string | null) => !!iso && Date.now() - new Date(iso).getTime() < 86400000
@@ -150,6 +167,9 @@ const BoltIcon = () => (
 const ArrowRight = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
 )
+const LockIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" /></svg>
+)
 const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
 )
@@ -158,6 +178,7 @@ export default function HomePage() {
   const [dark, setDark] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [checkingOut, setCheckingOut] = useState(false)
   useEffect(() => {
     const sb = createClient()
     sb.auth.getUser().then(({ data }) => setUserEmail(data.user?.email ?? null)).catch(() => {})
@@ -177,7 +198,7 @@ export default function HomePage() {
   const [bannerHidden, setBannerHidden] = useState(false)
   const [previewCount, setPreviewCount] = useState(0)
   const [previewIds, setPreviewIds] = useState<string[]>([])
-  const [lockedSample, setLockedSample] = useState<Partial<JobPost> | null>(null)
+  const [lockedJobs, setLockedJobs] = useState<LockedJob[]>([])
   const [dropBatches, setDropBatches] = useState<DropBatch[]>(DROP_BATCHES_FALLBACK)
   useEffect(() => {
     fetch('/api/schedule')
@@ -231,7 +252,7 @@ export default function HomePage() {
       setWithheld(data.withheld ?? 0)
       setPreviewCount(data.previewCount ?? 0)
       setPreviewIds(data.previewIds ?? [])
-      setLockedSample(data.lockedSample ?? null)
+      setLockedJobs(data.lockedJobs ?? [])
       setLastUpdated(new Date())
       setLoading(false)
 
@@ -548,6 +569,20 @@ export default function HomePage() {
     } catch { /* analytics must never break the page */ }
   }
 
+  // Every "Get a pass" button goes straight to Stripe; if the session can't be created
+  // we fall back to the /offer page so a failed request never strands the visitor.
+  const startCheckout = async (where: string) => {
+    if (checkingOut) return
+    track('cta_click', { where })
+    setCheckingOut(true)
+    try {
+      const res = await fetch(CHECKOUT_ENDPOINT, { method: 'POST' })
+      const data = await res.json()
+      if (data?.url) { window.location.href = data.url; return }
+    } catch { /* fall through to the fallback */ }
+    window.location.href = '/offer'
+  }
+
   const trackJobClick = (job: JobPost, index: number) => {
     const ageDays = job.posted_at
       ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000)
@@ -593,6 +628,40 @@ export default function HomePage() {
 
   const resetAll = () => setFilters(DEFAULT_FILTERS)
 
+  // Title-only locked roles: only shown when no search/location/work-type filter is active,
+  // and narrowed to the selected sector so the cards never contradict the filter.
+  const lockedShown = !hasPass && !filters.search && filters.locations.length === 0 && filters.workTypes.length === 0
+    ? lockedJobs.filter((l) => filters.sector === 'all' || l.sector === filters.sector)
+    : []
+  const renderLocked = (l: LockedJob, i: number) => {
+    const left = unlockIn(l.posted_at)
+    return (
+      <article key={`locked-${i}`} className="card locked-title" style={{ ['--sec' as string]: `var(--sec-${l.sector}, var(--ink-3))` }}>
+        <div className="locked-blur" aria-hidden="true">
+          <div className="card-top">
+            <span className="sec-tag"><span className="dot" />Sector · Location</span>
+            <span className="ago">just now</span>
+          </div>
+        </div>
+        <h3 className="locked-h">{l.title}</h3>
+        <div className="locked-blur" aria-hidden="true">
+          <p className="meta"><b>Company name hidden</b><span className="sep">·</span>Senior</p>
+          <p className="summary">The details of this role are hidden until it is {FREE_DELAY_HOURS} hours old. Unlock it now with a pass to read the full post.</p>
+          <p className="salary"><span className="via">via: link or DM</span></p>
+        </div>
+        <div className="card-foot lock-foot">
+          <span className="lock-msg">
+            <LockIcon /><b>Details unlock with a pass</b>
+            {left && <span>· or free in <span className="unlock-in">{left}</span></span>}
+          </span>
+          <div className="card-actions">
+            <button type="button" className="btn-primary" onClick={() => startCheckout('locked_title')} disabled={checkingOut}><BoltIcon />Unlock — $9</button>
+          </div>
+        </div>
+      </article>
+    )
+  }
+
   return (
     <div className={`ulj${dark ? ' dark' : ''}`}>
 
@@ -628,7 +697,7 @@ export default function HomePage() {
                     <>
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Pass active</div>}
-                      {!hasPass && <a href="/offer">Get a 14-day pass</a>}
+                      {!hasPass && <button onClick={() => { setMenuOpen(false); startCheckout('menu') }}>Get a 14-day pass</button>}
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
@@ -652,9 +721,9 @@ export default function HomePage() {
             </button>
 
             {!hasPass && (
-              <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'header' })}>
+              <button type="button" className="btn-primary" onClick={() => startCheckout('header')} disabled={checkingOut}>
                 <BoltIcon />Get a pass — $9
-              </a>
+              </button>
             )}
           </div>
         </div>
@@ -667,15 +736,15 @@ export default function HomePage() {
           <p className="sub">Roles recruiters, hiring managers and internal talent teams post to their own connections and never list - tracked by AI and delivered in real time.</p>
           <div className="cta-row">
             {!hasPass && (
-              <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'hero' })}>
+              <button type="button" className="btn-primary lg" onClick={() => startCheckout('hero')} disabled={checkingOut}>
                 <BoltIcon />Get a pass — $9
-              </a>
+              </button>
             )}
             <a className="btn-ghost lg" href="#feed">See today&apos;s roles <ArrowRight /></a>
           </div>
           {!hasPass && (
             <div className="offer">
-              <div><b>Free</b>Roles older than {FREE_DELAY_HOURS} hours, plus 10 fresh roles a day.</div>
+              <div><b>Free</b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.</div>
               <div><b>$9 pass</b>Every role the moment it drops. 14 days, no subscription.</div>
             </div>
           )}
@@ -819,7 +888,7 @@ export default function HomePage() {
               <span className="tagline">Most roles fill inside 48 hours</span>
               <h3>Don&apos;t wait {FREE_DELAY_HOURS} hours.</h3>
               <div className="price"><b>$9</b><span>14 days · one payment</span></div>
-              <a className="btn-primary block" href="/offer" onClick={() => track('cta_click', { where: 'sidebar' })}>Get a pass — $9</a>
+              <button type="button" className="btn-primary block" onClick={() => startCheckout('sidebar')} disabled={checkingOut}>Get a pass — $9</button>
               <ul>
                 <li><CheckIcon />Every role the moment it drops</li>
                 <li><CheckIcon />No subscription, expires on its own</li>
@@ -876,24 +945,6 @@ export default function HomePage() {
                 <div className="sec-head"><span>Today&apos;s roles</span><i /></div>
                 <div className="cards today-cards">
                   {todayJobs.map((job, i) => (
-                    <>
-                    {i === 3 && !hasPass && withheld > 0 && (
-                      <article key="teaser" className="card locked" style={{ ['--sec' as string]: `var(--sec-${lockedSample?.sector ?? 'tech'}, var(--ink-3))` }}>
-                        <div className="locked-peek">
-                          <div className="card-top">
-                            <span className="sec-tag"><span className="dot" />{sectorLabel(lockedSample?.sector ?? 'tech')}</span>
-                            <span className="ago fresh">just now</span>
-                          </div>
-                          <h3>{lockedSample?.title ?? 'Senior role at a growing team'}</h3>
-                          <p className="meta"><b>{lockedSample?.company ?? 'Hiring company'}</b></p>
-                        </div>
-                        <div className="locked-veil">
-                          <div className="locked-count">{withheld} more roles landed in the last {FREE_DELAY_HOURS} hours</div>
-                          <p className="locked-sub">Free visitors see them after {FREE_DELAY_HOURS} hours. Pass holders see them the moment they land.</p>
-                          <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'locked_card' })}><BoltIcon />Unlock now — $9</a>
-                        </div>
-                      </article>
-                    )}
                     <article key={job.id} className="card" style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
                       <div className="card-top">
                         <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}{job.location && <> · {job.location}</>}</span>
@@ -937,8 +988,8 @@ export default function HomePage() {
                         </div>
                       </div>
                     </article>
-                    </>
                   ))}
+                  {lockedShown.map(renderLocked)}
                 </div>
               </div>
             )}
@@ -949,33 +1000,13 @@ export default function HomePage() {
                   <h3>{withheld > 0 ? `${withheld} newer roles are waiting.` : 'See these now, not in 48 hours.'}</h3>
                   <p>14-day pass, $9. Every new role the moment it drops. No subscription.</p>
                 </div>
-                <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'inline' })}><BoltIcon />Get a pass — $9</a>
+                <button type="button" className="btn-primary lg" onClick={() => startCheckout('inline')} disabled={checkingOut}><BoltIcon />Get a pass — $9</button>
               </div>
             )}
 
             {splitFeed && <div className="sec-head"><span>Earlier roles</span><i />{!hasPass && <em className="sec-note">Older than {FREE_DELAY_HOURS} hours</em>}</div>}
             <div className="cards">
-              {!hasPass && withheld > 0 && !splitFeed && (
-                <article className="card locked" style={{ ['--sec' as string]: `var(--sec-${lockedSample?.sector ?? 'tech'}, var(--ink-3))` }}>
-                  <div className="locked-peek">
-                    <div className="card-top">
-                      <span className="sec-tag"><span className="dot" />{sectorLabel(lockedSample?.sector ?? 'tech')}</span>
-                      <span className="ago fresh">just now</span>
-                    </div>
-                    <h3>{lockedSample?.title ?? 'Senior role at a growing team'}</h3>
-                    <p className="meta">
-                      <b>{lockedSample?.company ?? 'Hiring company'}</b>
-                      {lockedSample?.location && <><span className="sep">·</span>{lockedSample.location}</>}
-                      {lockedSample?.seniority && lockedSample.seniority !== 'Unknown' && <><span className="sep">·</span>{lockedSample.seniority}</>}
-                    </p>
-                  </div>
-                  <div className="locked-veil">
-                    <div className="locked-count">{withheld} more roles landed in the last {FREE_DELAY_HOURS} hours</div>
-                    <p className="locked-sub">Free visitors see them after {FREE_DELAY_HOURS} hours. Pass holders see them the moment they land.</p>
-                    <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'locked_card' })}><BoltIcon />Unlock now — $9</a>
-                  </div>
-                </article>
-              )}
+              {!splitFeed && lockedShown.map(renderLocked)}
               {earlierJobs.slice(0, visibleCount).map((job, jobIndex) => {
                 const wt = inferWorkType(job)
                 return (
@@ -1043,7 +1074,7 @@ export default function HomePage() {
                 <b>Most roles fill inside 48 hours.</b>
                 <span>Pass holders get them the moment they drop.</span>
               </div>
-              <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'bar' })}>Get a pass — $9</a>
+              <button type="button" className="btn-primary" onClick={() => startCheckout('bar')} disabled={checkingOut}>Get a pass — $9</button>
               <button className="convert-x" onClick={() => setBannerHidden(true)} aria-label="Dismiss">×</button>
             </aside>
           )}
@@ -1228,6 +1259,7 @@ export default function HomePage() {
           transition: background .12s, border-color .12s;
         }
         .ulj .btn-primary:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
+        .ulj .btn-primary:disabled { opacity: .7; cursor: wait; }
         .ulj .btn-primary.lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
         .ulj .btn-primary.block { width: 100%; }
         .ulj .btn-ghost {
@@ -1388,8 +1420,6 @@ export default function HomePage() {
         }
         .ulj .card:hover { box-shadow: var(--shadow-lift); translate: 0 -2px; border-color: var(--hairline-2); }
         .ulj .card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .ulj .card.locked { position: relative; overflow: hidden; }
-        .ulj .locked-peek { filter: blur(4px); pointer-events: none; user-select: none; }
         .ulj .wordmark { display: inline-flex; align-items: center; gap: 10px; }
         .ulj .wordmark .mark { flex: none; width: 30px; height: 30px; border-radius: 7px;
           background: #185FA5; color: #FFFFFF; display: inline-flex; align-items: center;
@@ -1412,12 +1442,6 @@ export default function HomePage() {
         .ulj .acct-menu a:hover, .ulj .acct-menu button:hover { background: var(--page); }
         .ulj .acct-email { font-size: 11.5px; color: var(--ink-2); padding: 7px 10px 4px; word-break: break-all; }
         .ulj .acct-badge { font-size: 11px; color: var(--ink-2); padding: 0 10px 7px; }
-        .ulj .card.locked { min-height: 210px; }
-        .ulj .locked-veil { position: absolute; inset: 0; display: flex; flex-direction: column;
-          align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 24px;
-          background: color-mix(in srgb, var(--page) 78%, transparent); }
-        .ulj .locked-veil .locked-count { margin: 0; }
-        .ulj .locked-veil .locked-sub { margin: 0; max-width: 42ch; }
         .ulj .cards { padding-bottom: 92px; }
         .ulj .sec-head { display: flex; align-items: center; gap: 10px; padding: 4px 0 12px; }
         .ulj .sec-head span { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
@@ -1602,6 +1626,16 @@ export default function HomePage() {
         .ulj .sample-flag { font: 500 11px 'Spline Sans Mono', monospace; letter-spacing: .06em; text-transform: uppercase; background: var(--live-soft); color: var(--live); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
         .ulj .sec-head .sec-note { font-style: normal; font-size: 11.5px; color: var(--ink-2); background: var(--accent-soft); padding: 3px 10px; border-radius: 999px; }
         .ulj .sec-head span { white-space: nowrap; }
+
+        /* ── Title-only locked roles ── */
+        .ulj .card.locked-title:hover { translate: 0 0; box-shadow: var(--shadow); border-color: var(--hairline); }
+        .ulj .card h3.locked-h { color: var(--link); }
+        .ulj .locked-blur { filter: blur(5px); user-select: none; pointer-events: none; }
+        .ulj .lock-foot { background: linear-gradient(90deg, var(--accent-soft), transparent 85%); }
+        .ulj .lock-msg { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; flex: 1; font-size: 13px; color: var(--ink-2); }
+        .ulj .lock-msg svg { color: var(--accent); flex: none; }
+        .ulj .lock-msg b { color: var(--ink); font-weight: 600; }
+        .ulj .unlock-in { font: 500 12px 'Spline Sans Mono', monospace; color: var(--ink); }
 
         /* ── Sidebar pass card ── */
         .ulj .pass { background: #14213D; color: #F3F1EA; border-radius: 16px; padding: 20px; }
