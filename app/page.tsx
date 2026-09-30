@@ -140,16 +140,6 @@ function timeAgo(iso?: string | null): string | null {
   return `${Math.round(h / 24)}d ago`
 }
 
-// How long until a locked role becomes free (FREE_DELAY_HOURS after it was posted)
-function unlockIn(iso?: string | null): string | null {
-  if (!iso) return null
-  const ms = new Date(iso).getTime() + FREE_DELAY_HOURS * 3600_000 - Date.now()
-  if (ms <= 0) return 'soon'
-  const h = Math.floor(ms / 3600_000)
-  const m = Math.floor((ms % 3600_000) / 60_000)
-  return `${h}h ${String(m).padStart(2, '0')}m`
-}
-
 const isFresh = (iso?: string | null) => !!iso && Date.now() - new Date(iso).getTime() < 86400000
 
 const initials = (name: string) =>
@@ -166,9 +156,6 @@ const BoltIcon = () => (
 )
 const ArrowRight = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-)
-const LockIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" /></svg>
 )
 const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
@@ -569,7 +556,7 @@ export default function HomePage() {
     } catch { /* analytics must never break the page */ }
   }
 
-  // Every "Get a pass" button goes straight to Stripe; if the session can't be created
+  // Every early-access button goes straight to Stripe; if the session can't be created
   // we fall back to the /offer page so a failed request never strands the visitor.
   const startCheckout = async (where: string) => {
     if (checkingOut) return
@@ -633,34 +620,25 @@ export default function HomePage() {
   const lockedShown = !hasPass && !filters.search && filters.locations.length === 0 && filters.workTypes.length === 0
     ? lockedJobs.filter((l) => filters.sector === 'all' || l.sector === filters.sector)
     : []
-  const renderLocked = (l: LockedJob, i: number) => {
-    const left = unlockIn(l.posted_at)
-    return (
-      <article key={`locked-${i}`} className="card locked-title" style={{ ['--sec' as string]: `var(--sec-${l.sector}, var(--ink-3))` }}>
-        <div className="locked-blur" aria-hidden="true">
-          <div className="card-top">
-            <span className="sec-tag"><span className="dot" />Sector · Location</span>
-            <span className="ago">just now</span>
-          </div>
+  const renderLocked = (l: LockedJob, i: number) => (
+    <article key={`locked-${i}`} className="card locked-title" style={{ ['--sec' as string]: `var(--sec-${l.sector}, var(--ink-3))` }}>
+      <div className="card-top">
+        <span className="sec-tag"><span className="dot" />{sectorLabel(l.sector)}</span>
+        {l.posted_at && <span className="ago fresh">{timeAgo(l.posted_at)}</span>}
+      </div>
+      <h3 className="locked-h">{l.title}</h3>
+      <div className="locked-blur" aria-hidden="true">
+        <p className="meta"><b>Company name hidden</b><span className="sep">·</span>Senior</p>
+        <p className="summary">The details of this role are available with early access. Unlock it to read the full post and reach the recruiter.</p>
+        <p className="salary"><span className="via">via: link or DM</span></p>
+      </div>
+      <div className="card-foot lock-foot">
+        <div className="card-actions">
+          <button type="button" className="btn-primary" onClick={() => startCheckout('locked_title')} disabled={checkingOut}><BoltIcon />Unlock</button>
         </div>
-        <h3 className="locked-h">{l.title}</h3>
-        <div className="locked-blur" aria-hidden="true">
-          <p className="meta"><b>Company name hidden</b><span className="sep">·</span>Senior</p>
-          <p className="summary">The details of this role are hidden until it is {FREE_DELAY_HOURS} hours old. Unlock it now with a pass to read the full post.</p>
-          <p className="salary"><span className="via">via: link or DM</span></p>
-        </div>
-        <div className="card-foot lock-foot">
-          <span className="lock-msg">
-            <LockIcon /><b>Details unlock with a pass</b>
-            {left && <span>· or free in <span className="unlock-in">{left}</span></span>}
-          </span>
-          <div className="card-actions">
-            <button type="button" className="btn-primary" onClick={() => startCheckout('locked_title')} disabled={checkingOut}><BoltIcon />Unlock — $9</button>
-          </div>
-        </div>
-      </article>
-    )
-  }
+      </div>
+    </article>
+  )
 
   return (
     <div className={`ulj${dark ? ' dark' : ''}`}>
@@ -696,8 +674,8 @@ export default function HomePage() {
                   {userEmail ? (
                     <>
                       <div className="acct-email">{userEmail}</div>
-                      {hasPass && <div className="acct-badge">Pass active</div>}
-                      {!hasPass && <button onClick={() => { setMenuOpen(false); startCheckout('menu') }}>Get a 14-day pass</button>}
+                      {hasPass && <div className="acct-badge">Early access active</div>}
+                      {!hasPass && <button onClick={() => { setMenuOpen(false); startCheckout('menu') }}>See new roles first — $9</button>}
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
@@ -722,7 +700,7 @@ export default function HomePage() {
 
             {!hasPass && (
               <button type="button" className="btn-primary" onClick={() => startCheckout('header')} disabled={checkingOut}>
-                <BoltIcon />Get a pass — $9
+                <BoltIcon /><span className="cta-full">See new roles first — $9</span><span className="cta-short">See first — $9</span>
               </button>
             )}
           </div>
@@ -733,11 +711,11 @@ export default function HomePage() {
       <section className="hero">
         <div className="hero-copy">
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
-          <p className="sub">Roles recruiters, hiring managers and internal talent teams post to their own connections and never list - tracked by AI and delivered in real time.</p>
+          <p className="sub">Roles recruiters and hiring managers share with their networks before posting them publicly - tracked by AI and delivered in real time.</p>
           <div className="cta-row">
             {!hasPass && (
               <button type="button" className="btn-primary lg" onClick={() => startCheckout('hero')} disabled={checkingOut}>
-                <BoltIcon />Get a pass — $9
+                <BoltIcon />See new roles first — $9
               </button>
             )}
             <a className="btn-ghost lg" href="#feed">See today&apos;s roles <ArrowRight /></a>
@@ -745,7 +723,7 @@ export default function HomePage() {
           {!hasPass && (
             <div className="offer">
               <div><b>Free</b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.</div>
-              <div><b>$9 pass</b>Every role the moment it drops. 14 days, no subscription.</div>
+              <div><b>$9 early access</b>Every role the moment it drops. 14 days, no subscription.</div>
             </div>
           )}
         </div>
@@ -888,7 +866,7 @@ export default function HomePage() {
               <span className="tagline">Most roles fill inside 48 hours</span>
               <h3>Don&apos;t wait {FREE_DELAY_HOURS} hours.</h3>
               <div className="price"><b>$9</b><span>14 days · one payment</span></div>
-              <button type="button" className="btn-primary block" onClick={() => startCheckout('sidebar')} disabled={checkingOut}>Get a pass — $9</button>
+              <button type="button" className="btn-primary block" onClick={() => startCheckout('sidebar')} disabled={checkingOut}>See new roles first — $9</button>
               <ul>
                 <li><CheckIcon />Every role the moment it drops</li>
                 <li><CheckIcon />No subscription, expires on its own</li>
@@ -998,9 +976,9 @@ export default function HomePage() {
               <div className="inline-cta">
                 <div>
                   <h3>{withheld > 0 ? `${withheld} newer roles are waiting.` : 'See these now, not in 48 hours.'}</h3>
-                  <p>14-day pass, $9. Every new role the moment it drops. No subscription.</p>
+                  <p>14 days of early access for $9. Every new role the moment it drops. No subscription.</p>
                 </div>
-                <button type="button" className="btn-primary lg" onClick={() => startCheckout('inline')} disabled={checkingOut}><BoltIcon />Get a pass — $9</button>
+                <button type="button" className="btn-primary lg" onClick={() => startCheckout('inline')} disabled={checkingOut}><BoltIcon />See new roles first — $9</button>
               </div>
             )}
 
@@ -1072,9 +1050,9 @@ export default function HomePage() {
             <aside className="convert-bar">
               <div className="convert-copy">
                 <b>Most roles fill inside 48 hours.</b>
-                <span>Pass holders get them the moment they drop.</span>
+                <span>Early access shows them the moment they drop.</span>
               </div>
-              <button type="button" className="btn-primary" onClick={() => startCheckout('bar')} disabled={checkingOut}>Get a pass — $9</button>
+              <button type="button" className="btn-primary" onClick={() => startCheckout('bar')} disabled={checkingOut}>See new roles first — $9</button>
               <button className="convert-x" onClick={() => setBannerHidden(true)} aria-label="Dismiss">×</button>
             </aside>
           )}
@@ -1249,7 +1227,7 @@ export default function HomePage() {
         .ulj .art-tags span { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
         .ulj .art-actions { display: flex; gap: 8px; margin-top: 14px; }
 
-        /* ── Buttons: solid blue is reserved for the pass CTA ── */
+        /* ── Buttons: solid blue is reserved for the early-access CTA ── */
         .ulj .btn-primary {
           display: inline-flex; align-items: center; justify-content: center; gap: 8px;
           height: 38px; padding: 0 16px; border-radius: 10px; white-space: nowrap;
@@ -1271,6 +1249,7 @@ export default function HomePage() {
         .ulj .btn-ghost:hover { background: var(--surface-2); border-color: var(--ink); }
         .ulj .btn-ghost.lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
         .ulj .btn-ghost.sm { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 9px; }
+        .ulj .cta-short { display: none; }
         .ulj .nav-link { font-size: 14px; color: var(--ink-2); text-decoration: none; padding: 0 6px; }
         .ulj .nav-link:hover { color: var(--ink); }
 
@@ -1605,7 +1584,7 @@ export default function HomePage() {
           .ulj .chip { padding: 7px 13px; }  /* bigger tap targets */
         }
 
-        @media (max-width: 560px) { .ulj .refresh-btn { display: none; } }
+        @media (max-width: 560px) { .ulj .refresh-btn { display: none; } .ulj .cta-full { display: none; } .ulj .cta-short { display: inline; } }
 
         /* ── Small phones: tighter cards ── */
         @media (max-width: 640px) {
@@ -1631,11 +1610,7 @@ export default function HomePage() {
         .ulj .card.locked-title:hover { translate: 0 0; box-shadow: var(--shadow); border-color: var(--hairline); }
         .ulj .card h3.locked-h { color: var(--link); }
         .ulj .locked-blur { filter: blur(5px); user-select: none; pointer-events: none; }
-        .ulj .lock-foot { background: linear-gradient(90deg, var(--accent-soft), transparent 85%); }
-        .ulj .lock-msg { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; flex: 1; font-size: 13px; color: var(--ink-2); }
-        .ulj .lock-msg svg { color: var(--accent); flex: none; }
-        .ulj .lock-msg b { color: var(--ink); font-weight: 600; }
-        .ulj .unlock-in { font: 500 12px 'Spline Sans Mono', monospace; color: var(--ink); }
+        .ulj .lock-foot { background: linear-gradient(90deg, var(--accent-soft), transparent 85%); justify-content: flex-end; }
 
         /* ── Sidebar pass card ── */
         .ulj .pass { background: #14213D; color: #F3F1EA; border-radius: 16px; padding: 20px; }
