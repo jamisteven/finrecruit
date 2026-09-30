@@ -114,24 +114,6 @@ const jobInRegion = (job: JobPost, region: string) => {
   return locParts(job.location).some((p) => kws.some((k) => matchKw(p, k)))
 }
 
-// Distinct atomic location parts with counts, most frequent first
-// (same splitting rules as locParts, but preserves display casing)
-function locationStats(jobs: JobPost[]): { name: string; count: number }[] {
-  const freq = new Map<string, { name: string; count: number }>()
-  for (const j of jobs) {
-    if (!j.location) continue
-    for (const raw of j.location.replace(/[()]/g, ',').split(/[|,/]/)) {
-      const name = raw.trim()
-      if (!name || name.length >= 40) continue
-      const key = name.toLowerCase()
-      const cur = freq.get(key)
-      if (cur) cur.count++
-      else freq.set(key, { name, count: 1 })
-    }
-  }
-  return [...freq.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-}
-
 function inferWorkType(job: JobPost): WorkType | null {
   const text = `${job.location || ''} ${job.tags?.join(' ') || ''} ${job.title || ''}`.toLowerCase()
   if (/\bhybrid\b/.test(text)) return 'Hybrid'
@@ -155,6 +137,12 @@ const isFresh = (iso?: string | null) => !!iso && Date.now() - new Date(iso).get
 
 const initials = (name: string) =>
   name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+
+const HOW_STEPS = [
+  { t: 'We monitor recruiter posts', d: 'AI tracks public posts from recruiters and talent teams.' },
+  { t: 'We pick out real roles', d: 'Genuine openings, not generic career content.' },
+  { t: 'You see them first', d: 'Roles land here before the job boards.' },
+]
 
 const BoltIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z" /></svg>
@@ -184,13 +172,11 @@ export default function HomePage() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
   const [loading, setLoading] = useState(false)
   const [visibleCount, setVisibleCount] = useState(150)
-  const [totalJobs, setTotalJobs] = useState(0)
   const [hasPass, setHasPass] = useState(false)
   const [withheld, setWithheld] = useState(0)
   const [bannerHidden, setBannerHidden] = useState(false)
   const [previewCount, setPreviewCount] = useState(0)
   const [previewIds, setPreviewIds] = useState<string[]>([])
-  const [addedToday, setAddedToday] = useState(0)
   const [lockedSample, setLockedSample] = useState<Partial<JobPost> | null>(null)
   const [dropBatches, setDropBatches] = useState<DropBatch[]>(DROP_BATCHES_FALLBACK)
   useEffect(() => {
@@ -241,12 +227,10 @@ export default function HomePage() {
       const data = await res.json()
 
       setAllJobs(data.jobs ?? [])
-      setTotalJobs(data.total ?? data.jobs?.length ?? 0)
       setHasPass(!!data.hasPass)
       setWithheld(data.withheld ?? 0)
       setPreviewCount(data.previewCount ?? 0)
       setPreviewIds(data.previewIds ?? [])
-      setAddedToday(data.addedToday ?? 0)
       setLockedSample(data.lockedSample ?? null)
       setLastUpdated(new Date())
       setLoading(false)
@@ -466,9 +450,6 @@ export default function HomePage() {
     marketing: allJobs.filter((j) => j.sector === 'marketing').length,
     realestate: allJobs.filter((j) => j.sector === 'realestate').length,
   }), [allJobs])
-
-  // Hero stat: distinct locations across the whole dataset (unfiltered)
-  const availableLocations = useMemo(() => locationStats(allJobs).map((l) => l.name), [allJobs])
 
   // Base for location facet counts: every active filter EXCEPT location itself,
   // so region/city counts respond to the selected sector and work types.
@@ -724,11 +705,14 @@ export default function HomePage() {
         </div>
       </section>
 
-      <div className="statband-wrap">
-        <div className="statband">
-          <div className="stat"><div className="num">{(totalJobs || allJobs.length).toLocaleString('en-US')}</div><div className="lbl">Live roles</div></div>
-          <div className="stat"><div className="num">{availableLocations.length}</div><div className="lbl">Locations</div></div>
-          <div className="stat"><div className="num">{addedToday}</div><div className="lbl">Added today</div></div>
+      <div className="howbar-wrap" id="how">
+        <div className="howbar">
+          <div className="hb-title">How it works</div>
+          <ol className="hb-steps">
+            {HOW_STEPS.map((st, n) => (
+              <li key={st.t}><i>{n + 1}</i><div><b>{st.t}</b><span>{st.d}</span></div></li>
+            ))}
+          </ol>
         </div>
       </div>
 
@@ -1071,30 +1055,6 @@ export default function HomePage() {
         </main>
       </div>
 
-      <section className="how" id="how">
-        <div className="how-in">
-          <div>
-            <h2>How it works</h2>
-            <p className="how-sub">Recruiters post roles to their networks long before they list them. We collect those posts so you don&apos;t have to be in the right network.</p>
-          </div>
-          <ol className="steps">
-            <li><h3>We monitor recruiter posts</h3><p>AI tracks public posts from recruiters, hiring managers and talent teams.</p></li>
-            <li><h3>We pick out real roles</h3><p>Genuine openings are separated from generic career content.</p></li>
-            <li><h3>You see them first</h3><p>New roles land here before they reach the job boards. Each links back to the original post.</p></li>
-          </ol>
-          {!hasPass && (
-            <div className="compare">
-              <div><h4>Free</h4><p>Browse roles older than {FREE_DELAY_HOURS} hours, plus 10 fresh roles a day. Save roles and open the original post.</p></div>
-              <div>
-                <h4>Pass <span className="num">$9</span></h4>
-                <p>See every role the moment it drops, for 14 days. One payment, no subscription, expires automatically.</p>
-                <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'how_it_works' })}>Get a pass — $9</a>
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
       <style>{`
         /* Roman only, no italic file — the em italics render as a synthetic slant
            of the roman, which is calmer than Fraunces' real (very calligraphic) italic. */
@@ -1236,13 +1196,6 @@ export default function HomePage() {
         .ulj .offer > div { padding: 12px 16px; font-size: 13px; color: var(--ink-2); }
         .ulj .offer > div + div { border-left: 1px solid var(--hairline-2); background: var(--accent-soft); color: var(--ink); }
         .ulj .offer b { display: block; font-weight: 600; color: var(--ink); margin-bottom: 2px; font-size: 14px; }
-        .ulj .statband-wrap { max-width: 1200px; margin: 0 auto; padding: 0 28px; }
-        .ulj .statband { display: flex; border-block: 1px solid var(--hairline-2); margin-bottom: 32px; }
-        .ulj .stat { flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 12px; padding: 14px 24px; border-left: 1px solid var(--hairline-2); }
-        .ulj .stat:first-child { border-left: none; }
-        .ulj .stat .num { font-family: 'Fraunces', Georgia, serif; font-size: 34px; font-weight: 500; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
-        .ulj .stat .lbl { font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
-
         /* Hero art: a recruiter post becoming a listing */
         .ulj .art { position: relative; width: 100%; max-width: 520px; margin-left: auto; }
         .ulj .art-post { position: relative; z-index: 2; width: 66%; background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
@@ -1617,10 +1570,6 @@ export default function HomePage() {
           .ulj .refresh-btn span { display: none; }  /* icon-only so the top row fits one line */
           .ulj .hero { padding: 26px 16px 16px; gap: 24px; }
           .ulj .hero .sub { font-size: 15px; }
-          .ulj .statband-wrap { padding: 0 16px; }
-          .ulj .stat { flex-direction: column; align-items: center; gap: 2px; padding: 12px 6px; }
-          .ulj .stat .num { font-size: 26px; }
-          .ulj .stat .lbl { font-size: 9.5px; }
           .ulj .offer { grid-template-columns: 1fr; }
           .ulj .offer > div + div { border-left: none; border-top: 1px solid var(--hairline-2); }
           .ulj .art-post { width: 100%; }
@@ -1673,29 +1622,25 @@ export default function HomePage() {
         .ulj .inline-cta p { font-size: 14px; color: #A9B4CC; }
         @media (max-width: 640px) { .ulj .inline-cta { grid-template-columns: 1fr; } }
 
-        /* ── How it works ── */
-        .ulj .how { border-top: 1px solid var(--hairline); background: var(--surface-2); scroll-margin-top: 70px; padding-bottom: 40px; }
-        .ulj .how-in { max-width: 1200px; margin: 0 auto; padding: 44px 28px 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr); gap: 32px 56px; }
-        .ulj .how h2 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 34px; line-height: 1.1; letter-spacing: -.015em; margin-bottom: 8px; }
-        .ulj .how-sub { color: var(--ink-2); }
-        .ulj .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; list-style: none; padding: 0; counter-reset: s; }
-        .ulj .steps li { counter-increment: s; }
-        .ulj .steps li::before { content: counter(s); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); font: 500 13px 'Spline Sans Mono', monospace; margin-bottom: 12px; }
-        .ulj .steps h3 { font: 600 16px 'Inter', sans-serif; margin-bottom: 4px; }
-        .ulj .steps p { color: var(--ink-2); font-size: 14px; }
-        .ulj .compare { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--hairline-2); border-radius: 14px; overflow: hidden; background: var(--surface); }
-        .ulj .compare > div { padding: 18px 22px; }
-        .ulj .compare > div + div { border-left: 1px solid var(--hairline-2); background: var(--accent-soft); }
-        .ulj .compare h4 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 20px; display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
-        .ulj .compare h4 .num { font-size: 20px; }
-        .ulj .compare p { font-size: 14px; color: var(--ink-2); }
-        .ulj .compare .btn-primary { margin-top: 12px; }
-        @media (max-width: 900px) { .ulj .how-in { grid-template-columns: 1fr; } }
+        /* ── How it works bar (sits where the stat band was) ── */
+        .ulj .howbar-wrap { max-width: 1200px; margin: 0 auto; padding: 0 28px; scroll-margin-top: 80px; }
+        .ulj .howbar { display: flex; border-block: 1px solid var(--hairline-2); margin-bottom: 32px; }
+        .ulj .hb-title { flex: 0 0 190px; align-self: center; padding: 14px 20px 14px 0; font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 22px; line-height: 1.15; letter-spacing: -.01em; }
+        .ulj .hb-steps { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; padding: 0; }
+        .ulj .hb-steps li { display: grid; grid-template-columns: 26px 1fr; column-gap: 12px; align-items: start; padding: 16px 20px; border-left: 1px solid var(--hairline-2); }
+        .ulj .hb-steps i { font: 500 12px 'Spline Sans Mono', monospace; font-style: normal; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+        .ulj .hb-steps b { display: block; font: 600 14px/1.3 'Inter', sans-serif; margin-top: 3px; }
+        .ulj .hb-steps span { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
+        @media (max-width: 900px) {
+          .ulj .howbar { flex-direction: column; }
+          .ulj .hb-title { flex: none; padding: 14px 0 4px; }
+          .ulj .hb-steps li:first-child { border-left: none; padding-left: 0; }
+        }
         @media (max-width: 720px) {
-          .ulj .how-in { padding: 32px 16px 0; }
-          .ulj .steps { grid-template-columns: 1fr; }
-          .ulj .compare { grid-template-columns: 1fr; }
-          .ulj .compare > div + div { border-left: none; border-top: 1px solid var(--hairline-2); }
+          .ulj .howbar-wrap { padding: 0 16px; }
+          .ulj .hb-steps { grid-template-columns: 1fr; }
+          .ulj .hb-steps li { border-left: none; border-top: 1px solid var(--hairline-2); padding: 12px 0; }
+          .ulj .hb-steps li:first-child { border-top: none; }
         }
       `}</style>
 
