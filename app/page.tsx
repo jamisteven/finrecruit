@@ -183,6 +183,7 @@ export default function HomePage() {
   const [visibleCount, setVisibleCount] = useState(150)
   const [hasPass, setHasPass] = useState(false)
   const [withheld, setWithheld] = useState(0)
+  const [addedToday, setAddedToday] = useState(0)
   const [bannerHidden, setBannerHidden] = useState(false)
   const [previewCount, setPreviewCount] = useState(0)
   const [previewIds, setPreviewIds] = useState<string[]>([])
@@ -238,6 +239,7 @@ export default function HomePage() {
       setAllJobs(data.jobs ?? [])
       setHasPass(!!data.hasPass)
       setWithheld(data.withheld ?? 0)
+      setAddedToday(data.addedToday ?? 0)
       setPreviewCount(data.previewCount ?? 0)
       setPreviewIds(data.previewIds ?? [])
       setLockedJobs(data.lockedJobs ?? [])
@@ -891,6 +893,9 @@ export default function HomePage() {
               <b>{displayJobs.length}</b> {displayJobs.length === 1 ? 'role' : 'roles'}
               {filters.sector !== 'all' && ` in ${sectorLabel(filters.sector)}`}
             </span>
+            {!anyFilter && addedToday > 0 && (
+              <span className="new-today"><span className="nd" />{addedToday} new today</span>
+            )}
             {anyFilter && <button className="clear" onClick={resetAll}>Reset filters</button>}
             <div className="sort-wrap">
               <select value={filters.sortBy} onChange={(e) => setFilters({ ...filters, sortBy: e.target.value as 'newest' | 'oldest' })}>
@@ -1352,6 +1357,8 @@ export default function HomePage() {
         .ulj .feed-bar { display: flex; align-items: baseline; gap: 14px; padding: 8px 0 16px; }
         .ulj .feed-bar .count { font-family: 'Fraunces', Georgia, serif; font-size: 17px; font-weight: 500; }
         .ulj .feed-bar .count b { font-variant-numeric: tabular-nums; }
+        .ulj .new-today { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--live-soft); color: var(--live); font: 600 12px 'Inter', sans-serif; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .ulj .new-today .nd { width: 6px; height: 6px; border-radius: 50%; background: var(--live); animation: ulj-pulse 2.2s infinite; }
         .ulj .feed-bar .clear { font-size: 12px; color: var(--ink-2); background: none; border: none; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 0; }
         .ulj .feed-bar .clear:hover { color: var(--ink); }
         .ulj .sort-wrap { margin-left: auto; }
