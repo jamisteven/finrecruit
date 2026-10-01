@@ -551,6 +551,20 @@ export default function HomePage() {
     setFilters({ ...filters, workTypes: next })
   }
 
+  const [openDrop, setOpenDrop] = useState<'region' | 'city' | null>(null)
+  const selRegion = filters.locations.find((l) => REGIONS[l]) ?? null
+  const selCity = filters.locations.find((l) => !REGIONS[l]) ?? null
+  // Radio-style pickers: one region and one city at a time (null = Any)
+  const pickLocation = (kind: 'region' | 'city', value: string | null) => {
+    const region = kind === 'region' ? value : selRegion
+    const city = kind === 'city' ? value : selCity
+    const next = [region, city].filter(Boolean) as string[]
+    track('filter_location', { locations: next.join(',') || 'cleared' })
+    setFilters({ ...filters, locations: next })
+    setOpenDrop(null)
+    setLocQuery('')
+  }
+
   const toggleLocation = (loc: string) => {
     const next = filters.locations.includes(loc)
       ? filters.locations.filter((l) => l !== loc)
@@ -679,14 +693,13 @@ export default function HomePage() {
           </div>
 
           <div className="mast-actions">
-            <a className="nav-link" href="#how">How it works</a>
-
             <div className="acct-wrap">
               <button className="icon-btn" onClick={() => setMenuOpen(!menuOpen)} aria-label="Account menu" title="Account">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
               </button>
               {menuOpen && (
                 <div className="acct-menu">
+                  <button onClick={() => { setMenuOpen(false); fetchJobs() }} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh roles'}</button>
                   {userEmail ? (
                     <>
                       <div className="acct-email">{userEmail}</div>
@@ -709,12 +722,10 @@ export default function HomePage() {
                 : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>}
             </button>
 
-            <button className={`refresh-btn${loading ? ' spinning' : ''}`} onClick={fetchJobs} disabled={loading}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg>
-              <span>{loading ? 'Scanning…' : 'Refresh'}</span>
-            </button>
-
-            {!hasPass && (
+            {!hasPass && !userEmail && (
+              <a className="btn-primary signup" href="/login" onClick={() => track('cta_click', { where: 'header_signup' })}>Sign up</a>
+            )}
+            {!hasPass && userEmail && (
               <button type="button" className="btn-primary" onClick={() => startCheckout('header')} disabled={checkingOut}>
                 <BoltIcon /><span className="cta-full">See new roles first - $9</span><span className="cta-short">See first - $9</span>
               </button>
@@ -843,38 +854,58 @@ export default function HomePage() {
           <div className="fgroup">
             <div className="flabel">
               <span>Location</span>
-              {filters.locations.length > 0 && <button onClick={() => setFilters({ ...filters, locations: [] })}>Clear</button>}
+              {filters.locations.length > 0 && <button onClick={() => { setFilters({ ...filters, locations: [] }); setOpenDrop(null) }}>Clear</button>}
             </div>
 
-            {regionCounts.length > 0 && (
-              <div className="chips regions">
-                {regionCounts.map((r) => (
-                  <button key={r.name} className={`chip${filters.locations.includes(r.name) ? ' on' : ''}`} onClick={() => toggleLocation(r.name)}>
-                    {r.name}<span className="n">{r.count}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <input
-              className="loc-search"
-              type="text"
-              placeholder="Search cities…"
-              value={locQuery}
-              onChange={(e) => setLocQuery(e.target.value)}
-            />
-            <div className={`chips cities${cityExpanded ? ' expanded' : ''}`}>
-              {visibleCities.shown.map((l) => (
-                <button key={l.name} className={`chip${filters.locations.includes(l.name) ? ' on' : ''}`} onClick={() => toggleLocation(l.name)}>
-                  {l.name}<span className="n">{l.count}</span>
-                </button>
-              ))}
-            </div>
-            {(visibleCities.hidden > 0 || cityExpanded) && (
-              <button className="more-note" onClick={() => setCityExpanded(!cityExpanded)}>
-                {cityExpanded ? 'Show fewer' : `Show all (+${visibleCities.hidden} more)`}
+            <div className="drop">
+              <button type="button" className={`drop-btn${openDrop === 'region' ? ' open' : ''}`} aria-expanded={openDrop === 'region'} onClick={() => setOpenDrop(openDrop === 'region' ? null : 'region')}>
+                <span className="dl">Region</span><span className="dv">{selRegion ?? 'Any'}</span>
+                <svg className="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
               </button>
-            )}
+              {openDrop === 'region' && (
+                <div className="drop-panel" role="radiogroup" aria-label="Region">
+                  <button type="button" role="radio" aria-checked={!selRegion} className={`radio-row${!selRegion ? ' on' : ''}`} onClick={() => pickLocation('region', null)}>
+                    <span className="rad" />Any region<span className="n">{locBase.length}</span>
+                  </button>
+                  {regionCounts.map((r) => (
+                    <button type="button" role="radio" aria-checked={selRegion === r.name} key={r.name} className={`radio-row${selRegion === r.name ? ' on' : ''}`} onClick={() => pickLocation('region', r.name)}>
+                      <span className="rad" />{r.name}<span className="n">{r.count}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="drop">
+              <button type="button" className={`drop-btn${openDrop === 'city' ? ' open' : ''}`} aria-expanded={openDrop === 'city'} onClick={() => setOpenDrop(openDrop === 'city' ? null : 'city')}>
+                <span className="dl">City</span><span className="dv">{selCity ?? 'Any'}</span>
+                <svg className="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+              </button>
+              {openDrop === 'city' && (
+                <div className="drop-panel" role="radiogroup" aria-label="City">
+                  <input
+                    className="loc-search"
+                    type="text"
+                    placeholder="Search cities…"
+                    value={locQuery}
+                    onChange={(e) => setLocQuery(e.target.value)}
+                  />
+                  <div className="drop-list">
+                    <button type="button" role="radio" aria-checked={!selCity} className={`radio-row${!selCity ? ' on' : ''}`} onClick={() => pickLocation('city', null)}>
+                      <span className="rad" />Any city
+                    </button>
+                    {visibleCities.shown.map((l) => (
+                      <button type="button" role="radio" aria-checked={selCity === l.name} key={l.name} className={`radio-row${selCity === l.name ? ' on' : ''}`} onClick={() => pickLocation('city', l.name)}>
+                        <span className="rad" />{l.name}<span className="n">{l.count}</span>
+                      </button>
+                    ))}
+                    {visibleCities.hidden > 0 && (
+                      <button type="button" className="more-note" onClick={() => setCityExpanded(true)}>Show all (+{visibleCities.hidden} more)</button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {!hasPass && (
@@ -1628,9 +1659,13 @@ export default function HomePage() {
         /* ── Phone polish: one-row header, full-width hero buttons, compact sticky bar ── */
         @media (max-width: 560px) {
           .ulj .masthead-in { padding: 10px 16px; row-gap: 10px; }
-          .ulj .wordmark { font-size: 20px; margin-right: auto; }
-          .ulj .mast-actions { gap: 8px; }
-          .ulj .mast-actions > .btn-primary { display: none; }  /* hero + sticky bar already carry the CTA */
+          .ulj .masthead-in { gap: 8px; }
+          .ulj .wordmark { font-size: 18px; margin-right: auto; display: inline-flex; align-items: center; gap: 7px; }
+          .ulj .wordmark .mark { width: 26px; height: 26px; font-size: 14px; }
+          .ulj .mast-actions { gap: 6px; margin-left: 0; }
+          .ulj .mast-actions .icon-btn { width: 34px; height: 34px; }
+          .ulj .mast-actions > .btn-primary:not(.signup) { display: none; }  /* hero + sticky bar already carry the checkout CTA */
+          .ulj .mast-actions > .signup { height: 34px; padding: 0 12px; font-size: 13px; }
           .ulj .cta-row { flex-direction: column; align-items: stretch; gap: 10px; }
           .ulj .cta-row .btn-primary, .ulj .cta-row .btn-ghost { width: 100%; }
           .ulj .offer > div { padding: 11px 14px; }
@@ -1639,6 +1674,28 @@ export default function HomePage() {
           .ulj .convert-bar .btn-primary { flex: 1; margin: 0; height: 44px; font-size: 15px; }
           .ulj .convert-x { padding: 0 10px; height: 44px; }
         }
+
+
+        /* ── Location dropdowns (radio) ── */
+        .ulj .drop { margin-top: 8px; }
+        .ulj .drop-btn { display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 12px; background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 9px; cursor: pointer; font: 500 13px 'Inter', sans-serif; color: var(--ink); text-align: left; }
+        .ulj .drop-btn:hover { border-color: var(--ink-3); }
+        .ulj .drop-btn.open { border-color: var(--ink-2); }
+        .ulj .drop-btn .dl { color: var(--ink-3); font-size: 12px; }
+        .ulj .drop-btn .dv { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+        .ulj .drop-btn .chev { flex: none; color: var(--ink-3); transition: transform .15s; }
+        .ulj .drop-btn.open .chev { transform: rotate(180deg); }
+        .ulj .drop-panel { margin-top: 6px; padding: 6px; background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 10px; }
+        .ulj .drop-panel .loc-search { margin: 2px 0 6px; }
+        .ulj .drop-list { max-height: 240px; overflow-y: auto; }
+        .ulj .drop-panel > .radio-row, .ulj .drop-list > .radio-row { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; background: none; border: none; border-radius: 7px; cursor: pointer; font: 500 13px 'Inter', sans-serif; color: var(--ink-2); text-align: left; }
+        .ulj .radio-row:hover { background: var(--page); color: var(--ink); }
+        .ulj .radio-row.on { color: var(--ink); }
+        .ulj .radio-row .rad { flex: none; width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid var(--hairline-2); background: var(--surface); display: grid; place-items: center; }
+        .ulj .radio-row.on .rad { border-color: var(--accent); }
+        .ulj .radio-row.on .rad::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+        .ulj .radio-row .n { margin-left: auto; font: 500 10.5px 'Spline Sans Mono', monospace; color: var(--ink-3); }
+        .ulj .drop-list .more-note { margin: 6px 8px 4px; }
 
         /* ── Free sample flag, section notes ── */
         .ulj .sample-flag { font: 500 11px 'Spline Sans Mono', monospace; letter-spacing: .06em; text-transform: uppercase; background: var(--live-soft); color: var(--live); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
