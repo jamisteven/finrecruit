@@ -704,9 +704,21 @@ export default function HomePage() {
             <input
               ref={searchRef}
               className="search"
-              type="text"
+              type="search"
+              enterKeyHint="search"
+              inputMode="search"
               placeholder="Search roles, companies, skills…"
               autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              onKeyDown={(e) => {
+                // phone keyboards: Search/Return closes the keyboard and shows the results
+                if (e.key === 'Enter') {
+                  e.currentTarget.blur()
+                  document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              }}
               value={filters.search}
               onChange={(e) => {
                 const v = e.target.value
@@ -1257,6 +1269,8 @@ export default function HomePage() {
           font-size: 11px; color: var(--ink-3); border: 1px solid var(--hairline-2);
           border-radius: 5px; padding: 1px 6px; background: var(--surface);
         }
+        .ulj .search { -webkit-appearance: none; appearance: none; }
+        .ulj .search::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
         .ulj .search {
           width: 100%; height: 38px; padding: 0 40px 0 36px;
           background: var(--surface); color: var(--ink);
@@ -1669,6 +1683,7 @@ export default function HomePage() {
             flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 10px; row-gap: 10px;
           }
           .ulj .search-wrap { order: 3; flex-basis: 100%; max-width: none; }
+          .ulj .search { font-size: 16px; }  /* iOS zooms the page on focus below 16px */
           .ulj .slash { display: none; }
           .ulj .refresh-btn { width: 36px; padding: 0; justify-content: center; }
           .ulj .refresh-btn span { display: none; }  /* icon-only so the top row fits one line */
