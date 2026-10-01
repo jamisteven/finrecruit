@@ -23,12 +23,14 @@ export async function GET(req: NextRequest) {
 
   // Pass holders see roles as they land; everyone else waits FREE_DELAY_HOURS
   let hasPass = false
+  let passExpiresAt: string | null = null
   try {
     const session = await getSessionClient()
     const { data: { user } } = await session.auth.getUser()
     if (user) {
       const { data: profile, error: profErr } = await createServerClient()
         .from('profiles').select('pass_expires_at').eq('id', user.id).maybeSingle()
+      passExpiresAt = profile?.pass_expires_at ?? null
       hasPass = !!profile?.pass_expires_at && new Date(profile.pass_expires_at) > new Date()
       if (profErr) console.error('[jobs] profile query error:', profErr.message)
       console.log('[jobs] user', user.id, 'expires', profile?.pass_expires_at, 'hasPass', hasPass)
@@ -110,5 +112,5 @@ export async function GET(req: NextRequest) {
   const { data, error, count } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0, hasPass, withheld, lockedJobs, previewCount: previewIds.length, previewIds, addedToday: addedToday ?? 0 })
+  return NextResponse.json({ jobs: data, total: count ?? data?.length ?? 0, hasPass, passExpiresAt: hasPass ? passExpiresAt : null, withheld, lockedJobs, previewCount: previewIds.length, previewIds, addedToday: addedToday ?? 0 })
 }

@@ -164,12 +164,26 @@ const CheckIcon = () => (
 export default function HomePage() {
   const [dark, setDark] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)   // false until we know whether a session exists
+  const [firstLoad, setFirstLoad] = useState(false)        // true once the first /api/jobs response has landed
+  const [passExpires, setPassExpires] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const acctRef = useRef<HTMLDivElement>(null)
+  // close the account menu on any outside click/tap or Escape
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e: MouseEvent | TouchEvent) => { if (acctRef.current && !acctRef.current.contains(e.target as Node)) setMenuOpen(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('touchstart', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('touchstart', onDown); document.removeEventListener('keydown', onKey) }
+  }, [menuOpen])
   const [checkingOut, setCheckingOut] = useState(false)
   const [checkoutError, setCheckoutError] = useState(false)
   useEffect(() => {
     const sb = createClient()
-    sb.auth.getUser().then(({ data }) => setUserEmail(data.user?.email ?? null)).catch(() => {})
+    sb.auth.getUser().then(({ data }) => setUserEmail(data.user?.email ?? null)).catch(() => {}).finally(() => setAuthChecked(true))
     const { data: sub } = sb.auth.onAuthStateChange((_e, s) => setUserEmail(s?.user?.email ?? null))
     return () => sub.subscription.unsubscribe()
   }, [])
@@ -245,6 +259,8 @@ export default function HomePage() {
 
       setAllJobs(data.jobs ?? [])
       setHasPass(!!data.hasPass)
+      setPassExpires(data.passExpiresAt ?? null)
+      setFirstLoad(true)
       setWithheld(data.withheld ?? 0)
       setAddedToday(data.addedToday ?? 0)
       setPreviewCount(data.previewCount ?? 0)
@@ -540,6 +556,8 @@ export default function HomePage() {
     return allJobs.filter((j) => j.extracted_at && new Date(j.extracted_at).toDateString() === today).length
   }, [allJobs])
 
+  const daysLeft = passExpires ? Math.max(0, Math.ceil((new Date(passExpires).getTime() - Date.now()) / 86400000)) : null
+
   const anyFilter = filters.sector !== 'all' || filters.locations.length > 0 || filters.workTypes.length > 0 || filters.search !== ''
   const activeFilterCount = (filters.sector !== 'all' ? 1 : 0) + filters.workTypes.length + filters.locations.length
 
@@ -693,7 +711,7 @@ export default function HomePage() {
           </div>
 
           <div className="mast-actions">
-            <div className="acct-wrap">
+            <div className="acct-wrap" ref={acctRef}>
               <button className="icon-btn" onClick={() => setMenuOpen(!menuOpen)} aria-label="Account menu" title="Account">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
               </button>
@@ -704,7 +722,6 @@ export default function HomePage() {
                     <>
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Early access active</div>}
-                      {!hasPass && <button onClick={() => { setMenuOpen(false); startCheckout('menu') }}>See new roles first - $9</button>}
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
@@ -730,6 +747,7 @@ export default function HomePage() {
       </header>
 
       {/* ── Hero ─────────────────────────────── */}
+      {authChecked && !userEmail && (<>
       <section className="hero">
         <div className="hero-copy">
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
@@ -784,6 +802,29 @@ export default function HomePage() {
           </ol>
         </div>
       </div>
+
+      </>)}
+
+      {/* ── Signed-in strip: replaces the pitch once someone has an account ── */}
+      {userEmail && firstLoad && (
+        <div className="member-wrap">
+          {hasPass ? (
+            <div className="member-bar active">
+              <span className="mb-dot" />
+              <b>Early access active</b>
+              {daysLeft !== null && <span className="mb-sub">{daysLeft <= 0 ? 'ends today' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left`}</span>}
+              {daysLeft !== null && daysLeft <= 3 && (
+                <button type="button" className="mb-link" onClick={() => startCheckout('renew')} disabled={checkingOut}>Extend - $9</button>
+              )}
+            </div>
+          ) : (
+            <div className="member-bar free">
+              <div className="mb-copy"><b>Free account</b><span className="mb-sub">Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.</span></div>
+              <button type="button" className="btn-primary" onClick={() => startCheckout('member_bar')} disabled={checkingOut}><BoltIcon />See new roles first - $9</button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="layout" id="feed">
         {/* ── Sidebar ─────────────────────────── */}
@@ -1691,6 +1732,25 @@ export default function HomePage() {
         .ulj .radio-row.on .rad::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
         .ulj .radio-row .n { margin-left: auto; font: 500 10.5px 'Spline Sans Mono', monospace; color: var(--ink-3); }
         .ulj .drop-list .more-note { margin: 6px 8px 4px; }
+
+
+        /* ── Signed-in strip (replaces hero + how-it-works) ── */
+        .ulj .member-wrap { max-width: 1200px; margin: 0 auto; padding: 20px 28px 0; }
+        .ulj .member-bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--hairline-2); border-radius: 12px; background: var(--surface); font-size: 13.5px; }
+        .ulj .member-bar b { font-weight: 600; }
+        .ulj .member-bar .mb-sub { color: var(--ink-2); font-size: 13px; }
+        .ulj .member-bar.active { background: var(--live-soft); border-color: transparent; }
+        .ulj .member-bar.active b { color: var(--live); }
+        .ulj .mb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live); animation: ulj-pulse 2.2s infinite; flex: none; }
+        .ulj .mb-link { margin-left: auto; background: none; border: none; cursor: pointer; font: 600 13px 'Inter', sans-serif; color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+        .ulj .member-bar.free { background: var(--accent-soft); border-color: transparent; }
+        .ulj .member-bar.free .mb-copy { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; flex: 1; min-width: 0; }
+        .ulj .member-bar.free .btn-primary { margin-left: auto; height: 34px; }
+        @media (max-width: 720px) { .ulj .member-wrap { padding: 14px 16px 0; } }
+        @media (max-width: 560px) {
+          .ulj .member-bar.free { flex-direction: column; align-items: stretch; gap: 10px; }
+          .ulj .member-bar.free .btn-primary { margin: 0; height: 40px; }
+        }
 
         /* ── Free sample flag, section notes ── */
         .ulj .sample-flag { font: 500 11px 'Spline Sans Mono', monospace; letter-spacing: .06em; text-transform: uppercase; background: var(--live-soft); color: var(--live); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
