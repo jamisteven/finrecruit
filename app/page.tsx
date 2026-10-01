@@ -240,7 +240,9 @@ export default function HomePage() {
   const searchRef = useRef<HTMLInputElement>(null)
   const prevSlotKey = useRef<string | null>(null)
 
+  const fetchSeq = useRef(0)  // only the newest request may write results (older, slower ones are dropped)
   const fetchJobs = useCallback(async () => {
+    const seq = ++fetchSeq.current
     setLoading(true)
     try {
       const params = new URLSearchParams()
@@ -256,6 +258,7 @@ export default function HomePage() {
       const res = await fetch(`/api/jobs?${fast}`)
       if (!res.ok) throw new Error('API error')
       const data = await res.json()
+      if (seq !== fetchSeq.current) return
 
       setAllJobs(data.jobs ?? [])
       setHasPass(!!data.hasPass)
@@ -273,7 +276,7 @@ export default function HomePage() {
       // reflect the whole dataset. Replaces the array once it lands.
       fetch(`/api/jobs?${params}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((full) => { if (full?.jobs?.length) setAllJobs(full.jobs) })
+        .then((full) => { if (seq === fetchSeq.current && full?.jobs?.length) setAllJobs(full.jobs) })
         .catch(() => {})
     } catch {
       setLoading(false)
@@ -705,7 +708,15 @@ export default function HomePage() {
               placeholder="Search roles, companies, skills…"
               autoComplete="off"
               value={filters.search}
-              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              onChange={(e) => {
+                const v = e.target.value
+                setFilters({ ...filters, search: v })
+                // On phones the feed sits well below the hero, so bring the results into view
+                if (v && !filters.search) {
+                  const el = document.getElementById('feed')
+                  if (el && el.getBoundingClientRect().top > 200) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              }}
             />
             <span className="slash">/</span>
           </div>
@@ -1783,6 +1794,8 @@ export default function HomePage() {
         @media (max-width: 640px) { .ulj .inline-cta { grid-template-columns: 1fr; } }
 
         /* ── How it works bar (sits where the stat band was) ── */
+        .ulj #feed { scroll-margin-top: 76px; }
+        @media (max-width: 760px) { .ulj #feed { scroll-margin-top: 118px; } }
         .ulj .howbar-wrap { max-width: 1200px; margin: 0 auto; padding: 0 28px; scroll-margin-top: 80px; }
         .ulj .howbar { display: flex; border-block: 1px solid var(--hairline-2); margin-bottom: 32px; }
         .ulj .hb-title { flex: 0 0 190px; align-self: center; padding: 14px 20px 14px 0; font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 22px; line-height: 1.15; letter-spacing: -.01em; }

@@ -9,6 +9,41 @@ const FREE_DELAY_MS = FREE_DELAY_HOURS * 3600_000
 const FREE_SAMPLE_COUNT = 3
 const FREE_TITLE_ONLY_COUNT = 2
 
+
+// Search shorthand -> the phrases people actually write in job titles
+const SEARCH_SYNONYMS: Record<string, string[]> = {
+  swe: ['software engineer', 'software developer'],
+  sde: ['software development engineer', 'software engineer'],
+  sre: ['site reliability'],
+  devops: ['devops', 'dev ops', 'platform engineer'],
+  fe: ['front end', 'frontend', 'front-end'],
+  be: ['back end', 'backend', 'back-end'],
+  fullstack: ['full stack', 'fullstack', 'full-stack'],
+  pm: ['product manager', 'project manager', 'program manager'],
+  tpm: ['technical program manager', 'technical project manager'],
+  pmm: ['product marketing'],
+  ml: ['machine learning'],
+  ds: ['data scientist', 'data science'],
+  da: ['data analyst'],
+  ba: ['business analyst'],
+  qa: ['quality assurance', 'qa engineer', 'test engineer'],
+  hr: ['human resources', 'hr manager', 'people operations'],
+  vp: ['vice president', 'vp of'],
+  svp: ['senior vice president'],
+  md: ['managing director'],
+  ae: ['account executive'],
+  sdr: ['sales development'],
+  bdr: ['business development'],
+  csm: ['customer success'],
+  cfo: ['chief financial', 'cfo'],
+  coo: ['chief operating', 'coo'],
+  cto: ['chief technology', 'cto'],
+  ib: ['investment bank'],
+  pe: ['private equity'],
+  vc: ['venture capital'],
+  re: ['real estate'],
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const seniority = searchParams.get('seniority')
@@ -81,9 +116,18 @@ export async function GET(req: NextRequest) {
   if (seniority && seniority !== 'All') query = query.eq('seniority', seniority)
   if (sector && sector !== 'all') query = query.eq('sector', sector)
   if (search) {
-    query = query.or(
-      `title.ilike.%${search}%,company.ilike.%${search}%,summary.ilike.%${search}%,tags.cs.{${search.toLowerCase()}}`
-    )
+    // Every word must match somewhere (title, company, summary or tags), and common
+    // abbreviations are expanded, so "swe" finds "Software Engineer" and "senior pm"
+    // finds "Senior Product Manager". Raw abbreviations only match the exact tag: a
+    // plain %pm% / %swe% substring would hit "employment" and "Sweden".
+    const tokens = search.toLowerCase().replace(/[,()%*\\"]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 6)
+    for (const tok of tokens) {
+      const expansions = SEARCH_SYNONYMS[tok]
+      const phrases = expansions ?? [tok]
+      const conds = phrases.flatMap((p) => [`title.ilike.%${p}%`, `company.ilike.%${p}%`, `summary.ilike.%${p}%`])
+      conds.push(`tags.cs.{${tok}}`)
+      query = query.or(conds.join(','))
+    }
   }
 
   // how many roles the free tier is not being shown (everything newer than the delay, minus the full previews)
