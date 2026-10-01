@@ -906,7 +906,7 @@ export default function HomePage() {
             </button>
 
             {!hasPass && !userEmail && (
-              <a className="btn-primary signup" href="/login" onClick={() => track('cta_click', { where: 'header_signup' })}>Sign up</a>
+              <button type="button" className="btn-primary signup" onClick={() => startCheckout('header_signup')} disabled={checkingOut}>Sign up</button>
             )}
           </div>
         </div>
