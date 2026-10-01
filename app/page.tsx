@@ -704,7 +704,7 @@ export default function HomePage() {
                     <>
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Early access active</div>}
-                      {!hasPass && <button onClick={() => { setMenuOpen(false); startCheckout('menu') }}>Signup</button>}
+                      {!hasPass && <button onClick={() => { setMenuOpen(false); startCheckout('menu') }}>See new roles first - $9</button>}
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
@@ -724,11 +724,6 @@ export default function HomePage() {
 
             {!hasPass && !userEmail && (
               <a className="btn-primary signup" href="/login" onClick={() => track('cta_click', { where: 'header_signup' })}>Sign up</a>
-            )}
-            {!hasPass && userEmail && (
-              <button type="button" className="btn-primary" onClick={() => startCheckout('header')} disabled={checkingOut}>
-                <BoltIcon /><span className="cta-full">See new roles first - $9</span><span className="cta-short">See first - $9</span>
-              </button>
             )}
           </div>
         </div>
