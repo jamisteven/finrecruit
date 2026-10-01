@@ -185,6 +185,13 @@ export default function HomePage() {
   const [withheld, setWithheld] = useState(0)
   const [addedToday, setAddedToday] = useState(0)
   const [bannerHidden, setBannerHidden] = useState(false)
+  const [pastHero, setPastHero] = useState(false)  // sticky bar waits until the hero CTA has scrolled away
+  useEffect(() => {
+    const onScroll = () => setPastHero(window.scrollY > 520)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
   const [previewCount, setPreviewCount] = useState(0)
   const [previewIds, setPreviewIds] = useState<string[]>([])
   const [lockedJobs, setLockedJobs] = useState<LockedJob[]>([])
@@ -709,7 +716,7 @@ export default function HomePage() {
 
             {!hasPass && (
               <button type="button" className="btn-primary" onClick={() => startCheckout('header')} disabled={checkingOut}>
-                <BoltIcon /><span className="cta-full">See new roles first - $9</span><span className="cta-short">See first — $9</span>
+                <BoltIcon /><span className="cta-full">See new roles first - $9</span><span className="cta-short">See first - $9</span>
               </button>
             )}
           </div>
@@ -1058,7 +1065,7 @@ export default function HomePage() {
             </>
           )}
 
-          {!hasPass && !bannerHidden && (
+          {!hasPass && !bannerHidden && pastHero && (
             <aside className="convert-bar">
               <div className="convert-copy">
                 <b>Most roles fill inside 48 hours.</b>
@@ -1615,6 +1622,22 @@ export default function HomePage() {
           .ulj .ghost-btn { padding: 0 10px; }
           .ulj .apply-btn { padding: 0 11px; }
           .ulj .colophon { flex-direction: column; gap: 4px; }
+        }
+
+
+        /* ── Phone polish: one-row header, full-width hero buttons, compact sticky bar ── */
+        @media (max-width: 560px) {
+          .ulj .masthead-in { padding: 10px 16px; row-gap: 10px; }
+          .ulj .wordmark { font-size: 20px; margin-right: auto; }
+          .ulj .mast-actions { gap: 8px; }
+          .ulj .mast-actions > .btn-primary { display: none; }  /* hero + sticky bar already carry the CTA */
+          .ulj .cta-row { flex-direction: column; align-items: stretch; gap: 10px; }
+          .ulj .cta-row .btn-primary, .ulj .cta-row .btn-ghost { width: 100%; }
+          .ulj .offer > div { padding: 11px 14px; }
+          .ulj .convert-bar { width: calc(100vw - 24px); padding: 8px 8px 8px 8px; gap: 6px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+          .ulj .convert-copy { display: none; }
+          .ulj .convert-bar .btn-primary { flex: 1; margin: 0; height: 44px; font-size: 15px; }
+          .ulj .convert-x { padding: 0 10px; height: 44px; }
         }
 
         /* ── Free sample flag, section notes ── */
