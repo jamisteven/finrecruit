@@ -131,6 +131,40 @@ type LockedJob = { title: string; sector: string; posted_at: string | null }
 
 const toTime = (iso?: string | null) => (iso ? new Date(iso).getTime() : 0)
 
+// Search shorthand -> phrases people actually write in titles (keep in sync with the jobs route)
+const SEARCH_SYNONYMS: Record<string, string[]> = {
+  swe: ['software engineer', 'software developer'],
+  sde: ['software development engineer', 'software engineer'],
+  sre: ['site reliability'],
+  devops: ['devops', 'dev ops', 'platform engineer'],
+  fe: ['front end', 'frontend', 'front-end'],
+  be: ['back end', 'backend', 'back-end'],
+  fullstack: ['full stack', 'fullstack', 'full-stack'],
+  pm: ['product manager', 'project manager', 'program manager'],
+  tpm: ['technical program manager', 'technical project manager'],
+  pmm: ['product marketing'],
+  ml: ['machine learning'],
+  ds: ['data scientist', 'data science'],
+  da: ['data analyst'],
+  ba: ['business analyst'],
+  qa: ['quality assurance', 'qa engineer', 'test engineer'],
+  hr: ['human resources', 'hr manager', 'people operations'],
+  vp: ['vice president', 'vp of'],
+  svp: ['senior vice president'],
+  md: ['managing director'],
+  ae: ['account executive'],
+  sdr: ['sales development'],
+  bdr: ['business development'],
+  csm: ['customer success'],
+  cfo: ['chief financial', 'cfo'],
+  coo: ['chief operating', 'coo'],
+  cto: ['chief technology', 'cto'],
+  ib: ['investment bank'],
+  pe: ['private equity'],
+  vc: ['venture capital'],
+  re: ['real estate'],
+}
+
 function timeAgo(iso?: string | null): string | null {
   if (!iso) return null
   const m = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000))
@@ -191,8 +225,27 @@ export default function HomePage() {
     try { await createClient().auth.signOut() } catch {}
     window.location.reload()
   }
-  const [allJobs, setAllJobs] = useState<JobPost[]>([])
+  const [rawJobs, setAllJobs] = useState<JobPost[]>([])   // everything the API sent this visitor
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
+
+  // Search runs in the browser over the loaded roles, so results and suggestions appear instantly
+  // (no request per keystroke). The API only ever sends roles this visitor may see, so gating is unaffected.
+  const searchIndex = useMemo(() => rawJobs.map((j) => ({
+    hay: `${j.title ?? ''} ${j.company ?? ''} ${j.summary ?? ''}`.toLowerCase(),
+    tags: new Set((Array.isArray(j.tags) ? j.tags : []).map((t: string) => String(t).toLowerCase())),
+  })), [rawJobs])
+  const allJobs = useMemo(() => {
+    const tokens = filters.search.toLowerCase().replace(/[,()%*\\"]/g, ' ').split(/\s+/).filter(Boolean)
+    if (tokens.length === 0) return rawJobs
+    return rawJobs.filter((_, i) => {
+      const { hay, tags } = searchIndex[i]
+      return tokens.every((tok) => {
+        if (tags.has(tok)) return true
+        const phrases = SEARCH_SYNONYMS[tok] ?? [tok]
+        return phrases.some((ph) => hay.includes(ph))
+      })
+    })
+  }, [rawJobs, searchIndex, filters.search])
   const [loading, setLoading] = useState(false)
   const [visibleCount, setVisibleCount] = useState(150)
   const [hasPass, setHasPass] = useState(false)
@@ -246,7 +299,6 @@ export default function HomePage() {
     setLoading(true)
     try {
       const params = new URLSearchParams()
-      if (filters.search) params.set('search', filters.search)
       // NOTE: sector is deliberately NOT sent to the API — it's filtered client-side
       // so the sidebar counts always reflect the full dataset.
       params.set('sortBy', filters.sortBy)
@@ -281,7 +333,7 @@ export default function HomePage() {
     } catch {
       setLoading(false)
     } finally { setLoading(false) }
-  }, [filters.search, filters.sortBy])
+  }, [filters.sortBy])
 
   // Debounced so typing in search doesn't fire a request per keystroke
   useEffect(() => {
@@ -335,7 +387,7 @@ export default function HomePage() {
     persistSaved(next)
   }
 
-  const savedJobs = useMemo(() => allJobs.filter((j) => saved.has(j.id)), [allJobs, saved])
+  const savedJobs = useMemo(() => rawJobs.filter((j) => saved.has(j.id)), [rawJobs, saved])
 
   // Jump to a saved job's card in the feed; reset filters first if they're hiding it
   // ── Search suggestions (typeahead) ──
