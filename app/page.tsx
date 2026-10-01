@@ -338,6 +338,18 @@ export default function HomePage() {
   const savedJobs = useMemo(() => allJobs.filter((j) => saved.has(j.id)), [allJobs, saved])
 
   // Jump to a saved job's card in the feed; reset filters first if they're hiding it
+  // ── Search suggestions (typeahead) ──
+  const searchWrapRef = useRef<HTMLDivElement>(null)
+  const [sugOpen, setSugOpen] = useState(false)
+  const [sugIdx, setSugIdx] = useState(-1)
+  useEffect(() => {
+    if (!sugOpen) return
+    const onDown = (e: MouseEvent | TouchEvent) => { if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) setSugOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('touchstart', onDown)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('touchstart', onDown) }
+  }, [sugOpen])
+
   const jumpToJob = (id: string) => {
     const visible = displayJobs.some((j) => j.id === id)
     if (!visible) setFilters(DEFAULT_FILTERS)
@@ -559,6 +571,16 @@ export default function HomePage() {
     return allJobs.filter((j) => j.extracted_at && new Date(j.extracted_at).toDateString() === today).length
   }, [allJobs])
 
+  const SUG_MAX = 6
+  const sugList = filters.search.trim().length >= 2 ? displayJobs.slice(0, SUG_MAX) : []
+  const showSug = sugOpen && sugList.length > 0
+  const pickSuggestion = (id: string) => {
+    track('search_suggestion_click', { term: filters.search })
+    setSugOpen(false)
+    searchRef.current?.blur()
+    jumpToJob(id)
+  }
+
   const daysLeft = passExpires ? Math.max(0, Math.ceil((new Date(passExpires).getTime() - Date.now()) / 86400000)) : null
 
   const anyFilter = filters.sector !== 'all' || filters.locations.length > 0 || filters.workTypes.length > 0 || filters.search !== ''
@@ -699,7 +721,7 @@ export default function HomePage() {
         <div className="masthead-in">
           <a className="wordmark" href="/"><span className="mark">B</span><span>backchannel<em>.jobs</em></span></a>
 
-          <div className="search-wrap">
+          <div className="search-wrap" ref={searchWrapRef}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
             <input
               ref={searchRef}
@@ -713,24 +735,51 @@ export default function HomePage() {
               autoCapitalize="off"
               spellCheck={false}
               onKeyDown={(e) => {
-                // phone keyboards: Search/Return closes the keyboard and shows the results
-                if (e.key === 'Enter') {
-                  e.currentTarget.blur()
-                  document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                if (e.key === 'ArrowDown' && showSug) { e.preventDefault(); setSugIdx((i) => (i + 1) % sugList.length) }
+                else if (e.key === 'ArrowUp' && showSug) { e.preventDefault(); setSugIdx((i) => (i <= 0 ? sugList.length - 1 : i - 1)) }
+                else if (e.key === 'Escape') { setSugOpen(false) }
+                else if (e.key === 'Enter') {
+                  // a highlighted suggestion opens that role; otherwise Search/Return shows all results
+                  if (showSug && sugIdx >= 0) { e.preventDefault(); pickSuggestion(sugList[sugIdx].id) }
+                  else {
+                    setSugOpen(false)
+                    e.currentTarget.blur()
+                    document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
                 }
               }}
               value={filters.search}
-              onChange={(e) => {
-                const v = e.target.value
-                setFilters({ ...filters, search: v })
-                // On phones the feed sits well below the hero, so bring the results into view
-                if (v && !filters.search) {
-                  const el = document.getElementById('feed')
-                  if (el && el.getBoundingClientRect().top > 200) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }
-              }}
+              onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setSugOpen(true); setSugIdx(-1) }}
+              onFocus={() => setSugOpen(true)}
+              role="combobox"
+              aria-expanded={showSug}
+              aria-controls="search-sug"
             />
             <span className="slash">/</span>
+            {showSug && (
+              <div className="sug" id="search-sug" role="listbox">
+                {sugList.map((j, n) => (
+                  <button
+                    type="button" role="option" aria-selected={n === sugIdx} key={j.id}
+                    className={`sug-row${n === sugIdx ? ' on' : ''}`}
+                    style={{ ['--sec' as string]: `var(--sec-${j.sector}, var(--ink-3))` }}
+                    onMouseEnter={() => setSugIdx(n)}
+                    onClick={() => pickSuggestion(j.id)}
+                  >
+                    <span className="sd" />
+                    <span className="st">
+                      <b>{j.title}</b>
+                      <span>{[j.company, j.location].filter(Boolean).join(' · ')}</span>
+                    </span>
+                  </button>
+                ))}
+                {displayJobs.length > SUG_MAX && (
+                  <button type="button" className="sug-all" onClick={() => { setSugOpen(false); searchRef.current?.blur(); document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}>
+                    See all {displayJobs.length} results
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="mast-actions">
@@ -1777,6 +1826,18 @@ export default function HomePage() {
           .ulj .member-bar.free { flex-direction: column; align-items: stretch; gap: 10px; }
           .ulj .member-bar.free .btn-primary { margin: 0; height: 40px; }
         }
+
+
+        /* ── Search suggestions ── */
+        .ulj .sug { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 70; background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 12px; padding: 6px; box-shadow: 0 16px 40px -12px rgba(0,0,0,.28); max-height: min(70vh, 460px); overflow-y: auto; }
+        .ulj .sug-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 10px; background: none; border: none; border-radius: 8px; cursor: pointer; text-align: left; font-family: 'Inter', sans-serif; }
+        .ulj .sug-row.on, .ulj .sug-row:hover { background: var(--accent-soft); }
+        .ulj .sug-row .sd { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--sec); }
+        .ulj .sug-row .st { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+        .ulj .sug-row .st b { font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ulj .sug-row .st span { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ulj .sug-all { display: block; width: 100%; margin-top: 4px; padding: 9px 10px; border: none; border-top: 1px solid var(--hairline); background: none; text-align: left; cursor: pointer; font: 600 13px 'Inter', sans-serif; color: var(--link); border-radius: 0 0 8px 8px; }
+        .ulj .sug-all:hover { text-decoration: underline; text-underline-offset: 3px; }
 
         /* ── Free sample flag, section notes ── */
         .ulj .sample-flag { font: 500 11px 'Spline Sans Mono', monospace; letter-spacing: .06em; text-transform: uppercase; background: var(--live-soft); color: var(--live); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
