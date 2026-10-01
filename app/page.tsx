@@ -144,6 +144,7 @@ const SEARCH_SYNONYMS: Record<string, string[]> = {
   tpm: ['technical program manager', 'technical project manager'],
   pmm: ['product marketing'],
   ml: ['machine learning'],
+  grc: ['grc', 'governance, risk', 'governance risk', 'risk and compliance', 'risk & compliance'],
   ds: ['data scientist', 'data science'],
   da: ['data analyst'],
   ba: ['business analyst'],
@@ -163,6 +164,29 @@ const SEARCH_SYNONYMS: Record<string, string[]> = {
   pe: ['private equity'],
   vc: ['venture capital'],
   re: ['real estate'],
+}
+
+// Edit distance (insert / delete / substitute / swap-adjacent), giving up above `max`.
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1
+  const prev2: number[] = []
+  let prev: number[] = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const cur: number[] = [i]
+    let rowMin = i
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, prev2[j - 2] + 1)
+      cur[j] = v
+      if (v < rowMin) rowMin = v
+    }
+    if (rowMin > max) return max + 1
+    prev2.length = 0
+    prev2.push(...prev)
+    prev = cur
+  }
+  return prev[b.length]
 }
 
 function timeAgo(iso?: string | null): string | null {
@@ -234,31 +258,49 @@ export default function HomePage() {
     hay: `${j.title ?? ''} ${j.company ?? ''} ${j.summary ?? ''}`.toLowerCase(),
     tags: new Set((Array.isArray(j.tags) ? j.tags : []).map((t: string) => String(t).toLowerCase())),
   })), [rawJobs])
-  const allJobs = useMemo(() => {
+  // Words that appear in titles, companies and tags: the pool we correct misspellings against
+  const vocab = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const j of rawJobs) {
+      const words = `${j.title ?? ''} ${j.company ?? ''} ${Array.isArray(j.tags) ? j.tags.join(' ') : ''}`.toLowerCase().split(/[^a-z0-9+#]+/)
+      for (const w of words) if (w.length >= 4) m.set(w, (m.get(w) ?? 0) + 1)
+    }
+    return [...m.entries()]
+  }, [rawJobs])
+
+  // Per typed word: what to look for, and whether we silently fixed a likely typo
+  const searchTerms = useMemo(() => {
     const tokens = filters.search.toLowerCase().replace(/[,()%*\\"]/g, ' ').split(/\s+/).filter(Boolean)
-    if (tokens.length === 0) return rawJobs
+    return tokens.map((tok) => {
+      const known = SEARCH_SYNONYMS[tok]
+      if (known) return { tok, phrases: known, fixed: null as string | null }
+      // Only try to correct whole-looking words that match nothing as typed
+      if (tok.length >= 5 && rawJobs.length > 0 && !searchIndex.some((s) => s.hay.includes(tok))) {
+        const max = tok.length >= 8 ? 2 : 1
+        const close = vocab
+          .map(([w, n]) => ({ w, n, d: editDistance(tok, w, max) }))
+          .filter((x) => x.d <= max)
+          .sort((x, y) => x.d - y.d || y.n - x.n)
+          .slice(0, 3)
+        if (close.length > 0) return { tok, phrases: close.map((x) => x.w), fixed: close[0].w }
+      }
+      return { tok, phrases: [tok], fixed: null as string | null }
+    })
+  }, [filters.search, rawJobs, searchIndex, vocab])
+  const searchFixes = searchTerms.filter((t) => t.fixed)
+
+  const allJobs = useMemo(() => {
+    if (searchTerms.length === 0) return rawJobs
     return rawJobs.filter((_, i) => {
       const { hay, tags } = searchIndex[i]
-      return tokens.every((tok) => {
-        if (tags.has(tok)) return true
-        const phrases = SEARCH_SYNONYMS[tok] ?? [tok]
-        return phrases.some((ph) => hay.includes(ph))
-      })
+      return searchTerms.every(({ tok, phrases }) => tags.has(tok) || phrases.some((ph) => hay.includes(ph)))
     })
-  }, [rawJobs, searchIndex, filters.search])
+  }, [rawJobs, searchIndex, searchTerms])
   const [loading, setLoading] = useState(false)
   const [visibleCount, setVisibleCount] = useState(150)
   const [hasPass, setHasPass] = useState(false)
   const [withheld, setWithheld] = useState(0)
   const [addedToday, setAddedToday] = useState(0)
-  const [bannerHidden, setBannerHidden] = useState(false)
-  const [pastHero, setPastHero] = useState(false)  // sticky bar waits until the hero CTA has scrolled away
-  useEffect(() => {
-    const onScroll = () => setPastHero(window.scrollY > 520)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
   const [previewCount, setPreviewCount] = useState(0)
   const [previewIds, setPreviewIds] = useState<string[]>([])
   const [lockedJobs, setLockedJobs] = useState<LockedJob[]>([])
@@ -1102,6 +1144,9 @@ export default function HomePage() {
               </select>
             </div>
           </div>
+          {searchFixes.length > 0 && (
+            <div className="dym">Showing results for <b>{searchTerms.map((t) => t.fixed ?? t.tok).join(' ')}</b></div>
+          )}
 
           {press && (
             <div className={`press${press.cls}`}>
@@ -1254,17 +1299,6 @@ export default function HomePage() {
               })}
             </div>
             </>
-          )}
-
-          {!hasPass && !bannerHidden && pastHero && (
-            <aside className="convert-bar">
-              <div className="convert-copy">
-                <b>Most roles fill inside 48 hours.</b>
-                <span>Early access shows them the moment they drop.</span>
-              </div>
-              <button type="button" className="btn-primary" onClick={() => startCheckout('bar')} disabled={checkingOut}>See new roles first - $9</button>
-              <button className="convert-x" onClick={() => setBannerHidden(true)} aria-label="Dismiss">×</button>
-            </aside>
           )}
 
           <footer className="colophon">
@@ -1648,25 +1682,6 @@ export default function HomePage() {
           font-size: 17px; font-weight: 500; color: var(--ink); }
         .ulj .withheld-note span { font-size: 12.5px; color: var(--ink-2); }
         .ulj .card.mini h3 { font-size: 16px; margin: 2px 0 0; }
-        .ulj .convert-bar {
-          position: fixed; left: 50%; transform: translateX(-50%);
-          bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-          width: min(720px, calc(100vw - 32px)); z-index: 40;
-          display: flex; align-items: center; gap: 16px;
-          padding: 13px 18px;
-          background: var(--ink); border-radius: 12px;
-          box-shadow: 0 12px 32px -10px rgba(0,0,0,0.45);
-        }
-        .ulj .convert-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-        .ulj .convert-copy b { font-size: 13.5px; color: var(--page); font-weight: 500; }
-        .ulj .convert-copy span { font-size: 12px; color: var(--ink-3); }
-        .ulj .convert-bar .btn-primary { margin-left: auto; height: 36px; }
-        .ulj .convert-x { background: none; border: none; color: var(--ink-3);
-          font-size: 19px; line-height: 1; padding: 0 2px; cursor: pointer; }
-        @media (max-width: 560px) {
-          .ulj .convert-copy span { display: none; }
-          .ulj .convert-bar { gap: 10px; }
-        }
         .ulj .convert-old { margin: 34px 0 0; padding: 28px 26px; border-radius: 14px; background: var(--ink); }
         .ulj .convert h2 { font-family: 'Fraunces', Georgia, serif; font-size: 21px; font-weight: 500; color: var(--page); margin: 0 0 6px; }
         .ulj .convert p { font-size: 13.5px; color: var(--ink-3); margin: 0 0 16px; }
@@ -1827,15 +1842,11 @@ export default function HomePage() {
           .ulj .wordmark .mark { width: 26px; height: 26px; font-size: 14px; }
           .ulj .mast-actions { gap: 6px; margin-left: 0; }
           .ulj .mast-actions .icon-btn { width: 34px; height: 34px; }
-          .ulj .mast-actions > .btn-primary:not(.signup) { display: none; }  /* hero + sticky bar already carry the checkout CTA */
+          .ulj .mast-actions > .btn-primary:not(.signup) { display: none; }  /* the hero already carries the checkout CTA */
           .ulj .mast-actions > .signup { height: 34px; padding: 0 12px; font-size: 13px; }
           .ulj .cta-row { flex-direction: column; align-items: stretch; gap: 10px; }
           .ulj .cta-row .btn-primary, .ulj .cta-row .btn-ghost { width: 100%; }
           .ulj .offer > div { padding: 11px 14px; }
-          .ulj .convert-bar { width: calc(100vw - 24px); padding: 8px 8px 8px 8px; gap: 6px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
-          .ulj .convert-copy { display: none; }
-          .ulj .convert-bar .btn-primary { flex: 1; margin: 0; height: 44px; font-size: 15px; }
-          .ulj .convert-x { padding: 0 10px; height: 44px; }
         }
 
 
@@ -1879,6 +1890,9 @@ export default function HomePage() {
           .ulj .member-bar.free .btn-primary { margin: 0; height: 40px; }
         }
 
+
+        .ulj .dym { margin: -4px 0 12px; font-size: 13px; color: var(--ink-2); }
+        .ulj .dym b { color: var(--ink); font-weight: 600; }
 
         /* ── Search suggestions ── */
         .ulj .sug { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 70; background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 12px; padding: 6px; box-shadow: 0 16px 40px -12px rgba(0,0,0,.28); max-height: min(70vh, 460px); overflow-y: auto; }
