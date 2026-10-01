@@ -204,7 +204,7 @@ const initials = (name: string) =>
   name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
 
 const HOW_STEPS = [
-  { t: 'We monitor recruiter posts', d: 'AI tracks public posts from recruiters and talent teams.' },
+  { t: 'We monitor recruiter posts', d: 'AI tracks public posts from hiring managers, recruiters and talent teams.' },
   { t: 'We pick out real roles', d: 'Genuine openings, not generic career content.' },
   { t: 'You see them first', d: 'Roles land here before the job boards.' },
 ]
