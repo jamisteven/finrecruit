@@ -704,7 +704,7 @@ export default function HomePage() {
                     <>
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Early access active</div>}
-                      {!hasPass && <button onClick={() => { setMenuOpen(false); startCheckout('menu') }}>See new roles first - $9</button>}
+                      {!hasPass && <button onClick={() => { setMenuOpen(false); startCheckout('menu') }}>Signup</button>}
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
