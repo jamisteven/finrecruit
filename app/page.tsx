@@ -947,8 +947,12 @@ export default function HomePage() {
           </div>
           {!hasPass && (
             <div className="offer">
-              <div><b>Free</b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.</div>
-              <div><b>$9 early access</b>Every role the moment it drops. 14 days, no subscription.</div>
+              <a className="plan" href="/offer" onClick={() => track('cta_click', { where: 'hero_free' })}>
+                <b>Free<ArrowRight /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
+              </a>
+              <button type="button" className="plan" onClick={() => startCheckout('hero_plan')} disabled={checkingOut}>
+                <b>$9 early access<ArrowRight /></b>Every role the moment it drops. 14 days, no subscription.
+              </button>
             </div>
           )}
         </div>
@@ -1467,9 +1471,13 @@ export default function HomePage() {
         .ulj .hero .sub { font-size: 17px; color: var(--ink-2); max-width: 54ch; margin-bottom: 24px; }
         .ulj .cta-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
         .ulj .offer { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; max-width: 620px; border: 1px solid var(--hairline-2); background: var(--surface); border-radius: 12px; overflow: hidden; }
-        .ulj .offer > div { padding: 12px 16px; font-size: 13px; color: var(--ink-2); }
-        .ulj .offer > div + div { border-left: 1px solid var(--hairline-2); background: var(--accent-soft); color: var(--ink); }
-        .ulj .offer b { display: block; font-weight: 600; color: var(--ink); margin-bottom: 2px; font-size: 14px; }
+        .ulj .offer > .plan { display: block; text-align: left; padding: 12px 16px; font-size: 13px; line-height: 1.4; color: var(--ink-2); background: none; border: 0; border-radius: 0; cursor: pointer; text-decoration: none; transition: background .15s; }
+        .ulj .offer > .plan + .plan { border-left: 1px solid var(--hairline-2); background: var(--accent-soft); color: var(--ink); }
+        .ulj .offer > .plan:hover { background: var(--surface-2); }
+        .ulj .offer > .plan + .plan:hover { background: color-mix(in srgb, var(--accent-soft) 80%, var(--cta)); }
+        .ulj .offer > .plan:focus-visible { outline: 2px solid var(--cta); outline-offset: -2px; }
+        .ulj .offer b { display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--ink); margin-bottom: 2px; font-size: 14px; }
+        .ulj .offer b svg { width: 14px; height: 14px; flex: none; opacity: .55; }
         /* Hero art: a recruiter post becoming a listing */
         .ulj .art { position: relative; width: 100%; max-width: 520px; margin-left: auto; }
         .ulj .art-post { position: relative; z-index: 2; width: 66%; background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
@@ -1825,7 +1833,7 @@ export default function HomePage() {
           .ulj .hero { padding: 26px 16px 16px; gap: 24px; }
           .ulj .hero .sub { font-size: 15px; }
           .ulj .offer { grid-template-columns: 1fr; }
-          .ulj .offer > div + div { border-left: none; border-top: 1px solid var(--hairline-2); }
+          .ulj .offer > .plan + .plan { border-left: none; border-top: 1px solid var(--hairline-2); }
           .ulj .art-post { width: 100%; }
           .ulj .art-note { position: static; width: auto; transform: none; flex-direction: row; align-items: center; gap: 8px; margin: 8px 0 0 8px; font-size: 21px; }
           .ulj .art-note svg { margin: 0; flex: none; transform: rotate(-90deg) scaleX(-1); }
@@ -1865,7 +1873,7 @@ export default function HomePage() {
           .ulj .mast-actions > .signup { height: 34px; padding: 0 12px; font-size: 13px; }
           .ulj .cta-row { flex-direction: column; align-items: stretch; gap: 10px; }
           .ulj .cta-row .btn-primary, .ulj .cta-row .btn-ghost { width: 100%; }
-          .ulj .offer > div { padding: 11px 14px; }
+          .ulj .offer > .plan { padding: 11px 14px; }
         }
 
 

@@ -1,316 +1,135 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
-type Job = {
-  id: string
-  title: string
-  company: string | null
-  location: string | null
-  sector: string
-  seniority: string | null
-  posted_at: string | null
-  summary: string | null
-  post_url: string
-  author_name: string | null
-  author_headline: string | null
-}
-
-const SECTOR_LABEL: Record<string, string> = {
-  finance: 'Finance', tech: 'Tech', legal: 'Legal',
-  marketing: 'Marketing', realestate: 'Real Estate',
-}
-
-function ago(iso: string | null) {
-  if (!iso) return ''
-  const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3600_000)
-  if (h < 1) return 'just now'
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
-
-function Cta({ busy, onClick, label = 'Get my 14-day pass — $9' }: { busy: boolean; onClick: () => void; label?: string }) {
-  return (
-    <div className="cta-wrap">
-      <button className="cta" onClick={onClick} disabled={busy}>
-        {busy ? 'Opening checkout…' : label}
-      </button>
-      <p className="cta-sub">No subscription · Expires on its own · Refund if you find nothing</p>
-    </div>
-  )
-}
+const FREE_DELAY_HOURS = 48
 
 export default function OfferPage() {
-  const [jobs, setJobs] = useState<Job[]>([])
-  const [withheld, setWithheld] = useState(0)
-  const [today, setToday] = useState(0)
   const [busy, setBusy] = useState(false)
-  const [loaded, setLoaded] = useState(false)
-  const [hasPass, setHasPass] = useState(false)
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState(false)
 
-  useEffect(() => {
-    fetch('/api/jobs?limit=4&sortBy=newest')
-      .then((r) => r.json())
-      .then((d) => {
-        setJobs((d.jobs ?? []).slice(0, 6))
-        setWithheld(d.withheld ?? 0)
-        setToday((d.previewCount ?? 0) + (d.withheld ?? 0))
-        setHasPass(!!d.hasPass)
-        setLoaded(true)
-      })
-      .catch(() => setLoaded(true))
-  }, [])
+  const track = (name: string, params: Record<string, unknown> = {}) => {
+    try {
+      const w = window as unknown as { gtag?: (...a: unknown[]) => void }
+      w.gtag?.('event', name, params)
+    } catch { /* analytics must never break the page */ }
+  }
 
-  const buy = async () => {
-    setBusy(true); setErr('')
+  const checkout = async () => {
+    if (busy) return
+    track('cta_click', { where: 'offer_page' })
+    setBusy(true); setErr(false)
     try {
       const res = await fetch('/api/stripe/checkout', { method: 'POST' })
-      const d = await res.json()
-      if (d.url) window.location.href = d.url
-      else { setErr(d.error ?? 'Could not start checkout'); setBusy(false) }
-    } catch { setErr('Could not start checkout'); setBusy(false) }
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.url) { window.location.href = data.url; return }
+      console.error('[checkout] failed', res.status, data)
+    } catch (e) { console.error('[checkout] request error', e) }
+    setBusy(false); setErr(true)
+    setTimeout(() => setErr(false), 6000)
   }
 
   return (
-    <main className="offer">
-      <a className="back" href="/">← Back to the feed</a>
+    <div className="pp">
+      <header className="pp-top">
+        <a className="pp-brand" href="/">backchannel<span>.jobs</span></a>
+        <a className="pp-back" href="/">← Back to roles</a>
+      </header>
 
-      <section className="hero">
-        {today > 0 && (
-          <div className="pill"><i /> {today} roles landed today</div>
-        )}
-        <h1>The jobs LinkedIn doesn&apos;t show you — for the next 14 days</h1>
-        <p className="lede">
-          Recruiters, hiring managers and internal talent teams post openings straight into
-          their LinkedIn feed. Those posts never become listings, so nobody can search
-          them. We read them eight times a day.
+      <main className="pp-main">
+        <h1>See the roles <em>before everyone else.</em></h1>
+        <p className="pp-sub">
+          Recruiters and hiring managers share roles with their networks before they post them publicly.
+          We find them and list them here. Free visitors see each role after {FREE_DELAY_HOURS} hours; early access shows it the moment it drops.
         </p>
-        <Cta busy={busy} onClick={buy} />
-        {err && <p className="err">{err}</p>}
-      </section>
 
-      <section className="proof">
-        <div className="sec-label">Landed today</div>
-        <div className="proof-list">
-          {!loaded && [0, 1, 2].map((i) => (
-            <div key={`sk${i}`} className="proof-row skel">
-              <div className="skel-line w30" />
-              <div className="skel-line w70 tall" />
-              <div className="skel-line w45" />
-            </div>
-          ))}
-          {loaded && jobs.slice(0, 3).map((j, i) => (
-            <div key={j.id} className="proof-row">
-              <div className="proof-meta">
-                {SECTOR_LABEL[j.sector] ?? j.sector}
-                {j.location && <> · {j.location}</>}
-              </div>
-              <div className="proof-title">
-                {i > 2 ? j.title : <a href={j.post_url} target="_blank" rel="noopener noreferrer">{j.title}</a>}
-              </div>
-              <div className="proof-co">
-                {j.company}
-                {j.seniority && j.seniority !== 'Unknown' && <> · {j.seniority}</>}
-              </div>
-              {j.summary && <p className="proof-sum">{j.summary}</p>}
-              {j.author_name && (
-                <div className="proof-by">
-                  {j.author_name}{j.author_headline && <> · {j.author_headline}</>}
-                </div>
-              )}
-              <span className="proof-ago">{ago(j.posted_at)}</span>
-            </div>
-          ))}
-          {withheld > 0 && jobs[3] && (
-            <div className="proof-row teaser">
-              <div className="teaser-peek">
-                <div className="proof-meta">{SECTOR_LABEL[jobs[3].sector] ?? jobs[3].sector}{jobs[3].location && <> · {jobs[3].location}</>}</div>
-                <div className="proof-title">{jobs[3].title}</div>
-                <div className="proof-co">{jobs[3].company}</div>
-              </div>
-              <div className="teaser-veil">
-                <span>{withheld} more landed today</span>
-              </div>
-            </div>
-          )}
+        <div className="pp-cards">
+          <section className="pp-card pp-paid">
+            <span className="pp-tag">Most popular</span>
+            <h2>Early access</h2>
+            <div className="pp-price"><b>$9</b><span>one-time · 14 days</span></div>
+            <ul>
+              <li>Every new role the moment it drops</li>
+              <li>Full details and a direct link to the recruiter</li>
+              <li>No subscription, nothing renews</li>
+            </ul>
+            <button type="button" className="pp-btn pp-btn-primary" onClick={checkout} disabled={busy}>
+              {busy ? 'Opening checkout…' : 'Get early access – $9'}
+            </button>
+            <p className="pp-fine">Secure payment by Stripe.</p>
+            {err && <p className="pp-err" role="alert">Couldn&apos;t open checkout. Please try again.</p>}
+          </section>
+
+          <section className="pp-card">
+            <h2>Free</h2>
+            <div className="pp-price"><b>$0</b><span>always</span></div>
+            <ul>
+              <li>Every role older than {FREE_DELAY_HOURS} hours</li>
+              <li>3 fresh roles in full, plus a peek at 2 more</li>
+              <li>Search and filter the whole list</li>
+            </ul>
+            <a className="pp-btn pp-btn-ghost" href="/login" onClick={() => track('cta_click', { where: 'offer_free_account' })}>Create a free account</a>
+            <p className="pp-fine"><a href="/" onClick={() => track('cta_click', { where: 'offer_free_browse' })}>or just keep browsing</a></p>
+          </section>
         </div>
-      </section>
 
-      <section className="pain">
-        <h2>By the time a role reaches a job board, 400 people have applied</h2>
-        <p>
-          The ones that never reach a board are different. A recruiter, a hiring manager or
-          someone on an internal talent team writes a post, their network sees it, a
-          handful of people reply, and it&apos;s filled. Most
-          roles are gone inside 48 hours — usually before anyone outside that network
-          knew they existed.
-        </p>
-      </section>
-
-      <section className="steps">
-        <div className="sec-label">How it works</div>
-        <ol>
-          <li><b>Someone hiring posts to their feed</b><span>Not the jobs section. No listing, no search index, no queue.</span></li>
-          <li><b>We read the feed eight times a day</b><span>Every post, classified and filed by sector and city within the hour.</span></li>
-          <li><b>You reply while the list is short</b><span>Straight to the person hiring, before it becomes a numbers game.</span></li>
-        </ol>
-      </section>
-
-      <Cta busy={busy} onClick={buy} />
-
-      <section className="compare">
-        <div className="sec-label">How it compares</div>
-        <div className="compare-grid">
-          <div className="col">
-            <div className="col-name">LinkedIn Jobs</div>
-            <ul><li>Hundreds of applicants</li><li>Screened by filters first</li><li>No one to talk to</li></ul>
-          </div>
-          <div className="col">
-            <div className="col-name">Indeed &amp; aggregators</div>
-            <ul><li>Reposted from elsewhere</li><li>Often already filled</li><li>Apply into a void</li></ul>
-          </div>
-          <div className="col highlight">
-            <div className="col-name">BackchannelJobs</div>
-            <ul><li>A named person, same day</li><li>Posted hours ago, not weeks</li><li>Reply to a person</li></ul>
-          </div>
-        </div>
-      </section>
-
-      <section className="guarantee">
-        <h2>Nothing worth applying to? Tell us and we&apos;ll refund you.</h2>
-        <p>
-          Fourteen days is long enough to know. If the feed doesn&apos;t surface a single
-          role you want to go after, email us and we&apos;ll send the $9 back.
-        </p>
-        <Cta busy={busy} onClick={buy} />
-      </section>
-
-      <section className="pricing">
-        <div className="sec-label">What it costs</div>
-        <div className="price-grid">
-          <div className="price">
-            <div className="price-name">Free</div>
-            <div className="price-fig">$0</div>
-            <ul><li>10 fresh roles a day</li><li>Everything else after 24 hours</li></ul>
-          </div>
-          <div className="price featured">
-            <div className="price-name">14-day pass</div>
-            <div className="price-fig">$9</div>
-            <ul><li>Every role as it lands</li><li>Full archive</li><li>Expires on its own</li></ul>
-          </div>
-          <div className="price muted">
-            <div className="price-name">A recruiter&apos;s fee</div>
-            <div className="price-fig">15–25%</div>
-            <ul><li>Of your first-year salary</li><li>Paid by the employer, priced into the offer</li></ul>
-          </div>
-        </div>
-      </section>
-
-      <section className="faq">
-        <div className="sec-label">Before you buy</div>
-        <div className="q"><b>Are these real openings?</b><span>Every card links to the original LinkedIn post. You can read it yourself and message the person who wrote it.</span></div>
-        <div className="q"><b>What if I find something on day one?</b><span>Then it did its job. The pass expires by itself either way — there&apos;s nothing to cancel.</span></div>
-        <div className="q"><b>Why don&apos;t some roles name the company?</b><span>Because the recruiter chose not to. They want candidates to come through them rather than apply direct — which is exactly why these roles never reach a job board. Message the person who posted it.</span></div>
-        <div className="q"><b>Does it renew?</b><span>No. It&apos;s a single $9 charge for 14 days. We can&apos;t charge you again without you buying again.</span></div>
-        <div className="q"><b>Which sectors?</b><span>Finance, tech, legal, marketing and real estate, across {jobs.length > 0 ? 'every major market' : 'the US, UK, Europe, Canada and the Gulf'}.</span></div>
-      </section>
-
-      <section className="closing">
-        <h2>The jobs LinkedIn doesn&apos;t show you</h2>
-        <p>{today > 0 ? `${today} landed today. A pass shows you all of them.` : 'A pass shows you every role the moment it lands.'}</p>
-        <Cta busy={busy} onClick={buy} />
-      </section>
+        <section className="pp-faq">
+          <h3>Common questions</h3>
+          <details><summary>What happens after 14 days?</summary><p>Your access ends and you go back to the free view. It doesn&apos;t renew, so there is nothing to cancel. You can extend for another $9 if you want more time.</p></details>
+          <details><summary>Where do the roles come from?</summary><p>Public LinkedIn posts from recruiters and hiring managers, collected and organised by AI.</p></details>
+          <details><summary>Why is free delayed by {FREE_DELAY_HOURS} hours?</summary><p>Early roles are where the value is, since fewer people have applied. That is what early access pays for. Everything older stays free.</p></details>
+        </section>
+      </main>
 
       <style>{`
-        html, body { background: #F5F2EB; margin: 0; }
-        .offer { max-width: 980px; margin: 0 auto; padding: 34px 26px 90px;
-          font-family: 'Inter', system-ui, sans-serif; color: #191713; }
-        .offer .back { font-size: 13px; color: #6B6862; text-decoration: none; }
-        .offer section { padding: 46px 0; border-bottom: 1px solid #E2DCD0; }
-        .offer section:last-of-type { border-bottom: none; }
-        .offer h1 { font-family: 'Fraunces', Georgia, serif; font-size: 34px; font-weight: 500;
-          line-height: 1.16; margin: 16px 0 12px; letter-spacing: -0.01em; }
-        .offer h2 { font-family: 'Fraunces', Georgia, serif; font-size: 23px; font-weight: 500;
-          line-height: 1.25; margin: 0 0 10px; }
-        .offer p { font-size: 14.5px; line-height: 1.7; color: #57544E; margin: 0; max-width: 68ch; }
-        .offer .hero, .offer .guarantee, .offer .closing { text-align: center; }
-        .offer .hero p, .offer .guarantee p, .offer .closing p { margin-left: auto; margin-right: auto; }
-        .offer .lede { margin-bottom: 26px; max-width: 56ch; margin-left: auto; margin-right: auto; }
-        .offer .sec-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
-          color: #8B877F; margin-bottom: 16px; }
-        .offer .pill { display: inline-flex; align-items: center; gap: 7px; background: #EDE8DF;
-          border: 1px solid #DDD6C8; border-radius: 20px; padding: 4px 12px; font-size: 12px; color: #57544E; }
-        .offer .pill i { width: 6px; height: 6px; border-radius: 50%; background: #1D9E75; }
-        .offer .cta-wrap { margin: 26px 0 0; }
-        .offer .cta { display: block; width: 100%; max-width: 420px; margin: 0 auto; background: #191713; color: #F5F2EB;
-          border: none; font: 500 15px 'Inter', sans-serif; padding: 15px; border-radius: 10px; cursor: pointer; }
-        .offer .cta:disabled { opacity: 0.6; cursor: default; }
-        .offer .cta-sub { font-size: 12px; color: #8B877F; text-align: center; margin: 9px auto 0; max-width: none; }
-        .offer .err { font-size: 13px; color: #A32D2D; text-align: center; margin-top: 10px; }
-
-        .offer .proof-list { display: flex; flex-direction: column; gap: 8px; }
-        .offer .proof-row { position: relative; background: #FDFCFA; border: 1px solid #E2DCD0;
-          border-radius: 11px; padding: 13px 15px; }
-        .offer .proof-row.veiled { filter: blur(4px); user-select: none; pointer-events: none; }
-        .offer .proof-meta { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #8B877F; }
-        .offer .proof-title { font-family: 'Fraunces', Georgia, serif; font-size: 17px; margin-top: 3px; }
-        .offer .proof-co { font-size: 12.5px; color: #57544E; margin-top: 2px; }
-        .offer .proof-title a { color: inherit; text-decoration: none; }
-        .offer .proof-title a:hover { text-decoration: underline; text-underline-offset: 3px; }
-        .offer .proof-sum { font-size: 13px; color: #57544E; line-height: 1.6; margin: 7px 0 0; }
-        .offer .proof-by { font-size: 11.5px; color: #8B877F; margin-top: 8px; }
-        .offer .proof-ago { position: absolute; top: 13px; right: 15px; font-size: 11px; color: #8B877F; }
-        .offer .proof-row.skel { display: flex; flex-direction: column; gap: 9px; }
-        .offer .skel-line { height: 11px; border-radius: 5px; background: #EDE8DF;
-          animation: skelpulse 1.4s ease-in-out infinite; }
-        .offer .skel-line.tall { height: 17px; }
-        .offer .skel-line.w30 { width: 30%; }
-        .offer .skel-line.w45 { width: 45%; }
-        .offer .skel-line.w70 { width: 70%; }
-        @keyframes skelpulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.45 } }
-        .offer .proof-row.teaser { position: relative; overflow: hidden; min-height: 92px; }
-        .offer .teaser-peek { filter: blur(4.5px); user-select: none; pointer-events: none; }
-        .offer .teaser-veil { position: absolute; inset: 0; display: flex; align-items: center;
-          justify-content: center; background: rgba(245,242,235,0.78); }
-        .offer .teaser-veil span { font-family: 'Fraunces', Georgia, serif; font-size: 18px; color: #191713; }
-        .offer .proof-more { text-align: center; font-size: 13px; color: #57544E; padding: 6px 0 0; }
-
-        .offer .steps ol { list-style: none; counter-reset: s; padding: 0; margin: 0;
-          display: flex; flex-direction: column; gap: 18px; }
-        .offer .steps li { counter-increment: s; padding-left: 40px; position: relative; }
-        .offer .steps li::before { content: counter(s); position: absolute; left: 0; top: 0;
-          width: 27px; height: 27px; border-radius: 50%; background: #EDE8DF; color: #57544E;
-          font-size: 12px; display: flex; align-items: center; justify-content: center; }
-        .offer .steps b { display: block; font-size: 15px; font-weight: 500; }
-        .offer .steps span { display: block; font-size: 13.5px; color: #57544E; margin-top: 3px; line-height: 1.6; }
-
-        .offer .compare-grid, .offer .price-grid { display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-        .offer .col, .offer .price { background: #FDFCFA; border: 1px solid #E2DCD0;
-          border-radius: 12px; padding: 15px; }
-        .offer .col.highlight, .offer .price.featured { border: 2px solid #191713; }
-        .offer .price.muted { background: transparent; }
-        .offer .col-name, .offer .price-name { font-size: 13px; }
-        .offer .price-fig { font-family: 'Fraunces', Georgia, serif; font-size: 25px; margin: 3px 0 11px; }
-        .offer .col ul, .offer .price ul { list-style: none; padding: 0; margin: 9px 0 0; }
-        .offer .col li, .offer .price li { font-size: 12px; color: #57544E; padding: 4px 0 4px 12px;
-          position: relative; line-height: 1.5; }
-        .offer .col li::before, .offer .price li::before { content: '·'; position: absolute; left: 2px; color: #A8A49B; }
-
-        .offer .q { padding: 13px 0; border-top: 1px solid #EDE8DF; }
-        .offer .q:first-of-type { border-top: none; }
-        .offer .q b { display: block; font-size: 14px; font-weight: 500; }
-        .offer .q span { display: block; font-size: 13.5px; color: #57544E; margin-top: 4px; line-height: 1.65; }
-
-        .offer .closing { text-align: center; }
-        .offer .closing p { margin-bottom: 4px; }
-
-        @media (max-width: 560px) {
-          .offer h1 { font-size: 27px; }
-          .offer .compare-grid, .offer .price-grid { grid-template-columns: 1fr; }
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
+        .pp { --page:#F5F2EB; --surface:#FDFCFA; --ink:#191713; --ink-2:#5C574D; --hair:#D8D2C2; --accent-soft:#E4EAF6; --cta:#2F6BF2; --cta-h:#2458D4; --accent:#24468f;
+          min-height: 100vh; background: var(--page); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+        @media (prefers-color-scheme: dark) {
+          .pp { --page:#131210; --surface:#1C1A17; --ink:#F2EFE7; --ink-2:#A9A293; --hair:#3A362F; --accent-soft:#1D2538; --accent:#9DB4F0; }
+        }
+        .pp *, .pp *::before, .pp *::after { box-sizing: border-box; }
+        .pp-top { max-width: 900px; margin: 0 auto; padding: 20px 20px 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .pp-brand { font-family: 'Fraunces', Georgia, serif; font-size: 22px; font-weight: 600; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
+        .pp-brand span { color: var(--ink-2); font-weight: 400; }
+        .pp-back { font-size: 14px; color: var(--ink-2); text-decoration: none; }
+        .pp-back:hover { color: var(--ink); }
+        .pp-main { max-width: 900px; margin: 0 auto; padding: 36px 20px 72px; }
+        .pp h1 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(32px, 6vw, 48px); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 14px; }
+        .pp h1 em { font-style: normal; color: var(--accent); }
+        .pp-sub { font-size: 17px; line-height: 1.55; color: var(--ink-2); max-width: 620px; margin: 0 0 32px; }
+        .pp-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+        .pp-card { position: relative; background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; padding: 26px 24px 22px; display: flex; flex-direction: column; }
+        .pp-paid { background: var(--accent-soft); border-color: var(--cta); box-shadow: 0 10px 30px -12px rgba(47,107,242,0.35); order: 0; }
+        .pp-tag { position: absolute; top: -11px; left: 22px; background: var(--cta); color: #fff; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+        .pp h2 { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
+        .pp-price { display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px; }
+        .pp-price b { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 44px; letter-spacing: -0.02em; }
+        .pp-price span { font-size: 14px; color: var(--ink-2); }
+        .pp ul { list-style: none; padding: 0; margin: 0 0 22px; display: grid; gap: 10px; flex: 1; }
+        .pp li { font-size: 15px; line-height: 1.4; padding-left: 24px; position: relative; }
+        .pp li::before { content: ''; position: absolute; left: 2px; top: 5px; width: 6px; height: 11px; border: solid var(--accent); border-width: 0 2px 2px 0; transform: rotate(45deg) scale(.85); }
+        .pp-btn { display: block; width: 100%; text-align: center; font: inherit; font-size: 16px; font-weight: 600; padding: 14px 18px; border-radius: 12px; cursor: pointer; text-decoration: none; border: 1px solid transparent; }
+        .pp-btn-primary { background: var(--cta); color: #fff; }
+        .pp-btn-primary:hover:not(:disabled) { background: var(--cta-h); }
+        .pp-btn-primary:disabled { opacity: .7; cursor: default; }
+        .pp-btn-ghost { background: transparent; color: var(--ink); border-color: var(--hair); }
+        .pp-btn-ghost:hover { border-color: var(--ink-2); }
+        .pp-btn:focus-visible, .pp a:focus-visible, .pp summary:focus-visible { outline: 2px solid var(--cta); outline-offset: 2px; }
+        .pp-fine { font-size: 13px; color: var(--ink-2); text-align: center; margin: 10px 0 0; }
+        .pp-fine a { color: var(--ink-2); }
+        .pp-err { font-size: 13px; color: #C23B22; text-align: center; margin: 8px 0 0; }
+        .pp-faq { margin-top: 44px; max-width: 640px; }
+        .pp-faq h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+        .pp details { border-top: 1px solid var(--hair); padding: 14px 0; }
+        .pp details:last-child { border-bottom: 1px solid var(--hair); }
+        .pp summary { cursor: pointer; font-weight: 500; font-size: 15px; }
+        .pp details p { margin: 10px 0 0; color: var(--ink-2); font-size: 15px; line-height: 1.55; }
+        @media (max-width: 720px) {
+          .pp-cards { grid-template-columns: 1fr; }
+          .pp-main { padding-top: 24px; }
         }
       `}</style>
-    </main>
+    </div>
   )
 }
