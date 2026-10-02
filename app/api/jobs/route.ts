@@ -113,6 +113,32 @@ const loadArchive = () => load('archive', ARCHIVE_TTL_MS, (q) => q
 const loadRecent = () => load('recent', RECENT_TTL_MS, (q) => q
   .or(`posted_at.gte.${new Date(Date.now() - RECENT_WINDOW_MS).toISOString()},posted_at.is.null`))
 
+// Counting the older roles costs Supabase almost nothing (no rows are sent), so the page can show
+// the full total without downloading them.
+const SECTORS = ['finance', 'tech', 'legal', 'marketing', 'realestate']
+let countsCache: { v: Record<string, number>; at: number } | undefined
+async function loadArchiveCounts(): Promise<Record<string, number> | undefined> {
+  if (countsCache && Date.now() - countsCache.at < ARCHIVE_TTL_MS / 2) return countsCache.v
+  try {
+    const db = createServerClient()
+    const lo = new Date(Date.now() - HISTORY_DAYS * 86400000).toISOString()
+    const hi = new Date(Date.now() - CORE_DAYS * 86400000).toISOString()
+    const res = await Promise.all(SECTORS.map((sec) =>
+      db.from('jobs').select('id', { count: 'exact', head: true })
+        .eq('is_verified_job', true).or('quality.is.null,quality.neq.low')
+        .eq('sector', sec).gte('posted_at', lo).lt('posted_at', hi)))
+    const failed = res.find((x) => x.error)
+    if (failed?.error) throw new Error(failed.error.message)
+    const v: Record<string, number> = {}
+    SECTORS.forEach((sec, i) => { v[sec] = res[i].count ?? 0 })
+    countsCache = { v, at: Date.now() }
+    return v
+  } catch (e) {
+    console.error('[jobs] archive counts failed:', (e as Error).message)
+    return countsCache?.v
+  }
+}
+
 const hay = new WeakMap<Row, string>()
 function haystack(r: Row): string {
   let h = hay.get(r)
@@ -236,6 +262,7 @@ export async function GET(req: NextRequest) {
     previewCount: previewIds.length,
     previewIds,
     addedToday,
+    ...(archive ? {} : { archiveCounts: await loadArchiveCounts() }),
   })
   // the browser may reuse this for a minute (refreshes, sort toggles) without hitting the server
   res.headers.set('Cache-Control', 'private, max-age=60')

@@ -24,9 +24,6 @@ const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
 // The cutoff itself is enforced server-side in /api/jobs, so keep that in sync with this value.
 const FREE_DELAY_HOURS = 48
 
-// POST endpoint that creates the Stripe Checkout session and returns { url }
-// (app/api/stripe/checkout/route.ts)
-const CHECKOUT_ENDPOINT = '/api/stripe/checkout'
 
 // JobPost.sector is a plain string in the API payload, so accept any string
 const PIPELINE_LABELS: Record<string, string> = {
@@ -237,7 +234,6 @@ export default function HomePage() {
     document.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('touchstart', onDown); document.removeEventListener('keydown', onKey) }
   }, [menuOpen])
-  const [checkingOut, setCheckingOut] = useState(false)
   const [checkoutError, setCheckoutError] = useState(false)
   useEffect(() => {
     const sb = createClient()
@@ -253,6 +249,9 @@ export default function HomePage() {
   // Older roles (2-4 weeks) are not downloaded until someone searches or picks a location
   const [archiveJobs, setArchiveJobs] = useState<JobPost[]>([])
   const archiveRequested = useRef(false)
+  const [archiveDone, setArchiveDone] = useState(false)
+  // How many older roles exist per sector (counted by the server, not downloaded), so the totals show the full month
+  const [archiveCounts, setArchiveCounts] = useState<Record<string, number> | null>(null)
   const rawJobs = useMemo(() => {
     if (!archiveJobs.length) return coreJobs
     const ids = new Set(coreJobs.map((j) => j.id))
@@ -367,6 +366,7 @@ export default function HomePage() {
       setPassExpires(data.passExpiresAt ?? null)
       setFirstLoad(true)
       setWithheld(data.withheld ?? 0)
+      setArchiveCounts(data.archiveCounts ?? null)
       setAddedToday(data.addedToday ?? 0)
       setPreviewCount(data.previewCount ?? 0)
       setPreviewIds(data.previewIds ?? [])
@@ -394,6 +394,7 @@ export default function HomePage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.jobs?.length) setArchiveJobs(d.jobs) })
       .catch(() => { archiveRequested.current = false })
+      .finally(() => setArchiveDone(true))
   }, [wantsArchive])
 
   // Debounced so typing in search doesn't fire a request per keystroke
@@ -604,14 +605,24 @@ export default function HomePage() {
     return () => clearTimeout(t)
   }, [filters.search, filters.sector, filters.locations, filters.workTypes, displayJobs.length])
 
-  const sectorCounts = useMemo(() => ({
-    all: allJobs.length,
-    finance: allJobs.filter((j) => j.sector === 'finance').length,
-    tech: allJobs.filter((j) => j.sector === 'tech').length,
-    legal: allJobs.filter((j) => j.sector === 'legal').length,
-    marketing: allJobs.filter((j) => j.sector === 'marketing').length,
-    realestate: allJobs.filter((j) => j.sector === 'realestate').length,
-  }), [allJobs])
+  // Until the older roles are downloaded, add the server's count of them so the totals cover the whole month
+  const olderPending = archiveCounts && !archiveDone ? archiveCounts : null
+  // The feed count: add the not-yet-downloaded older roles when nothing narrows beyond the sector
+  const headlineCount = displayJobs.length + (
+    olderPending && !filters.search.trim() && filters.locations.length === 0 && filters.workTypes.length === 0
+      ? (filters.sector === 'all' ? Object.values(olderPending).reduce((a, b) => a + b, 0) : (olderPending[filters.sector] ?? 0))
+      : 0)
+  const sectorCounts = useMemo(() => {
+    const plus = (id: string) => (olderPending?.[id] ?? 0)
+    return {
+      all: allJobs.length + Object.values(olderPending ?? {}).reduce((a, b) => a + b, 0),
+      finance: allJobs.filter((j) => j.sector === 'finance').length + plus('finance'),
+      tech: allJobs.filter((j) => j.sector === 'tech').length + plus('tech'),
+      legal: allJobs.filter((j) => j.sector === 'legal').length + plus('legal'),
+      marketing: allJobs.filter((j) => j.sector === 'marketing').length + plus('marketing'),
+      realestate: allJobs.filter((j) => j.sector === 'realestate').length + plus('realestate'),
+    }
+  }, [allJobs, olderPending])
 
   // Base for location facet counts: every active filter EXCEPT location itself,
   // so region/city counts respond to the selected sector and work types.
@@ -736,30 +747,6 @@ export default function HomePage() {
     } catch { /* analytics must never break the page */ }
   }
 
-  // Every early-access button goes straight to Stripe Checkout. If the session can't be
-  // created we say so and log why, rather than silently sending people to another page.
-  const startCheckout = async (where: string, plan: 'monthly' | 'quarter' = 'monthly') => {
-    if (checkingOut) return
-    track('cta_click', { where, plan })
-    setCheckingOut(true)
-    setCheckoutError(false)
-    try {
-      const res = await fetch(CHECKOUT_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan }),
-      })
-      const data = await res.json().catch(() => null)
-      if (res.ok && data?.url) { window.location.href = data.url; return }
-      console.error('[checkout] failed', res.status, data)
-    } catch (err) {
-      console.error('[checkout] request error', err)
-    }
-    setCheckingOut(false)
-    setCheckoutError(true)
-    setTimeout(() => setCheckoutError(false), 6000)
-  }
-
   // Stripe's hosted billing portal: update card, see invoices, cancel
   const [portalBusy, setPortalBusy] = useState(false)
   const openPortal = async () => {
@@ -842,7 +829,7 @@ export default function HomePage() {
       </div>
       <div className="card-foot lock-foot">
         <div className="card-actions">
-          <button type="button" className="btn-primary" onClick={() => startCheckout('locked_title')} disabled={checkingOut}><BoltIcon />Unlock</button>
+          <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'locked_title' })}><BoltIcon />Unlock</a>
         </div>
       </div>
     </article>
@@ -949,7 +936,7 @@ export default function HomePage() {
             </button>
 
             {!hasPass && !userEmail && (
-              <button type="button" className="btn-primary signup" onClick={() => startCheckout('header_signup')} disabled={checkingOut}>Sign up</button>
+              <a className="btn-primary signup" href="/offer" onClick={() => track('cta_click', { where: 'header_signup' })}>Sign up</a>
             )}
           </div>
         </div>
@@ -963,9 +950,9 @@ export default function HomePage() {
           <p className="sub">Roles recruiters and hiring managers share with their networks before posting them publicly - tracked by AI and delivered in real time.</p>
           <div className="cta-row">
             {!hasPass && (
-              <button type="button" className="btn-primary lg" onClick={() => startCheckout('hero')} disabled={checkingOut}>
+              <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'hero' })}>
                 <BoltIcon />See new roles first - $9
-              </button>
+              </a>
             )}
             <a className="btn-ghost lg" href="#feed">See today&apos;s roles <ArrowRight /></a>
           </div>
@@ -974,9 +961,9 @@ export default function HomePage() {
               <a className="plan" href="/offer" onClick={() => track('cta_click', { where: 'hero_free' })}>
                 <b>Free<ArrowRight /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
               </a>
-              <button type="button" className="plan" onClick={() => startCheckout('hero_plan')} disabled={checkingOut}>
+              <a className="plan" href="/offer" onClick={() => track('cta_click', { where: 'hero_plan' })}>
                 <b>$9 first month<ArrowRight /></b>Every role the moment it drops. Then $15/month, cancel anytime.
-              </button>
+              </a>
             </div>
           )}
         </div>
@@ -1033,7 +1020,7 @@ export default function HomePage() {
           ) : (
             <div className="member-bar free">
               <div className="mb-copy"><b>Free account</b><span className="mb-sub">Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.</span></div>
-              <button type="button" className="btn-primary" onClick={() => startCheckout('member_bar')} disabled={checkingOut}><BoltIcon />See new roles first - $9</button>
+              <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'member_bar' })}><BoltIcon />See new roles first - $9</a>
             </div>
           )}
         </div>
@@ -1162,7 +1149,7 @@ export default function HomePage() {
               <span className="tagline">Most roles fill inside 48 hours</span>
               <h3>Don&apos;t wait {FREE_DELAY_HOURS} hours.</h3>
               <div className="price"><b>$9</b><span>first month · then $15/mo</span></div>
-              <button type="button" className="btn-primary block" onClick={() => startCheckout('sidebar')} disabled={checkingOut}>See new roles first - $9</button>
+              <a className="btn-primary block" href="/offer" onClick={() => track('cta_click', { where: 'sidebar' })}>See new roles first - $9</a>
               <ul>
                 <li><CheckIcon />Every role the moment it drops</li>
                 <li><CheckIcon />Cancel anytime</li>
@@ -1177,7 +1164,7 @@ export default function HomePage() {
         <main>
           <div className="feed-bar">
             <span className="count">
-              <b>{displayJobs.length}</b> {displayJobs.length === 1 ? 'role' : 'roles'}
+              <b>{headlineCount.toLocaleString()}</b> {headlineCount === 1 ? 'role' : 'roles'}
               {filters.sector !== 'all' && ` in ${sectorLabel(filters.sector)}`}
             </span>
             {!anyFilter && addedToday > 0 && (
@@ -1280,7 +1267,7 @@ export default function HomePage() {
                   <h3>{withheld > 0 ? `${withheld} newer roles are waiting.` : 'See these now, not in 48 hours.'}</h3>
                   <p>Early access is $9 for your first month, then $15/month. Every new role the moment it drops. Cancel anytime.</p>
                 </div>
-                <button type="button" className="btn-primary lg" onClick={() => startCheckout('inline')} disabled={checkingOut}><BoltIcon />See new roles first - $9</button>
+                <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'inline' })}><BoltIcon />See new roles first - $9</a>
               </div>
             )}
 
