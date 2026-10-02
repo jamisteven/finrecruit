@@ -204,7 +204,7 @@ const initials = (name: string) =>
   name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
 
 const HOW_STEPS = [
-  { t: 'We monitor recruiter posts', d: 'AI tracks public posts from hiring managers, recruiters and talent teams.' },
+  { t: 'We monitor recruiter posts', d: 'AI tracks public posts from recruiters and talent teams.' },
   { t: 'We pick out real roles', d: 'Genuine openings, not generic career content.' },
   { t: 'You see them first', d: 'Roles land here before the job boards.' },
 ]
@@ -249,7 +249,15 @@ export default function HomePage() {
     try { await createClient().auth.signOut() } catch {}
     window.location.reload()
   }
-  const [rawJobs, setAllJobs] = useState<JobPost[]>([])   // everything the API sent this visitor
+  const [coreJobs, setAllJobs] = useState<JobPost[]>([])   // the default list: roles from the last two weeks
+  // Older roles (2-4 weeks) are not downloaded until someone searches or picks a location
+  const [archiveJobs, setArchiveJobs] = useState<JobPost[]>([])
+  const archiveRequested = useRef(false)
+  const rawJobs = useMemo(() => {
+    if (!archiveJobs.length) return coreJobs
+    const ids = new Set(coreJobs.map((j) => j.id))
+    return [...coreJobs, ...archiveJobs.filter((j) => !ids.has(j.id))]
+  }, [coreJobs, archiveJobs])
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
 
   // Search runs in the browser over the loaded roles, so results and suggestions appear instantly
@@ -376,6 +384,17 @@ export default function HomePage() {
       setLoading(false)
     } finally { setLoading(false) }
   }, [filters.sortBy])
+
+  // Pull the older roles once, the first time a search or location filter is used
+  const wantsArchive = filters.search.trim().length >= 2 || filters.locations.length > 0
+  useEffect(() => {
+    if (!wantsArchive || archiveRequested.current) return
+    archiveRequested.current = true
+    fetch('/api/jobs?archive=1&limit=20000')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.jobs?.length) setArchiveJobs(d.jobs) })
+      .catch(() => { archiveRequested.current = false })
+  }, [wantsArchive])
 
   // Debounced so typing in search doesn't fire a request per keystroke
   useEffect(() => {

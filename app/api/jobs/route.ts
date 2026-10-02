@@ -52,15 +52,18 @@ const SEARCH_SYNONYMS: Record<string, string[]> = {
 // ---------------------------------------------------------------------------
 const COLUMNS = 'id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, author_avatar, posted_at, extracted_at, is_verified_job, quality, work_type'
 const HISTORY_DAYS = 30                 // longest window the page can ask for
+const CORE_DAYS = 14                    // sent by default; older roles (CORE_DAYS..HISTORY_DAYS) only on request (?archive=1)
 const OLD_TTL_MS = 4 * 3600_000         // roles older than 48h barely change: refresh every 4h
+const ARCHIVE_TTL_MS = 12 * 3600_000     // the oldest roles change least
 const RECENT_TTL_MS = 3 * 60_000        // the last 72h (and undated roles): refresh every 3 min
 const RECENT_WINDOW_MS = 72 * 3600_000  // overlaps the 48h boundary so nothing falls between the caches
 const PAGE = 1000
 
 type Row = Record<string, any>
+type Kind = 'old' | 'recent' | 'archive'
 type Entry = { rows: Row[]; at: number }
-const cache: { old?: Entry; recent?: Entry } = {}
-const inflight: { old?: Promise<Entry>; recent?: Promise<Entry> } = {}
+const cache: Partial<Record<Kind, Entry>> = {}
+const inflight: Partial<Record<Kind, Promise<Entry>>> = {}
 
 async function fetchAll(build: (q: any) => any): Promise<Row[]> {
   const db = createServerClient()
@@ -80,7 +83,7 @@ async function fetchAll(build: (q: any) => any): Promise<Row[]> {
   return out
 }
 
-async function load(kind: 'old' | 'recent', ttl: number, build: (q: any) => any): Promise<Row[]> {
+async function load(kind: Kind, ttl: number, build: (q: any) => any): Promise<Row[]> {
   const hit = cache[kind]
   if (hit && Date.now() - hit.at < ttl) return hit.rows
   if (!inflight[kind]) {
@@ -97,9 +100,15 @@ async function load(kind: 'old' | 'recent', ttl: number, build: (q: any) => any)
   }
 }
 
+// 48h .. CORE_DAYS old: the default list
 const loadOld = () => load('old', OLD_TTL_MS, (q) => q
-  .gte('posted_at', new Date(Date.now() - HISTORY_DAYS * 86400000).toISOString())
+  .gte('posted_at', new Date(Date.now() - CORE_DAYS * 86400000).toISOString())
   .lt('posted_at', new Date(Date.now() - FREE_DELAY_MS).toISOString()))
+
+// CORE_DAYS .. HISTORY_DAYS old: only read from Supabase if someone asks for it
+const loadArchive = () => load('archive', ARCHIVE_TTL_MS, (q) => q
+  .gte('posted_at', new Date(Date.now() - HISTORY_DAYS * 86400000).toISOString())
+  .lt('posted_at', new Date(Date.now() - CORE_DAYS * 86400000).toISOString()))
 
 const loadRecent = () => load('recent', RECENT_TTL_MS, (q) => q
   .or(`posted_at.gte.${new Date(Date.now() - RECENT_WINDOW_MS).toISOString()},posted_at.is.null`))
@@ -125,6 +134,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.max(1, parseInt(searchParams.get('limit') || '20000'))
   const maxAgeDays = Math.min(HISTORY_DAYS, parseInt(searchParams.get('maxAge') || String(HISTORY_DAYS)))
   const offset = Math.max(0, parseInt(searchParams.get('offset') || '0'))
+  const archive = searchParams.get('archive') === '1'   // older roles, requested on demand
 
   // Pass holders see roles as they land; everyone else waits FREE_DELAY_HOURS
   let hasPass = false
@@ -143,7 +153,13 @@ export async function GET(req: NextRequest) {
 
   let oldRows: Row[], recentRows: Row[]
   try {
-    ;[oldRows, recentRows] = await Promise.all([loadOld(), loadRecent()])
+    if (archive) {
+      // older-than-default roles only; the page already holds everything newer
+      oldRows = await loadArchive()
+      recentRows = []
+    } else {
+      ;[oldRows, recentRows] = await Promise.all([loadOld(), loadRecent()])
+    }
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Failed to load roles' }, { status: 500 })
   }
