@@ -738,13 +738,17 @@ export default function HomePage() {
 
   // Every early-access button goes straight to Stripe Checkout. If the session can't be
   // created we say so and log why, rather than silently sending people to another page.
-  const startCheckout = async (where: string) => {
+  const startCheckout = async (where: string, plan: 'monthly' | 'quarter' = 'monthly') => {
     if (checkingOut) return
-    track('cta_click', { where })
+    track('cta_click', { where, plan })
     setCheckingOut(true)
     setCheckoutError(false)
     try {
-      const res = await fetch(CHECKOUT_ENDPOINT, { method: 'POST' })
+      const res = await fetch(CHECKOUT_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan }),
+      })
       const data = await res.json().catch(() => null)
       if (res.ok && data?.url) { window.location.href = data.url; return }
       console.error('[checkout] failed', res.status, data)
@@ -752,6 +756,24 @@ export default function HomePage() {
       console.error('[checkout] request error', err)
     }
     setCheckingOut(false)
+    setCheckoutError(true)
+    setTimeout(() => setCheckoutError(false), 6000)
+  }
+
+  // Stripe's hosted billing portal: update card, see invoices, cancel
+  const [portalBusy, setPortalBusy] = useState(false)
+  const openPortal = async () => {
+    if (portalBusy) return
+    setPortalBusy(true)
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.url) { window.location.href = data.url; return }
+      console.error('[portal] failed', res.status, data)
+    } catch (err) {
+      console.error('[portal] request error', err)
+    }
+    setPortalBusy(false)
     setCheckoutError(true)
     setTimeout(() => setCheckoutError(false), 6000)
   }
@@ -907,6 +929,8 @@ export default function HomePage() {
                     <>
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Early access active</div>}
+                      {hasPass && <button onClick={() => { setMenuOpen(false); openPortal() }} disabled={portalBusy}>Manage billing</button>}
+                      <a href="/offer">Pricing</a>
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
@@ -951,7 +975,7 @@ export default function HomePage() {
                 <b>Free<ArrowRight /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
               </a>
               <button type="button" className="plan" onClick={() => startCheckout('hero_plan')} disabled={checkingOut}>
-                <b>$9 early access<ArrowRight /></b>Every role the moment it drops. 14 days, no subscription.
+                <b>$9 first month<ArrowRight /></b>Every role the moment it drops. Then $15/month, cancel anytime.
               </button>
             </div>
           )}
@@ -1003,7 +1027,7 @@ export default function HomePage() {
               <b>Early access active</b>
               {daysLeft !== null && <span className="mb-sub">{daysLeft <= 0 ? 'ends today' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left`}</span>}
               {daysLeft !== null && daysLeft <= 3 && (
-                <button type="button" className="mb-link" onClick={() => startCheckout('renew')} disabled={checkingOut}>Extend - $9</button>
+                <a className="mb-link" href="/offer" onClick={() => track('cta_click', { where: 'renew' })}>Extend</a>
               )}
             </div>
           ) : (
@@ -1137,11 +1161,11 @@ export default function HomePage() {
             <div className="pass pass-side">
               <span className="tagline">Most roles fill inside 48 hours</span>
               <h3>Don&apos;t wait {FREE_DELAY_HOURS} hours.</h3>
-              <div className="price"><b>$9</b><span>14 days · one payment</span></div>
+              <div className="price"><b>$9</b><span>first month · then $15/mo</span></div>
               <button type="button" className="btn-primary block" onClick={() => startCheckout('sidebar')} disabled={checkingOut}>See new roles first - $9</button>
               <ul>
                 <li><CheckIcon />Every role the moment it drops</li>
-                <li><CheckIcon />No subscription, expires on its own</li>
+                <li><CheckIcon />Cancel anytime</li>
               </ul>
             </div>
           )}
@@ -1254,7 +1278,7 @@ export default function HomePage() {
               <div className="inline-cta">
                 <div>
                   <h3>{withheld > 0 ? `${withheld} newer roles are waiting.` : 'See these now, not in 48 hours.'}</h3>
-                  <p>14 days of early access for $9. Every new role the moment it drops. No subscription.</p>
+                  <p>Early access is $9 for your first month, then $15/month. Every new role the moment it drops. Cancel anytime.</p>
                 </div>
                 <button type="button" className="btn-primary lg" onClick={() => startCheckout('inline')} disabled={checkingOut}><BoltIcon />See new roles first - $9</button>
               </div>
@@ -1988,7 +2012,7 @@ export default function HomePage() {
 
       {checkoutError && (
         <div className="checkout-error" role="alert">
-          We couldn&apos;t start checkout. Please try again in a moment.
+          Something went wrong on our side. Please try again in a moment.
           <button onClick={() => setCheckoutError(false)} aria-label="Dismiss">×</button>
         </div>
       )}
