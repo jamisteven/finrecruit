@@ -25,6 +25,12 @@ const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
 const FREE_DELAY_HOURS = 48
 
 // Label for every Premium call to action (the first month is $9, then it renews at $15)
+// Rotating examples in the search box. Swap for your real top queries once you have them.
+const SEARCH_EXAMPLES = [
+  'product manager', 'software engineer', 'remote', 'Zurich', 'London', 'data analyst',
+  'investment banking', 'marketing manager', 'account executive', 'legal counsel',
+  'customer success', 'real estate', 'UX designer', 'Berlin', 'compliance',
+]
 const CTA_LABEL = "See today's roles - $9 first month"
 
 
@@ -841,6 +847,37 @@ export default function HomePage() {
 
   const resetAll = () => setFilters(DEFAULT_FILTERS)
 
+  // Rotating search examples while the box is empty
+  const [exIdx, setExIdx] = useState(0)
+  useEffect(() => {
+    if (filters.search) return
+    const t = setInterval(() => setExIdx((i) => (i + 1) % SEARCH_EXAMPLES.length), 3200)
+    return () => clearInterval(t)
+  }, [filters.search])
+
+  // Free visitors: how many roles inside the free delay match this search (a number only; the roles stay server-side)
+  const [freshMatches, setFreshMatches] = useState(0)
+  const freshQuery = useMemo(
+    () => searchTerms.map((t) => t.fixed ?? t.tok).join(' ').trim(),
+    [searchTerms],
+  )
+  useEffect(() => {
+    if (hasPass || freshQuery.length < 2 || filters.locations.length > 0 || filters.workTypes.length > 0) { setFreshMatches(0); return }
+    let alive = true
+    const t = setTimeout(async () => {
+      try {
+        const p = new URLSearchParams({ freshCount: '1', search: freshQuery })
+        if (filters.sector !== 'all') p.set('sector', filters.sector)
+        const r = await fetch(`/api/jobs?${p}`)
+        const d = r.ok ? await r.json() : null
+        if (alive) setFreshMatches(Number(d?.freshMatches) || 0)
+      } catch { if (alive) setFreshMatches(0) }
+    }, 450)
+    return () => { alive = false; clearTimeout(t) }
+  }, [hasPass, freshQuery, filters.sector, filters.locations.length, filters.workTypes.length])
+  const showFreshUpsell = !hasPass && freshMatches > 0 && freshQuery.length >= 2
+  const showSugBox = sugOpen && (sugList.length > 0 || showFreshUpsell)
+
   // Title-only locked roles: only shown when no search/location/work-type filter is active,
   // and narrowed to the selected sector so the cards never contradict the filter.
   const lockedShown = !hasPass && !filters.search && filters.locations.length === 0 && filters.workTypes.length === 0
@@ -909,7 +946,7 @@ export default function HomePage() {
               type="search"
               enterKeyHint="search"
               inputMode="search"
-              placeholder="Search roles, companies, skills…"
+              placeholder={`Search roles, e.g. “${SEARCH_EXAMPLES[exIdx]}”`}
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="off"
@@ -935,8 +972,10 @@ export default function HomePage() {
               aria-expanded={showSug}
               aria-controls="search-sug"
             />
-            <span className="slash">/</span>
-            {showSug && (
+            {showFreshUpsell
+              ? <a className="bar-up" href="/offer" onClick={() => track('cta_click', { where: 'search_bar', q: freshQuery, n: freshMatches })}>+{freshMatches} new<span>&nbsp;· Premium</span></a>
+              : <span className="slash">/</span>}
+            {showSugBox && (
               <div className="sug" id="search-sug" role="listbox">
                 {sugList.map((j, n) => (
                   <button
@@ -957,6 +996,11 @@ export default function HomePage() {
                   <button type="button" className="sug-all" onClick={() => { setSugOpen(false); searchRef.current?.blur(); document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}>
                     See all {displayJobs.length} results
                   </button>
+                )}
+                {showFreshUpsell && (
+                  <a className="sug-up" href="/offer" onClick={() => track('cta_click', { where: 'search_dropdown', q: freshQuery, n: freshMatches })}>
+                    <BoltIcon /><span><b>{freshMatches} newer {freshMatches === 1 ? 'role matches' : 'roles match'}</b> this search. Premium shows them now.</span>
+                  </a>
                 )}
               </div>
             )}
@@ -1012,7 +1056,7 @@ export default function HomePage() {
                 <b>Browse free<ArrowRight /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
               </a>
               <a className="plan plan-pro" href="/offer" onClick={() => track('cta_click', { where: 'hero_plan' })}>
-                <b><span>Premium</span><ArrowRight /></b>Every role the moment it drops. $9 first month, then $15/month, cancel anytime.
+                <b><span><BoltIcon />$9 first month</span><ArrowRight /></b>Every role the moment it drops. Then $15/month, cancel anytime.
               </a>
             </div>
           )}
@@ -1227,11 +1271,19 @@ export default function HomePage() {
               {[...Array(5)].map((_, i) => <div key={i} className="skeleton" />)}
             </div>
           ) : displayJobs.length === 0 ? (
+            showFreshUpsell ? (
+              <div className="empty">
+                <h3>No older roles match, but {freshMatches} new {freshMatches === 1 ? 'one does' : 'ones do'}.</h3>
+                <p>Roles from the last {FREE_DELAY_HOURS} hours are Premium only.</p>
+                <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'search_empty', q: freshQuery, n: freshMatches })}><BoltIcon />See them with Premium</a>
+              </div>
+            ) : (
             <div className="empty">
               <h3>Nothing matches those filters.</h3>
               <p>Try widening the sector, location, or work-type selection.</p>
               <button onClick={resetAll}>Reset all filters</button>
             </div>
+            )
           ) : (
             <>
             {splitFeed && todayJobs.length > 0 && (
@@ -1359,6 +1411,12 @@ export default function HomePage() {
                 )
               })}
             </div>
+            {showFreshUpsell && (
+              <a className="fresh-more" href="/offer" onClick={() => track('cta_click', { where: 'search_end', q: freshQuery, n: freshMatches })}>
+                <span>{displayJobs.length.toLocaleString()} {displayJobs.length === 1 ? 'role' : 'roles'} · <b>{freshMatches} more from the last {FREE_DELAY_HOURS} hours</b> with Premium</span>
+                <ArrowRight />
+              </a>
+            )}
             </>
           )}
 
@@ -1815,6 +1873,11 @@ export default function HomePage() {
         }
         .ulj .apply-btn:hover { background: var(--surface-2); border-color: var(--ink); }
 
+        .ulj .fresh-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 0 0; padding: 12px 16px; border: 1px solid var(--hairline-2); border-radius: 12px; background: var(--accent-soft); color: var(--ink-2); font-size: 14px; text-decoration: none; transition: border-color .15s; }
+        .ulj .fresh-more b { color: var(--ink); font-weight: 600; }
+        .ulj .fresh-more:hover { border-color: var(--cta); }
+        .ulj .fresh-more svg { width: 14px; height: 14px; flex: none; opacity: .6; }
+        .ulj .empty .btn-primary { display: inline-flex; }
         .ulj .empty {
           background: var(--surface); border: 1px dashed var(--hairline-2); border-radius: 16px;
           padding: 64px 24px; text-align: center;
@@ -1974,6 +2037,13 @@ export default function HomePage() {
         .ulj .sug-row .st b { font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .ulj .sug-row .st span { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .ulj .sug-all { display: block; width: 100%; margin-top: 4px; padding: 9px 10px; border: none; border-top: 1px solid var(--hairline); background: none; text-align: left; cursor: pointer; font: 600 13px 'Inter', sans-serif; color: var(--link); border-radius: 0 0 8px 8px; }
+        .ulj .bar-up { position: absolute; right: 7px; top: 50%; translate: 0 -50%; height: 24px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: 999px; background: var(--cta); color: #fff; font: 600 11.5px 'Inter', sans-serif; text-decoration: none; white-space: nowrap; }
+        .ulj .bar-up span { opacity: .85; font-weight: 500; }
+        .ulj .bar-up:hover { background: var(--cta-hover, var(--cta)); }
+        .ulj .search-wrap:has(.bar-up) .search { padding-right: 112px; }
+        .ulj .sug-up { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 10px; border-radius: 8px; background: var(--accent-soft); color: var(--ink-2); font-size: 13px; line-height: 1.35; text-decoration: none; }
+        .ulj .sug-up b { color: var(--ink); font-weight: 600; }
+        .ulj .sug-up svg { width: 14px; height: 14px; flex: none; color: var(--cta); }
         .ulj .sug-all:hover { text-decoration: underline; text-underline-offset: 3px; }
 
         /* ── Free sample flag, section notes ── */
