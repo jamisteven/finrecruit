@@ -1012,7 +1012,7 @@ export default function HomePage() {
                 <b>Browse free<ArrowRight /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
               </a>
               <a className="plan plan-pro" href="/offer" onClick={() => track('cta_click', { where: 'hero_plan' })}>
-                <b><span><BoltIcon />$9 first month</span><ArrowRight /></b>Every role the moment it drops. Then $15/month, cancel anytime.
+                <b><span>Premium</span><ArrowRight /></b>Every role the moment it drops. $9 first month, then $15/month, cancel anytime.
               </a>
             </div>
           )}
