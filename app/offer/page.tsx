@@ -1,12 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { captureAttribution, deviceType, getAttribution, getVisitorId } from '@/lib/attribution'
 
 const FREE_DELAY_HOURS = 48
 
 export default function OfferPage() {
   const [busy, setBusy] = useState<'monthly' | 'quarter' | null>(null)
   const [err, setErr] = useState(false)
+
+  useEffect(() => { captureAttribution() }, [])   // in case someone lands here first
 
   const track = (name: string, params: Record<string, unknown> = {}) => {
     try {
@@ -23,7 +26,12 @@ export default function OfferPage() {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({
+          plan,
+          visitor_id: getVisitorId(),
+          device: deviceType(),
+          attribution: getAttribution(),
+        }),
       })
       const data = await res.json().catch(() => null)
       if (res.ok && data?.url) { window.location.href = data.url; return }

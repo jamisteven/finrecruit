@@ -88,6 +88,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'user unresolved' }, { status: 500 })   // Stripe retries
       }
 
+      // mark the checkout row as paid, and remember which device the customer first bought on
+      if (s.payment_status === 'paid' || s.mode === 'subscription') {
+        const { error: evErr } = await db.from('checkout_events')
+          .update({ paid_at: new Date().toISOString(), user_id: userId, email })
+          .eq('stripe_session_id', s.id)
+        if (evErr) console.error('[stripe] checkout_events update failed:', evErr.message)
+        const device = s.metadata?.device
+        if (device) {
+          await db.from('profiles').update({ signup_device: device }).eq('id', userId).is('signup_device', null)
+        }
+      }
+
       if (s.mode === 'subscription') {
         const subId = idOf(s.subscription)
         if (subId) await grantFromSubscription(stripe, db, subId, userId, customerId)

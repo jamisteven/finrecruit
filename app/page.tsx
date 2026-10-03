@@ -2,8 +2,8 @@
 
 import { createClient } from '@/lib/supabase-browser'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { Analytics } from '@vercel/analytics/next'
 import { JobPost, FilterState, Sector, WorkType } from '@/types'
+import { captureAttribution } from '@/lib/attribution'
 
 const DEFAULT_FILTERS: FilterState = {
   sector: 'all', seniority: 'All', locations: [], workTypes: [], search: '', sortBy: 'newest',
@@ -327,6 +327,7 @@ export default function HomePage() {
   const [nowTs, setNowTs] = useState<number | null>(null)  // null until mounted — avoids SSR hydration mismatch
   const visitorId = useRef<string | null>(null)
   useEffect(() => {
+    captureAttribution()   // remember how this visitor first arrived (used at checkout)
     try {
       let id = localStorage.getItem('bcj_vid')
       if (!id) { id = crypto.randomUUID(); localStorage.setItem('bcj_vid', id) }
@@ -2004,7 +2005,6 @@ export default function HomePage() {
         </div>
       )}
 
-      <Analytics />
     </div>
   )
 }

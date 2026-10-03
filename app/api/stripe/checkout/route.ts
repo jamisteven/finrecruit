@@ -22,6 +22,15 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null)
   const plan: Plan = body?.plan === 'quarter' || body?.plan === 'pass' ? body.plan : 'monthly'
+
+  // Who is buying, on what, and how they found us (all best-effort, never blocks checkout)
+  const clip = (v: unknown, n: number): string | null => (typeof v === 'string' && v ? v.slice(0, n) : null)
+  const userAgent = clip(req.headers.get('user-agent'), 400)
+  const uaDevice = /iPad|Tablet/i.test(userAgent ?? '') || (/Android/i.test(userAgent ?? '') && !/Mobi/i.test(userAgent ?? ''))
+    ? 'tablet' : /Mobi|iPhone|Android/i.test(userAgent ?? '') ? 'mobile' : 'desktop'
+  const device = ['mobile', 'tablet', 'desktop'].includes(body?.device) ? (body.device as string) : uaDevice
+  const visitorId = clip(body?.visitor_id, 80)
+  const attr = (body?.attribution && typeof body.attribution === 'object' ? body.attribution : {}) as Record<string, unknown>
   const price = PRICES[plan]
   if (!price) return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 })
 
@@ -69,7 +78,11 @@ export async function POST(req: NextRequest) {
     } catch { /* stale id: continue to a normal checkout */ }
   }
 
-  const meta = { plan, ...(userId ? { user_id: userId } : {}) }
+  const meta: Record<string, string> = {
+    plan, device,
+    ...(userId ? { user_id: userId } : {}),
+    ...(visitorId ? { visitor_id: visitorId } : {}),
+  }
   const common = {
     line_items: [{ price, quantity: 1 }],
     ...(customerId ? { customer: customerId } : email ? { customer_email: email } : {}),
@@ -94,6 +107,25 @@ export async function POST(req: NextRequest) {
         ...(customerId ? {} : { customer_creation: 'always' as const }),
         custom_text: { submit: { message: plan === 'quarter' ? 'One payment for 90 days of early access. It does not renew.' : 'One payment for 14 days of early access. It does not renew.' } },
       })
+
+  // First-party record of every checkout started: one row per click, marked paid by the webhook.
+  try {
+    const { error } = await createServerClient().from('checkout_events').insert({
+      stripe_session_id: session.id,
+      visitor_id: visitorId,
+      user_id: userId ?? null,
+      email: email ?? null,
+      plan,
+      device,
+      user_agent: userAgent,
+      referrer: clip(attr.referrer, 300),
+      utm_source: clip(attr.utm_source, 100),
+      utm_medium: clip(attr.utm_medium, 100),
+      utm_campaign: clip(attr.utm_campaign, 100),
+      landing_path: clip(attr.landing_path, 200),
+    })
+    if (error) console.error('[checkout] event insert failed:', error.message)
+  } catch (e) { console.error('[checkout] event insert error:', (e as Error).message) }
 
   return NextResponse.json({ url: session.url })
 }
