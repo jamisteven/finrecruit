@@ -81,7 +81,7 @@ const REGIONS: Record<string, string[]> = {
   'India':          ['india', 'mumbai', 'bangalore', 'bengaluru', 'delhi', 'new delhi', 'gurgaon', 'gurugram', 'hyderabad', 'pune', 'chennai', 'ahmedabad', 'noida'],
   'Australia':      ['australia', 'sydney', 'melbourne', 'brisbane', 'perth'],
   'Canada':         ['canada', 'toronto', 'vancouver', 'montreal', 'calgary'],
-  'Spain':          ['spain', 'madrid', 'barcelona'],
+  'Spain':          ['spain', 'españa', 'espana', 'madrid', 'barcelona', 'valencia', 'seville', 'sevilla', 'malaga', 'málaga', 'bilbao', 'palma', 'mallorca', 'alicante', 'zaragoza', 'ibiza', 'catalonia', 'catalunya', 'andalusia', 'canary islands'],
   'Ireland':        ['ireland', 'dublin'],
 }
 
@@ -387,7 +387,9 @@ export default function HomePage() {
   }, [filters.sortBy])
 
   // Pull the older roles once, the first time a search or location filter is used
-  const wantsArchive = filters.search.trim().length >= 2 || filters.locations.length > 0
+  const [openDrop, setOpenDrop] = useState<'region' | 'city' | null>(null)   // which location dropdown is open
+  // Opening a location dropdown also loads them, so the region and city counts cover the whole month
+  const wantsArchive = filters.search.trim().length >= 2 || filters.locations.length > 0 || openDrop !== null
   useEffect(() => {
     if (!wantsArchive || archiveRequested.current) return
     archiveRequested.current = true
@@ -719,7 +721,6 @@ export default function HomePage() {
     setFilters({ ...filters, workTypes: next })
   }
 
-  const [openDrop, setOpenDrop] = useState<'region' | 'city' | null>(null)
   const selRegion = filters.locations.find((l) => REGIONS[l]) ?? null
   const selCity = filters.locations.find((l) => !REGIONS[l]) ?? null
   // Radio-style pickers: one region and one city at a time (null = Any)
