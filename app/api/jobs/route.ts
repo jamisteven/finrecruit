@@ -151,6 +151,16 @@ function haystack(r: Row): string {
 
 const ts = (v: string | null | undefined) => (v ? Date.parse(v) : NaN)
 
+// Every word must match somewhere (title, company, summary or tags); abbreviations are expanded.
+function matchesSearch(r: Row, tokens: string[]): boolean {
+  return tokens.every((tok) => {
+    const phrases = SEARCH_SYNONYMS[tok] ?? [tok]
+    return (Array.isArray(r.tags) && r.tags.some((t: string) => String(t).toLowerCase() === tok)) ||
+      phrases.some((p) => haystack(r).includes(p))
+  })
+}
+const tokenize = (s: string) => s.toLowerCase().replace(/[,()%*\\"]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 6)
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const seniority = searchParams.get('seniority')
@@ -176,6 +186,27 @@ export async function GET(req: NextRequest) {
       if (profErr) console.error('[jobs] profile query error:', profErr.message)
     }
   } catch { /* treat any failure as free tier */ }
+
+  // Lightweight count for the search upsell line: how many roles inside the free delay match this
+  // search. Only a number leaves the server, never the roles themselves. Uses the in-memory cache.
+  if (searchParams.get('freshCount') === '1') {
+    const out = (n: number) => {
+      const r = NextResponse.json({ freshMatches: n })
+      r.headers.set('Cache-Control', 'private, max-age=60')
+      return r
+    }
+    if (hasPass || !search) return out(0)
+    try {
+      const rows = await loadRecent()
+      const cut = Date.now() - FREE_DELAY_MS
+      const fr = rows
+        .filter((r) => { const t = ts(r.posted_at); return !isNaN(t) && t >= cut })
+        .sort((a, b) => ts(b.posted_at) - ts(a.posted_at))
+        .slice(FREE_SAMPLE_COUNT)                       // the free samples are already visible
+        .filter((r) => !sector || sector === 'all' || r.sector === sector)
+      return out(fr.filter((r) => matchesSearch(r, tokenize(search))).length)
+    } catch { return out(0) }
+  }
 
   let oldRows: Row[], recentRows: Row[]
   try {
