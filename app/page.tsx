@@ -1006,21 +1006,13 @@ export default function HomePage() {
         <div className="hero-copy">
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
           <p className="sub">Roles recruiters and hiring managers share with their networks before posting them publicly - tracked by AI and delivered in real time.</p>
-          <div className="cta-row">
-            {!hasPass && (
-              <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'hero' })}>
-                <BoltIcon />{CTA_LABEL}
-              </a>
-            )}
-            <a className="btn-ghost lg" href="#feed">See roles older than {FREE_DELAY_HOURS} hours <ArrowRight /></a>
-          </div>
           {!hasPass && (
             <div className="offer">
               <a className="plan" href="/offer" onClick={() => track('cta_click', { where: 'hero_free' })}>
-                <b>Free<ArrowRight /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
+                <b>Browse free<ArrowRight /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
               </a>
-              <a className="plan" href="/offer" onClick={() => track('cta_click', { where: 'hero_plan' })}>
-                <b>$9 first month<ArrowRight /></b>Every role the moment it drops. Then $15/month, cancel anytime.
+              <a className="plan plan-pro" href="/offer" onClick={() => track('cta_click', { where: 'hero_plan' })}>
+                <b><span><BoltIcon />$9 first month</span><ArrowRight /></b>Every role the moment it drops. Then $15/month, cancel anytime.
               </a>
             </div>
           )}
@@ -1520,11 +1512,14 @@ export default function HomePage() {
         .ulj .hero h1 em { font-style: italic; font-weight: 400; }
         .ulj .hero .sub { font-size: 17px; color: var(--ink-2); max-width: 54ch; margin-bottom: 24px; }
         .ulj .cta-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-        .ulj .offer { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; max-width: 620px; border: 1px solid var(--hairline-2); background: var(--surface); border-radius: 12px; overflow: hidden; }
-        .ulj .offer > .plan { display: block; text-align: left; padding: 12px 16px; font-size: 13px; line-height: 1.4; color: var(--ink-2); background: none; border: 0; border-radius: 0; cursor: pointer; text-decoration: none; transition: background .15s; }
-        .ulj .offer > .plan + .plan { border-left: 1px solid var(--hairline-2); background: var(--accent-soft); color: var(--ink); }
-        .ulj .offer > .plan:hover { background: var(--surface-2); }
-        .ulj .offer > .plan + .plan:hover { background: color-mix(in srgb, var(--accent-soft) 80%, var(--cta)); }
+        .ulj .offer { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; max-width: 640px; gap: 10px; }
+        .ulj .offer > .plan { display: block; text-align: left; padding: 14px 16px; font-size: 13px; line-height: 1.4; color: var(--ink-2); background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 12px; cursor: pointer; text-decoration: none; transition: background .15s; }
+        .ulj .offer > .plan:hover { border-color: var(--ink-2); }
+        .ulj .offer > .plan-pro { background: var(--cta); border-color: var(--cta); color: rgba(255,255,255,.88); }
+        .ulj .offer > .plan-pro:hover { background: var(--cta-h, var(--cta)); border-color: var(--cta-h, var(--cta)); }
+        .ulj .offer > .plan-pro b { color: #fff; }
+        .ulj .offer > .plan-pro b svg { opacity: 1; }
+        .ulj .offer b span { display: inline-flex; align-items: center; gap: 6px; }
         .ulj .offer > .plan:focus-visible { outline: 2px solid var(--cta); outline-offset: -2px; }
         .ulj .offer b { display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--ink); margin-bottom: 2px; font-size: 14px; }
         .ulj .offer b svg { width: 14px; height: 14px; flex: none; opacity: .55; }
@@ -1887,7 +1882,6 @@ export default function HomePage() {
           .ulj .art-m-wrap { padding: 0 16px 24px; }
           .ulj .hero .sub { font-size: 15px; }
           .ulj .offer { grid-template-columns: 1fr; }
-          .ulj .offer > .plan + .plan { border-left: none; border-top: 1px solid var(--hairline-2); }
           .ulj .art-post { width: 100%; }
           .ulj .art-note { position: static; width: auto; transform: none; flex-direction: row; align-items: center; gap: 8px; margin: 8px 0 0 8px; font-size: 21px; }
           .ulj .art-note svg { margin: 0; flex: none; transform: rotate(-90deg) scaleX(-1); }

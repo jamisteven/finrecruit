@@ -13,7 +13,7 @@ const PRICES: Record<Plan, string | undefined> = {
   quarter: process.env.STRIPE_PRICE_QUARTER ?? 'price_1UM747Gvp4wVTRq88qxWobVJ',   // $39, one-time, 90 days
   pass: process.env.STRIPE_PRICE_ID,                                                // legacy $9 / 14-day pass
 }
-const INTRO_COUPON = process.env.STRIPE_COUPON_INTRO ?? 'ulbQ9TrL'                 // $6 off, once: first month = $9
+const INTRO_COUPON = process.env.STRIPE_COUPON_INTRO ?? 'eKBd4KGR'                 // $6 off, once: first month = $9
 const PORTAL_CONFIG = process.env.STRIPE_PORTAL_CONFIG ?? 'bpc_1UM7AGGvp4wVTRq8O7aN7d2x'
 
 export async function POST(req: NextRequest) {

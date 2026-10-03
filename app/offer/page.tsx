@@ -165,9 +165,6 @@ export default function OfferPage() {
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
         .pp { --page:#F5F2EB; --surface:#FDFCFA; --ink:#191713; --ink-2:#5C574D; --hair:#D8D2C2; --accent-soft:#E4EAF6; --cta:#2F6BF2; --cta-h:#2458D4; --accent:#24468f;
           min-height: 100vh; background: var(--page); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-        @media (prefers-color-scheme: dark) {
-          .pp { --page:#131210; --surface:#1C1A17; --ink:#F2EFE7; --ink-2:#A9A293; --hair:#3A362F; --accent-soft:#1D2538; --accent:#9DB4F0; }
-        }
         .pp *, .pp *::before, .pp *::after { box-sizing: border-box; }
         .pp-top { max-width: 980px; margin: 0 auto; padding: 20px 20px 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
         .pp-brand { font-family: 'Fraunces', Georgia, serif; font-size: 22px; font-weight: 600; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
