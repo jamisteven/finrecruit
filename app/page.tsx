@@ -836,6 +836,33 @@ export default function HomePage() {
     </article>
   )
 
+  // The recruiter-post example. Rendered twice: beside the hero copy on wide screens, and below
+  // "How it works" on narrow ones (see .art-d / .art-m in the CSS).
+  const renderArt = (cls: string) => (
+      <div className={`art ${cls}`} role="img" aria-label="Example: a recruiter's LinkedIn post becomes a listing on backchannel.jobs">
+        <div className="art-post">
+          <div className="art-h"><span className="li">in</span><div><b>Senior Recruiter</b><small>2h ago · LinkedIn</small></div></div>
+          <p>I&apos;m working with a Series B SaaS company looking for a Senior Product Manager. Great team, remote friendly. DM me if interested!</p>
+        </div>
+        <div className="art-note">
+          <svg viewBox="0 0 60 40" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M52 8C40 6 24 10 10 26M10 26l1-11M10 26l11-3" /></svg>
+          <span>We find these posts and turn them into real opportunities.</span>
+        </div>
+        <div className="art-role">
+          <div className="art-top"><span className="new">New · 42m ago</span><span className="art-eg">Example</span></div>
+          <h3>Senior Product Manager</h3>
+          <div className="art-meta">Series B SaaS · San Francisco, CA (Hybrid)</div>
+          <ul className="art-facts">
+            <li>Posted by: Senior Recruiter at Redwood Talent</li>
+            <li>Source: LinkedIn personal post</li>
+          </ul>
+          <p className="art-quote">“I&apos;m helping a Series B SaaS company hire a Senior Product Manager. Great team, competitive comp, remote friendly…”</p>
+          <div className="art-tags"><span>Product</span><span>SaaS</span><span>Remote friendly</span></div>
+          <div className="art-actions"><a className="btn-ghost sm" href="#feed">See live roles <ArrowRight /></a></div>
+        </div>
+      </div>
+  )
+
   return (
     <div className={`ulj${dark ? ' dark' : ''}`}>
 
@@ -969,28 +996,7 @@ export default function HomePage() {
           )}
         </div>
 
-        <div className="art" role="img" aria-label="Example: a recruiter's LinkedIn post becomes a listing on backchannel.jobs">
-          <div className="art-post">
-            <div className="art-h"><span className="li">in</span><div><b>Senior Recruiter</b><small>2h ago · LinkedIn</small></div></div>
-            <p>I&apos;m working with a Series B SaaS company looking for a Senior Product Manager. Great team, remote friendly. DM me if interested!</p>
-          </div>
-          <div className="art-note">
-            <svg viewBox="0 0 60 40" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M52 8C40 6 24 10 10 26M10 26l1-11M10 26l11-3" /></svg>
-            <span>We find these posts and turn them into real opportunities.</span>
-          </div>
-          <div className="art-role">
-            <div className="art-top"><span className="new">New · 42m ago</span><span className="art-eg">Example</span></div>
-            <h3>Senior Product Manager</h3>
-            <div className="art-meta">Series B SaaS · San Francisco, CA (Hybrid)</div>
-            <ul className="art-facts">
-              <li>Posted by: Senior Recruiter at Redwood Talent</li>
-              <li>Source: LinkedIn personal post</li>
-            </ul>
-            <p className="art-quote">“I&apos;m helping a Series B SaaS company hire a Senior Product Manager. Great team, competitive comp, remote friendly…”</p>
-            <div className="art-tags"><span>Product</span><span>SaaS</span><span>Remote friendly</span></div>
-            <div className="art-actions"><a className="btn-ghost sm" href="#feed">See live roles <ArrowRight /></a></div>
-          </div>
-        </div>
+        {renderArt('art-d')}
       </section>
 
       <div className="howbar-wrap" id="how">
@@ -1003,6 +1009,8 @@ export default function HomePage() {
           </ol>
         </div>
       </div>
+
+      <div className="art-m-wrap">{renderArt('art-m')}</div>
 
       </>)}
 
@@ -1492,6 +1500,7 @@ export default function HomePage() {
         .ulj .offer b svg { width: 14px; height: 14px; flex: none; opacity: .55; }
         /* Hero art: a recruiter post becoming a listing */
         .ulj .art { position: relative; width: 100%; max-width: 520px; margin-left: auto; }
+        .ulj .art-m-wrap { display: none; }
         .ulj .art-post { position: relative; z-index: 2; width: 66%; background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
         .ulj .art-h { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
         .ulj .art-h b { display: block; font-size: 14px; line-height: 1.2; }
@@ -1828,6 +1837,8 @@ export default function HomePage() {
           .ulj .filters.open .fgroup { display: block; margin-top: 18px; }
           .ulj .filters.open .side-note { display: block; margin-top: 14px; }
           .ulj .hero { grid-template-columns: 1fr; align-items: start; }
+          .ulj .hero .art-d { display: none; }   /* narrow screens: the example moves below How it works */
+          .ulj .art-m-wrap { display: block; max-width: 1200px; margin: 0 auto; padding: 0 28px 28px; }
           .ulj .art { margin: 0 auto 0 0; }
           .ulj .pass-side { display: none; }
         }
@@ -1843,6 +1854,7 @@ export default function HomePage() {
           .ulj .refresh-btn { width: 36px; padding: 0; justify-content: center; }
           .ulj .refresh-btn span { display: none; }  /* icon-only so the top row fits one line */
           .ulj .hero { padding: 26px 16px 16px; gap: 24px; }
+          .ulj .art-m-wrap { padding: 0 16px 24px; }
           .ulj .hero .sub { font-size: 15px; }
           .ulj .offer { grid-template-columns: 1fr; }
           .ulj .offer > .plan + .plan { border-left: none; border-top: 1px solid var(--hairline-2); }
