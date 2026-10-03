@@ -91,7 +91,7 @@ export default function OfferPage() {
 
       <main className="pp-main">
         {/* ───────── Compact hero ───────── */}
-        <h1>The best roles go in two days ,<em>see them in two minutes.</em></h1>
+        <h1>The best roles go in two days,<em> see them in two minutes.</em></h1>
         <p className="pp-sub">
           Free shows roles after {FREE_DELAY_HOURS} hours, once the applications have piled up. Premium shows every recruiter post the moment it goes live.
         </p>
