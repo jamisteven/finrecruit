@@ -5,11 +5,32 @@ import { captureAttribution, deviceType, getAttribution, getVisitorId } from '@/
 
 const FREE_DELAY_HOURS = 48
 
+const SECTOR_LABEL: Record<string, string> = { finance: 'Finance', tech: 'Tech', legal: 'Legal', marketing: 'Marketing', realestate: 'Real Estate' }
+const ago = (iso: string | null) => {
+  if (!iso) return ''
+  const h = Math.max(0, (Date.now() - new Date(iso).getTime()) / 3600_000)
+  return h < 1 ? `${Math.max(1, Math.round(h * 60))}m ago` : `${Math.round(h)}h ago`
+}
+
 export default function OfferPage() {
   const [busy, setBusy] = useState<'monthly' | 'quarter' | null>(null)
   const [err, setErr] = useState(false)
+  // Real numbers from the same API the main page uses (limit=1: no role data is downloaded)
+  const [live, setLive] = useState<{ fresh: number; shown: number; hasPass: boolean; locked: { title: string; sector: string; posted_at: string | null }[] } | null>(null)
 
   useEffect(() => { captureAttribution() }, [])   // in case someone lands here first
+  useEffect(() => {
+    fetch('/api/jobs?limit=1')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setLive({
+        // roles posted inside the free delay window = the ones free visitors can't see, plus the few shown as samples
+        shown: d.previewCount ?? 0,
+        fresh: (d.withheld ?? 0) + (d.previewCount ?? 0),
+        hasPass: !!d.hasPass,
+        locked: Array.isArray(d.lockedJobs) ? d.lockedJobs : [],
+      }))
+      .catch(() => {})
+  }, [])
 
   const track = (name: string, params: Record<string, unknown> = {}) => {
     try {
@@ -49,20 +70,49 @@ export default function OfferPage() {
       </header>
 
       <main className="pp-main">
-        <h1>See the roles <em>before everyone else.</em></h1>
+        <h1>Free shows you old jobs. <em>Premium shows you new ones.</em></h1>
         <p className="pp-sub">
-          Recruiters and hiring managers share roles with their networks before they post them publicly.
-          We find them and list them here. Free visitors see each role after {FREE_DELAY_HOURS} hours; early access shows it the moment it drops.
+          Every role on the free list is at least {FREE_DELAY_HOURS} hours old. Premium shows each one the moment it&apos;s posted,
+          before it reaches the job boards.
         </p>
+
+        {live?.hasPass && (
+          <p className="pp-have">You already have Premium. Buying again adds more time.</p>
+        )}
+
+        {live && !live.hasPass && live.fresh > 0 && (
+          <div className="pp-live" aria-live="polite">
+            <p>
+              <span className="pp-dot" />
+              <b>{live.fresh.toLocaleString()} roles were posted in the last {FREE_DELAY_HOURS} hours.</b>{' '}
+              Free visitors can read {live.shown}. Premium shows all {live.fresh.toLocaleString()}.
+            </p>
+            {live.locked.length > 0 && (
+              <>
+                <p className="pp-lk">Locked for free visitors right now:</p>
+                <ul>
+                  {live.locked.map((j, i) => (
+                    <li key={i}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                      <span className="pp-lt">{j.title}</span>
+                      <span className="pp-lm">{SECTOR_LABEL[j.sector] ?? j.sector}{j.posted_at ? ` · ${ago(j.posted_at)}` : ''}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="pp-cards">
           <section className="pp-card">
             <h2>Free</h2>
-            <div className="pp-price"><b>$0</b><span>always</span></div>
+            <div className="pp-price"><b>$0</b><span>old roles only</span></div>
             <ul>
               <li>Every role older than {FREE_DELAY_HOURS} hours</li>
-              <li>3 fresh roles in full, plus a peek at 2 more</li>
-              <li>Search and filter the whole list</li>
+              <li>3 fresh roles in full each day</li>
+              <li className="no">Nothing posted in the last {FREE_DELAY_HOURS} hours</li>
+              <li className="no">No first look at new recruiter posts</li>
             </ul>
             <a className="pp-btn pp-btn-ghost" href="/login" onClick={() => track('cta_click', { where: 'offer_free_account' })}>Create a free account</a>
             <p className="pp-fine"><a href="/" onClick={() => track('cta_click', { where: 'offer_free_browse' })}>or just keep browsing</a></p>
@@ -70,25 +120,27 @@ export default function OfferPage() {
 
           <section className="pp-card pp-paid">
             <span className="pp-tag">Most popular</span>
-            <h2>Monthly</h2>
+            <h2>Premium, monthly</h2>
             <div className="pp-price"><b>$9</b><span>first month, then $15/month</span></div>
             <ul>
-              <li>Every new role the moment it drops</li>
-              <li>Full details and a direct link to the recruiter</li>
+              <li>Every new role the moment it&apos;s posted</li>
+              <li>Full details and a direct link to the recruiter, on every role</li>
+              <li>Plus everything in Free</li>
               <li>Cancel anytime, no questions</li>
             </ul>
             <button type="button" className="pp-btn pp-btn-primary" onClick={() => checkout('monthly')} disabled={busy !== null}>
-              {busy === 'monthly' ? 'Opening checkout…' : 'Start for $9'}
+              {busy === 'monthly' ? 'Opening checkout…' : 'Unlock new roles for $9'}
             </button>
-            <p className="pp-fine">Renews at $15/month until you cancel. Secure payment by Stripe.</p>
+            <p className="pp-fine">First month $9, then $15/month until you cancel. Secure payment by Stripe.</p>
             {err && <p className="pp-err" role="alert">Couldn&apos;t open checkout. Please try again.</p>}
           </section>
 
           <section className="pp-card">
-            <h2>3 months</h2>
+            <h2>Premium, 3 months</h2>
             <div className="pp-price"><b>$39</b><span>one payment · 90 days</span></div>
             <ul>
-              <li>Everything in Monthly</li>
+              <li>Every new role the moment it&apos;s posted</li>
+              <li>Full details and a direct link to the recruiter</li>
               <li>About $13 a month</li>
               <li>Pay once, it never renews</li>
             </ul>
@@ -101,11 +153,11 @@ export default function OfferPage() {
 
         <section className="pp-faq">
           <h3>Common questions</h3>
-          <details><summary>How do I cancel?</summary><p>Open the menu in the top right, choose Manage billing, and cancel there. You keep early access until the end of the period you&apos;ve already paid for, and you won&apos;t be charged again.</p></details>
+          <details><summary>How do I cancel?</summary><p>Open the menu in the top right, choose Manage billing, and cancel there. You keep Premium until the end of the period you&apos;ve already paid for, and you won&apos;t be charged again.</p></details>
           <details><summary>What happens after the first month?</summary><p>The $9 is your first month. After that the plan renews at $15 a month until you cancel.</p></details>
           <details><summary>Does the 3-month option renew?</summary><p>No. It&apos;s a single payment for 90 days, and it simply ends. If you want to keep going you can buy again or switch to monthly.</p></details>
           <details><summary>Where do the roles come from?</summary><p>Public LinkedIn posts from recruiters and hiring managers, collected and organised by AI.</p></details>
-          <details><summary>Why is free delayed by {FREE_DELAY_HOURS} hours?</summary><p>Early roles are where the value is, since fewer people have applied. That is what early access pays for. Everything older stays free.</p></details>
+          <details><summary>Why is free delayed by {FREE_DELAY_HOURS} hours?</summary><p>Early roles are where the value is, since fewer people have applied. That is what Premium pays for. Everything older stays free.</p></details>
         </section>
       </main>
 
@@ -147,6 +199,23 @@ export default function OfferPage() {
         .pp-fine { font-size: 13px; color: var(--ink-2); text-align: center; margin: 10px 0 0; }
         .pp-fine a { color: var(--ink-2); }
         .pp-err { font-size: 13px; color: #C23B22; text-align: center; margin: 8px 0 0; }
+        .pp-live { max-width: 640px; margin: 0 0 28px; padding: 14px 16px; border: 1px solid var(--hair); border-radius: 14px; background: var(--surface); }
+        .pp-live p { margin: 0; font-size: 15px; line-height: 1.45; }
+        .pp-live p b { font-weight: 600; }
+        .pp-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #0A7A3D; margin-right: 8px; vertical-align: 1px; box-shadow: 0 0 0 0 rgba(10,122,61,.5); animation: pp-pulse 2s infinite; }
+        @keyframes pp-pulse { 70% { box-shadow: 0 0 0 7px rgba(10,122,61,0); } 100% { box-shadow: 0 0 0 0 rgba(10,122,61,0); } }
+        @media (prefers-reduced-motion: reduce) { .pp-dot { animation: none; } }
+        .pp-live .pp-lk { margin: 12px 0 0; font-size: 13px; color: var(--ink-2); }
+        .pp-live ul { margin: 8px 0 0; display: grid; gap: 8px; }
+        .pp-live li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; background: var(--page); font-size: 14px; padding-left: 12px; }
+        .pp-live li::before { display: none; }
+        .pp-live li svg { flex: none; color: var(--ink-2); }
+        .pp-lt { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pp-lm { margin-left: auto; flex: none; color: var(--ink-2); font-size: 13px; }
+        .pp-have { margin: 0 0 24px; font-size: 14px; color: var(--ink-2); }
+        .pp li.no { color: var(--ink-2); }
+        .pp li.no::before { border: none; width: auto; height: auto; top: 0; left: 3px; transform: none; content: '\\00d7'; font-size: 18px; line-height: 1.2; color: #B3402A; font-weight: 600; }
+        .pp-paid .pp-btn-primary { padding: 17px 18px; font-size: 17px; box-shadow: 0 8px 20px -8px rgba(47,107,242,.6); }
         .pp-faq { margin-top: 44px; max-width: 640px; }
         .pp-faq h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
         .pp details { border-top: 1px solid var(--hair); padding: 14px 0; }

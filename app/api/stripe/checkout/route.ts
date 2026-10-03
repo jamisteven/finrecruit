@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
         mode: 'payment',
         // gives one-time buyers a customer record too (billing portal, future purchases)
         ...(customerId ? {} : { customer_creation: 'always' as const }),
-        custom_text: { submit: { message: plan === 'quarter' ? 'One payment for 90 days of early access. It does not renew.' : 'One payment for 14 days of early access. It does not renew.' } },
+        custom_text: { submit: { message: plan === 'quarter' ? 'One payment for 90 days of Premium. It does not renew.' : 'One payment for 14 days of Premium. It does not renew.' } },
       })
 
   // First-party record of every checkout started: one row per click, marked paid by the webhook.

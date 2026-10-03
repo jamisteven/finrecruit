@@ -825,7 +825,7 @@ export default function HomePage() {
       <h3 className="locked-h">{l.title}</h3>
       <div className="locked-blur" aria-hidden="true">
         <p className="meta"><b>Company name hidden</b><span className="sep">·</span>Senior</p>
-        <p className="summary">The details of this role are available with early access. Unlock it to read the full post and reach the recruiter.</p>
+        <p className="summary">The details of this role are available with Premium. Unlock it to read the full post and reach the recruiter.</p>
         <p className="salary"><span className="via">via: link or DM</span></p>
       </div>
       <div className="card-foot lock-foot">
@@ -943,7 +943,7 @@ export default function HomePage() {
                   {userEmail ? (
                     <>
                       <div className="acct-email">{userEmail}</div>
-                      {hasPass && <div className="acct-badge">Early access active</div>}
+                      {hasPass && <div className="acct-badge">Premium active</div>}
                       {hasPass && <button onClick={() => { setMenuOpen(false); openPortal() }} disabled={portalBusy}>Manage billing</button>}
                       <a href="/offer">Pricing</a>
                       <button onClick={signOut}>Sign out</button>
@@ -1020,7 +1020,7 @@ export default function HomePage() {
           {hasPass ? (
             <div className="member-bar active">
               <span className="mb-dot" />
-              <b>Early access active</b>
+              <b>Premium active</b>
               {daysLeft !== null && <span className="mb-sub">{daysLeft <= 0 ? 'ends today' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left`}</span>}
               {daysLeft !== null && daysLeft <= 3 && (
                 <a className="mb-link" href="/offer" onClick={() => track('cta_click', { where: 'renew' })}>Extend</a>
@@ -1274,7 +1274,7 @@ export default function HomePage() {
               <div className="inline-cta">
                 <div>
                   <h3>{withheld > 0 ? `${withheld} newer roles are waiting.` : 'See these now, not in 48 hours.'}</h3>
-                  <p>Early access is $9 for your first month, then $15/month. Every new role the moment it drops. Cancel anytime.</p>
+                  <p>Premium is $9 for your first month, then $15/month. Every new role the moment it drops. Cancel anytime.</p>
                 </div>
                 <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'inline' })}><BoltIcon />See new roles first - $9</a>
               </div>
