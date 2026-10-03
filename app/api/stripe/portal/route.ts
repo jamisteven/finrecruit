@@ -15,13 +15,30 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await (await getSessionClient()).auth.getUser()
   if (!user) return NextResponse.json({ error: 'not signed in' }, { status: 401 })
 
-  const { data: profile } = await createServerClient()
+  const stripe = new Stripe(key)
+  const db = createServerClient()
+  const { data: profile } = await db
     .from('profiles').select('stripe_customer_id').eq('id', user.id).maybeSingle()
-  const customer = profile?.stripe_customer_id as string | undefined
-  if (!customer) return NextResponse.json({ error: 'no billing account' }, { status: 404 })
+  let customer = profile?.stripe_customer_id as string | undefined
+
+  // Fallback: premium granted by hand, or bought before we stored the customer id.
+  // Look the customer up by email in Stripe and remember it for next time.
+  if (!customer && user.email) {
+    try {
+      const found = await stripe.customers.list({ email: user.email, limit: 1 })
+      customer = found.data[0]?.id
+      if (customer) await db.from('profiles').update({ stripe_customer_id: customer }).eq('id', user.id)
+    } catch (e) {
+      console.error('[portal] customer lookup failed:', (e as Error).message)
+    }
+  }
+  if (!customer) {
+    console.error('[portal] no Stripe customer for user', user.id)
+    return NextResponse.json({ error: 'no billing account' }, { status: 404 })
+  }
 
   try {
-    const session = await new Stripe(key).billingPortal.sessions.create({
+    const session = await stripe.billingPortal.sessions.create({
       customer,
       configuration: PORTAL_CONFIG,
       return_url: new URL(req.url).origin,
