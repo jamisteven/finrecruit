@@ -1012,7 +1012,7 @@ export default function HomePage() {
                 <b>Browse free<ArrowRight /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
               </a>
               <a className="plan plan-pro" href="/offer" onClick={() => track('cta_click', { where: 'hero_plan' })}>
-                <b><span>Premium</span><ArrowRight /></b>Every role the moment it drops. $9 first month, then $15/month, cancel anytime.
+                <b><span><BoltIcon />$9 first month</span><ArrowRight /></b>Every role the moment it drops. Then $15/month, cancel anytime.
               </a>
             </div>
           )}
@@ -1177,14 +1177,10 @@ export default function HomePage() {
 
           {!hasPass && (
             <div className="pass pass-side">
-              <span className="tagline">Most roles fill inside 48 hours</span>
               <h3>Don&apos;t wait {FREE_DELAY_HOURS} hours.</h3>
-              <div className="price"><b>$9</b><span>first month · then $15/mo</span></div>
-              <a className="btn-primary block" href="/offer" onClick={() => track('cta_click', { where: 'sidebar' })}>{CTA_LABEL}</a>
-              <ul>
-                <li><CheckIcon />Every role the moment it drops</li>
-                <li><CheckIcon />Cancel anytime</li>
-              </ul>
+              <p className="pass-sub">Every role the moment it drops.</p>
+              <a className="btn-primary block" href="/offer" onClick={() => track('cta_click', { where: 'sidebar' })}>$9 first month</a>
+              <span className="pass-fine">Then $15/month. Cancel anytime.</span>
             </div>
           )}
 
@@ -1999,6 +1995,9 @@ export default function HomePage() {
         .ulj .pass .price { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; }
         .ulj .pass .price b { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 46px; line-height: 1; }
         .ulj .pass .price span { font-size: 13px; color: #A9B4CC; }
+        .ulj .pass .pass-sub { font-size: 14px; color: #A9B4CC; margin: 0 0 14px; }
+        .ulj .pass .btn-primary.block { white-space: normal; text-align: center; padding-left: 12px; padding-right: 12px; }
+        .ulj .pass .pass-fine { display: block; margin-top: 10px; font-size: 12px; color: #A9B4CC; text-align: center; }
         .ulj .pass ul { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; font-size: 13px; color: #A9B4CC; }
         .ulj .pass li { display: flex; gap: 8px; align-items: center; }
         .ulj .pass li svg { color: #7FD69B; flex: none; }
