@@ -24,6 +24,9 @@ const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
 // The cutoff itself is enforced server-side in /api/jobs, so keep that in sync with this value.
 const FREE_DELAY_HOURS = 48
 
+// Label for every Premium call to action (the first month is $9, then it renews at $15)
+const CTA_LABEL = "See today's roles - $9 first month"
+
 
 // JobPost.sector is a plain string in the API payload, so accept any string
 const PIPELINE_LABELS: Record<string, string> = {
@@ -69,21 +72,45 @@ function dropsAround(now: number, dropBatches: DropBatch[]): { prev: Drop | null
 // Country/region groups so "Switzerland" catches Zurich, Geneva, Basel, …
 // Keywords ≤3 chars are matched as whole words to avoid e.g. "us" matching "Austin".
 const REGIONS: Record<string, string[]> = {
-  'Switzerland':    ['switzerland', 'zurich', 'zürich', 'geneva', 'genève', 'genf', 'basel', 'bern', 'lausanne', 'zug', 'lugano', 'st. gallen', 'winterthur'],
-  'United Kingdom': ['united kingdom', 'uk', 'england', 'scotland', 'london', 'manchester', 'edinburgh', 'birmingham', 'leeds', 'glasgow', 'bristol', 'cambridge', 'oxford', 'belfast'],
-  'United States':  ['united states', 'usa', 'us', 'new york', 'nyc', 'san francisco', 'bay area', 'boston', 'chicago', 'los angeles', 'austin', 'seattle', 'miami', 'atlanta', 'dallas', 'houston', 'denver', 'washington', 'charlotte', 'philadelphia', 'california', 'texas', 'arizona'],
-  'Germany':        ['germany', 'berlin', 'munich', 'münchen', 'frankfurt', 'hamburg', 'cologne', 'köln', 'düsseldorf', 'stuttgart'],
-  'France':         ['france', 'paris', 'lyon', 'marseille'],
-  'Netherlands':    ['netherlands', 'amsterdam', 'rotterdam', 'the hague', 'utrecht', 'eindhoven'],
-  'UAE':            ['uae', 'united arab emirates', 'dubai', 'abu dhabi'],
-  'Singapore':      ['singapore'],
-  'Hong Kong':      ['hong kong'],
-  'India':          ['india', 'mumbai', 'bangalore', 'bengaluru', 'delhi', 'new delhi', 'gurgaon', 'gurugram', 'hyderabad', 'pune', 'chennai', 'ahmedabad', 'noida'],
-  'Australia':      ['australia', 'sydney', 'melbourne', 'brisbane', 'perth'],
-  'Canada':         ['canada', 'toronto', 'vancouver', 'montreal', 'calgary'],
-  'Spain':          ['spain', 'españa', 'espana', 'madrid', 'barcelona', 'valencia', 'seville', 'sevilla', 'malaga', 'málaga', 'bilbao', 'palma', 'mallorca', 'alicante', 'zaragoza', 'ibiza', 'catalonia', 'catalunya', 'andalusia', 'canary islands'],
-  'Ireland':        ['ireland', 'dublin'],
+  'Switzerland': ['switzerland', 'zurich', 'zürich', 'geneva', 'genève', 'genf', 'basel', 'bern', 'berne', 'lausanne', 'zug', 'lugano', 'st. gallen', 'winterthur', 'schaffhausen', 'visp', 'bülach', 'neuchâtel', 'biel', 'mägenwil', 'opfikon', 'lucerne', 'luzern', 'dübendorf', 'urdorf', 'baar', 'thun', 'wetzikon', 'uster', 'valais', 'rotkreuz', 'crissier', 'montreux', 'davos', 'sursee', 'glattbrugg', 'dietikon', 'horgen', 'pratteln', 'écublens', 'étoy', 'orsières', 'la chaux-de-fonds', 'weinfelden', 'emmen', 'oensingen', 'altdorf', 'cazis', 'vaud', 'aargau', 'ticino', 'bütschwil', 'amriswil', 'wohlen', 'netstal', 'oberburg', 'zeiningen', 'dielsdorf', 'beringen', 'affoltern am albis', 'moosseedorf', 'hünenberg'],
+  'United Kingdom': ['united kingdom', 'uk', 'england', 'scotland', 'wales', 'london', 'manchester', 'edinburgh', 'birmingham', 'leeds', 'glasgow', 'bristol', 'cambridge', 'oxford', 'belfast', 'liverpool', 'crawley', 'oxfordshire', 'west midlands', 'milton keynes', 'kingston upon thames', 'wimbledon', 'brighton', 'leicester', 'oldham', 'rochdale', 'cobham', 'rothley', 'st austell', 'wallasey', 'spennymoor', 'telford', 'solihull', 'stockport', 'bolton', 'sheffield', 'nottingham', 'cardiff', 'swansea', 'aylesford', 'croydon', 'maidenhead', 'weybridge', 'slough', 'wootton bassett', 'cowbridge', 'southampton', 'coventry', 'derby', 'hertfordshire', 'cheshire', 'hampshire', 'kent', 'devon', 'potters bar', 'east horsley', 'hereford', 'marlow', 'ascot', 'deeside', 'south uk'],
+  'United States': ['united states', 'usa', 'us', 'new york', 'nyc', 'san francisco', 'bay area', 'boston', 'chicago', 'los angeles', 'austin', 'seattle', 'miami', 'atlanta', 'dallas', 'houston', 'denver', 'washington', 'charlotte', 'philadelphia', 'columbus', 'st. louis', 'st louis', 'saint louis', 'minneapolis', 'san antonio', 'cincinnati', 'nashville', 'raleigh', 'san diego', 'phoenix', 'salt lake city', 'portland', 'kansas city', 'memphis', 'pittsburgh', 'baltimore', 'las vegas', 'richmond', 'detroit', 'jersey city', 'san jose', 'tampa', 'hartford', 'plano', 'milwaukee', 'sunnyvale', 'palo alto', 'mountain view', 'jacksonville', 'bellevue', 'arlington', 'cleveland', 'newark', 'mclean', 'orlando', 'oklahoma city', 'malvern', 'king of prussia', 'brooklyn', 'queens', 'santa clara', 'reston', 'wilmington', 'scottsdale', 'ann arbor', 'springfield', 'madison', 'albany', 'redmond', 'buffalo', 'oakland', 'tucson', 'bethesda', 'stamford', 'norwalk', 'irvine', 'pasadena', 'harrisburg', 'fresno', 'rochester', 'wichita', 'frisco', 'sacramento', 'irving', 'coppell', 'herndon', 'waltham', 'multiple us locations', 'multiple us cities', 'remote usa', 'northern virginia', 'south florida', 'southern california', 'northeast region', 'long island', 'fort worth', 'dallas-fort worth', 'raleigh-durham', 'boca raton', 'fort lauderdale', 'santa monica', 'santa barbara', 'princeton', 'hoboken', 'white plains', 'tulsa', 'omaha', 'colorado springs', 'el segundo', 'louisville', 'knoxville', 'honolulu', 'sioux falls', 'spokane', 'savannah', 'providence', 'worcester', 'natick', 'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware', 'florida', 'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan', 'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey', 'new mexico', 'north carolina', 'north dakota', 'ohio', 'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee', 'texas', 'utah', 'vermont', 'virginia', 'west virginia', 'wisconsin', 'wyoming', 'district of columbia', 'washington dc', 'washington d.c.', 'dc', 'al', 'ak', 'az', 'ar', 'ca', 'co', 'ct', 'fl', 'ga', 'hi', 'id', 'il', 'in', 'ia', 'ks', 'ky', 'la', 'me', 'md', 'ma', 'mi', 'mn', 'ms', 'mo', 'mt', 'ne', 'nv', 'nh', 'nj', 'nm', 'ny', 'nc', 'nd', 'oh', 'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn', 'tx', 'ut', 'vt', 'va', 'wa', 'wv', 'wi', 'wy'],
+  'Germany': ['germany', 'deutschland', 'berlin', 'munich', 'münchen', 'frankfurt', 'hamburg', 'cologne', 'köln', 'düsseldorf', 'stuttgart', 'hannover', 'karlsruhe', 'heilbronn', 'ulm', 'münster', 'bonn', 'dresden', 'mannheim', 'mainz', 'wiesbaden', 'essen', 'bremen', 'nürnberg', 'nuremberg', 'leipzig', 'dortmund', 'aachen', 'erfurt', 'augsburg', 'potsdam', 'trier', 'kiel', 'ratingen', 'landshut', 'würzburg', 'tübingen', 'marburg', 'offenburg', 'forchheim', 'herten', 'mülheim an der ruhr', 'bielefeld', 'kaiserslautern', 'saarbrücken', 'friedrichshafen', 'east germany', 'northern germany', 'southern germany', 'north rhine-westphalia', 'hessen', 'niedersachsen', 'bavaria', 'bayern', 'baden-württemberg'],
+  'France': ['france', 'paris', 'lyon', 'marseille', 'courbevoie', 'lille', 'antony', 'auch', 'bordeaux', 'toulouse'],
+  'Netherlands': ['netherlands', 'amsterdam', 'rotterdam', 'the hague', 'utrecht', 'eindhoven', 'delft', 'schiphol', 'schiphol-rijk', 'groningen'],
+  'UAE': ['uae', 'united arab emirates', 'dubai', 'abu dhabi', 'sharjah', 'ras al khaimah', 'ajman'],
+  'Singapore': ['singapore'],
+  'Hong Kong': ['hong kong'],
+  'India': ['india', 'mumbai', 'bangalore', 'bengaluru', 'delhi', 'new delhi', 'gurgaon', 'gurugram', 'hyderabad', 'pune', 'chennai', 'ahmedabad', 'noida', 'lucknow', 'agra', 'meerut', 'nagpur', 'thane', 'trivandrum', 'kerala', 'tamil nadu', 'rajkot', 'surat', 'rohtak', 'kolkata'],
+  'Australia': ['australia', 'sydney', 'melbourne', 'brisbane', 'perth', 'north sydney', 'campbelltown', 'toowoomba', 'wodonga'],
+  'Canada': ['canada', 'toronto', 'vancouver', 'montreal', 'calgary', 'ottawa', 'mississauga', 'edmonton', 'winnipeg', 'markham', 'brockville', 'ontario', 'alberta', 'guelph', 'coquitlam', 'owen sound', 'north york', 'british columbia', 'quebec'],
+  'Spain': ['spain', 'españa', 'espana', 'madrid', 'barcelona', 'seville', 'sevilla', 'malaga', 'málaga', 'bilbao', 'palma de mallorca', 'mallorca', 'alicante', 'zaragoza', 'ibiza', 'catalonia', 'catalunya', 'andalusia', 'canary islands'],
+  'Ireland': ['ireland', 'dublin', 'tullamore', 'limerick', 'athlone', 'donegal', 'tipperary', 'waterford', 'meath', 'cork', 'galway'],
+  'Saudi Arabia': ['saudi arabia', 'ksa', 'riyadh', 'jeddah', 'makkah', 'mecca', 'dammam', 'al qassim', 'khurais'],
+  'Qatar': ['qatar', 'doha'],
+  'Egypt': ['egypt', 'cairo', 'new cairo', 'giza', 'nasr city', 'mansoura', '10th of ramadan city'],
+  'South Africa': ['south africa', 'johannesburg', 'cape town', 'pretoria', 'durban', 'sandton', 'centurion', 'gauteng', 'western cape', 'kwazulu-natal', 'postmasburg'],
+  'Nigeria': ['nigeria', 'lagos', 'abuja', 'port harcourt', 'bauchi'],
+  'Kenya': ['kenya', 'nairobi'],
+  'Pakistan': ['pakistan', 'islamabad', 'rawalpindi', 'lahore', 'karachi', 'gujranwala', 'sialkot', 'sukkur', 'kotli'],
+  'Malaysia': ['malaysia', 'kuala lumpur', 'penang', 'cyberjaya', 'sepang', 'petaling jaya'],
+  'Philippines': ['philippines', 'manila', 'quezon city', 'makati', 'pasay', 'taguig', 'taguig city', 'bgc', 'cebu', 'parañaque', 'paranaque'],
+  'Indonesia': ['indonesia', 'jakarta', 'bali', 'bsd city', 'banyuasin', 'aceh tengah'],
+  'Israel': ['israel', 'tel aviv', 'netanya', 'holon', 'ramat gan', 'hadera', 'jerusalem', 'nazareth'],
+  'Poland': ['poland', 'warsaw', 'krakow', 'kraków', 'wroclaw', 'gdansk', 'poznan'],
+  'Austria': ['austria', 'österreich', 'wien', 'innsbruck', 'klagenfurt', 'vorarlberg', 'rankweil', 'salzburg', 'graz', 'linz'],
+  'Italy': ['italy', 'italia', 'milan', 'milano', 'rome', 'roma', 'bolzano', 'turin', 'torino', 'bologna', 'pastorano'],
+  'Belgium': ['belgium', 'brussels', 'antwerp', 'wavre', 'ghent'],
+  'Portugal': ['portugal', 'lisbon', 'porto'],
+  'Nordics': ['sweden', 'stockholm', 'halmstad', 'finland', 'helsinki', 'denmark', 'copenhagen', 'norway', 'oslo', 'trondheim'],
+  'Mexico': ['mexico', 'mexico city', 'hermosillo', 'monterrey', 'guadalajara'],
+  'Brazil': ['brazil', 'são paulo', 'sao paulo', 'parnamirim'],
+  'Nepal': ['nepal', 'kathmandu', 'chitwan'],
 }
+
+// A US state in the location ("Geneva, New York", "Lake Zurich, IL") means it is a US role,
+// so it must not also count for a same-named place abroad.
+const US_STATE_PARTS = new Set(['alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware', 'florida', 'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan', 'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey', 'new mexico', 'new york', 'north carolina', 'north dakota', 'ohio', 'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee', 'texas', 'utah', 'vermont', 'virginia', 'west virginia', 'wisconsin', 'wyoming', 'district of columbia', 'al', 'ak', 'az', 'ar', 'ca', 'co', 'ct', 'fl', 'ga', 'hi', 'id', 'il', 'in', 'ia', 'ks', 'ky', 'la', 'me', 'md', 'ma', 'mi', 'mn', 'ms', 'mo', 'mt', 'ne', 'nv', 'nh', 'nj', 'nm', 'ny', 'nc', 'nd', 'oh', 'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn', 'tx', 'ut', 'vt', 'va', 'wa', 'wv', 'wi', 'wy'])
 
 const REGION_NAMES_LC = new Set(Object.keys(REGIONS).map((k) => k.toLowerCase()))
 
@@ -112,7 +139,9 @@ const CITY_STOP = new Set(['hybrid', 'on-site', 'onsite', 'on site', 'office', '
 const jobInRegion = (job: JobPost, region: string) => {
   const kws = REGIONS[region]
   if (!kws || !job.location) return false
-  return locParts(job.location).some((p) => kws.some((k) => matchKw(p, k)))
+  const parts = locParts(job.location)
+  if (region !== 'United States' && parts.some((p) => US_STATE_PARTS.has(p))) return false
+  return parts.some((p) => kws.some((k) => matchKw(p, k)))
 }
 
 function inferWorkType(job: JobPost): WorkType | null {
@@ -980,10 +1009,10 @@ export default function HomePage() {
           <div className="cta-row">
             {!hasPass && (
               <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'hero' })}>
-                <BoltIcon />See new roles first - $9
+                <BoltIcon />{CTA_LABEL}
               </a>
             )}
-            <a className="btn-ghost lg" href="#feed">See today&apos;s roles <ArrowRight /></a>
+            <a className="btn-ghost lg" href="#feed">See roles older than {FREE_DELAY_HOURS} hours <ArrowRight /></a>
           </div>
           {!hasPass && (
             <div className="offer">
@@ -1030,7 +1059,7 @@ export default function HomePage() {
           ) : (
             <div className="member-bar free">
               <div className="mb-copy"><b>Free account</b><span className="mb-sub">Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.</span></div>
-              <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'member_bar' })}><BoltIcon />See new roles first - $9</a>
+              <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'member_bar' })}><BoltIcon />{CTA_LABEL}</a>
             </div>
           )}
         </div>
@@ -1159,7 +1188,7 @@ export default function HomePage() {
               <span className="tagline">Most roles fill inside 48 hours</span>
               <h3>Don&apos;t wait {FREE_DELAY_HOURS} hours.</h3>
               <div className="price"><b>$9</b><span>first month · then $15/mo</span></div>
-              <a className="btn-primary block" href="/offer" onClick={() => track('cta_click', { where: 'sidebar' })}>See new roles first - $9</a>
+              <a className="btn-primary block" href="/offer" onClick={() => track('cta_click', { where: 'sidebar' })}>{CTA_LABEL}</a>
               <ul>
                 <li><CheckIcon />Every role the moment it drops</li>
                 <li><CheckIcon />Cancel anytime</li>
@@ -1277,7 +1306,7 @@ export default function HomePage() {
                   <h3>{withheld > 0 ? `${withheld} newer roles are waiting.` : 'See these now, not in 48 hours.'}</h3>
                   <p>Premium is $9 for your first month, then $15/month. Every new role the moment it drops. Cancel anytime.</p>
                 </div>
-                <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'inline' })}><BoltIcon />See new roles first - $9</a>
+                <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'inline' })}><BoltIcon />{CTA_LABEL}</a>
               </div>
             )}
 
