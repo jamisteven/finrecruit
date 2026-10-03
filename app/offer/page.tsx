@@ -91,7 +91,7 @@ export default function OfferPage() {
 
       <main className="pp-main">
         {/* ───────── Compact hero ───────── */}
-        <h1>Apply first, <em>while recruiters are still reading.</em></h1>
+        <h1>Apply in the first hours, <em>not after everyone else.</em></h1>
         <p className="pp-sub">
           Free shows roles after {FREE_DELAY_HOURS} hours, once the applications have piled up. Premium shows every recruiter post the moment it goes live.
         </p>
