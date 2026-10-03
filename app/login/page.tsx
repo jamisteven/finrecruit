@@ -59,7 +59,7 @@ export default function LoginPage() {
     <div className="lg">
       {/* ── Brand panel ── */}
       <aside className="lg-brand">
-        <a className="lg-wm" href="/"><span className="lg-mk">B</span>backchannel<em>.jobs</em></a>
+        <a className="lg-wm" href="/"><span className="lg-mk">B</span><span>backchannel<em>.jobs</em></span></a>
         <h2>The jobs LinkedIn <em>doesn&apos;t show you.</em></h2>
       </aside>
 
