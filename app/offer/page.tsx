@@ -91,9 +91,9 @@ export default function OfferPage() {
 
       <main className="pp-main">
         {/* ───────── Compact hero ───────── */}
-        <h1>Apply in the first hours, <em>not after everyone else.</em></h1>
+        <h1>Apply first, <em>while recruiters are still reading.</em></h1>
         <p className="pp-sub">
-          Free shows roles after {FREE_DELAY_HOURS} hours, once the applications have piled up. Premium shows every post the moment it goes live.
+          Free shows roles after {FREE_DELAY_HOURS} hours, once the applications have piled up. Premium shows every recruiter post the moment it goes live.
         </p>
 
         {hasPass && <p className="pp-have">You already have Premium. <a href="/">See today&apos;s new roles →</a> Buying again adds more time.</p>}
@@ -110,15 +110,15 @@ export default function OfferPage() {
         <div className="pp-cards" ref={cardsRef}>
           <section className="pp-card pp-free">
             <h2>Free</h2>
-            <div className="pp-price"><b>$0</b><span>roles {FREE_DELAY_HOURS}h+ old</span></div>
+            <div className="pp-price"><b>$0</b><span>old roles only</span></div>
             <ul>
               <li>Every role older than {FREE_DELAY_HOURS} hours</li>
               <li>3 fresh roles in full each day</li>
-              <li className="no">The rest of today&apos;s new roles</li>
-              <li className="no">Direct recruiter links on new roles</li>
+              <li className="no">Nothing posted in the last {FREE_DELAY_HOURS} hours</li>
+              <li className="no">No first look at new recruiter posts</li>
             </ul>
             <a className="pp-btn pp-btn-ghost" href="/login" onClick={() => track('cta_click', { where: 'offer_free_account' })}>Create a free account</a>
-            <p className="pp-fine"><a href="/" onClick={() => track('cta_click', { where: 'offer_free_browse' })}>or keep browsing</a></p>
+            <p className="pp-fine"><a href="/" onClick={() => track('cta_click', { where: 'offer_free_browse' })}>or just keep browsing</a></p>
           </section>
 
           <section className="pp-card pp-paid">
