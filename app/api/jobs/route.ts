@@ -73,7 +73,6 @@ async function fetchAll(build: (q: any) => any): Promise<Row[]> {
       db.from('jobs').select(COLUMNS)
         .eq('is_verified_job', true)
         .or('quality.is.null,quality.neq.low')
-        .neq('sector', 'other')
     ).order('extracted_at', { ascending: false }).order('id', { ascending: true }).range(from, from + PAGE - 1)
     const { data, error } = await q
     if (error) throw new Error(error.message)

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { inferWorkType } from '@/lib/workType'
-import { runApifyScraperForSector, normalisePost, Sector, SECTOR_QUERIES } from '@/lib/apify'
+import { runApifyScraperForSector, normalisePost, Sector, SECTOR_QUERIES, PRIORITY_QUERIES, dayIndex } from '@/lib/apify'
 import { classifyPost } from '@/lib/classifier'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   const offsetParam = url.searchParams.get('offset')
   const queryOffset = offsetParam !== null
     ? parseInt(offsetParam)
-    : (new Date().getUTCHours() * 3) % SECTOR_QUERIES[sector].length
+    : (dayIndex() * (PRIORITY_QUERIES[sector]?.length ? 2 : 3)) % SECTOR_QUERIES[sector].length  // advance daily: each weekday cron gets the next queries
 
   // mode=recent (default, used by crons): date-sorted, last-week posts only.
   // mode=deep (manual loading sweeps): relevance-ranked, no date filter, deeper fetch.
@@ -116,14 +116,11 @@ export async function POST(req: NextRequest) {
         }
 
         // Trust the classifier's judgment of the ROLE's sector over the query's sector.
-        // A finance query that surfaces a tech job files it under tech; roles that fit
-        // no vertical ('other') are dropped instead of polluting a sector.
-        const jobSector = SECTORS.includes(classified.sector as Sector) ? (classified.sector as Sector) : null
-        if (!jobSector) {
-          console.log(`[ingest] Skipping off-sector role: "${classified.title}" (${classified.sector})`)
-          result.skipped_off_sector++
-          continue
-        }
+        // A finance query that surfaces a tech job files it under tech. Real jobs outside
+        // our verticals are kept as 'other' (we've already paid to classify them, and
+        // paying users search for roles like GRC, enablement and customer experience).
+        const jobSector: string = SECTORS.includes(classified.sector as Sector) ? classified.sector : 'other'
+        if (jobSector === 'other') result.skipped_off_sector++  // now counts 'other' roles kept, not dropped
 
         result.classified_as_jobs++
 

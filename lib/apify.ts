@@ -73,7 +73,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'fund accounting recruiter hiring',
     'real estate finance recruiter hiring',
     'infrastructure finance recruiter hiring',
-    'securities lawyer finance recruiter hiring',
     'financial controller CFO recruiter hiring',
   ],
   tech: [
@@ -153,9 +152,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'associate solicitor recruiter hiring',
     'compliance recruiter hiring role',
     'litigation associate recruiter hiring',
-    'legal counsel recruiter mandate',
-    'employment lawyer recruiter hiring',
-    'general counsel recruiter hiring',
     'legal recruiter hiring Toronto',
     'commercial solicitor recruiter hiring',
     'paralegal recruiter hiring',
@@ -227,7 +223,6 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
     'property manager recruiter hiring',
     'real estate recruiter now hiring',
     'property management recruiter now hiring',
-    'real estate recruiter hiring London',
     'leasing consultant recruiter hiring',
     'property leasing recruiter opportunity',
     'real estate recruiter hiring Toronto',
@@ -262,6 +257,28 @@ export const SECTOR_QUERIES: Record<Sector, string[]> = {
   ],
 }
 
+// Searches for roles our paying customers look for. One of these runs on EVERY
+// sector run (cycling through the list day by day), on top of the rotating queries,
+// so they're refreshed every day or two instead of once every few weeks.
+export const PRIORITY_QUERIES: Partial<Record<Sector, string[]>> = {
+  finance: [
+    'FP&A financial analyst hiring New York',
+    'corporate strategy revenue growth management hiring',
+  ],
+  legal: [
+    'GRC governance risk compliance analyst hiring',
+    'IT risk compliance analyst remote hiring',
+  ],
+  marketing: [
+    'sales enablement instructional designer hiring',
+    'customer experience manager hiring Washington DC',
+  ],
+}
+
+// Whole days since 1970: the cron fires at the same UTC hour every day, so the
+// rotation has to advance by day (rotating by hour picked the same 3 queries daily).
+export const dayIndex = () => Math.floor(Date.now() / 86_400_000)
+
 export async function runApifyScraperForSector(
   sector: Sector,
   queryOffset = 0,
@@ -277,7 +294,10 @@ export async function runApifyScraperForSector(
   const recentOnly = opts.recentOnly ?? true
 
   const queries = SECTOR_QUERIES[sector]
-  const batch = [...queries, ...queries].slice(queryOffset % queries.length, (queryOffset % queries.length) + 3)
+  const priority = PRIORITY_QUERIES[sector] ?? []
+  // 1 priority query (when the sector has any) + rotating queries, 3 in total
+  const rotating = [...queries, ...queries].slice(queryOffset % queries.length, (queryOffset % queries.length) + (priority.length ? 2 : 3))
+  const batch = priority.length ? [priority[dayIndex() % priority.length], ...rotating] : rotating
   const allPosts: ApifyPost[] = []
 
   for (const query of batch) {

@@ -209,11 +209,10 @@ export async function POST(req: NextRequest) {
             const classified = await classifyPost(post.text, post.authorHeadline, sector)
             if (!classified.isJob) { queryRejected++; return }
 
-            // Trust the classifier's sector over the regex hint, and drop
-            // roles that aren't in one of our verticals.
+            // Trust the classifier's sector over the regex hint. Real jobs outside our
+            // verticals are kept as 'other' rather than dropped (already paid to classify).
             const jobSector = ['finance','tech','legal','marketing','realestate']
-              .includes(classified.sector) ? classified.sector : null
-            if (!jobSector) { queryRejected++; return }
+              .includes(classified.sector) ? classified.sector : 'other'
 
             const loc = (classified.location || '').toLowerCase()
             if (INDIA_LOCATIONS.some(l => loc.includes(l))) return
