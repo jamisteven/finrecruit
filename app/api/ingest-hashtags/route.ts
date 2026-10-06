@@ -47,11 +47,6 @@ const HASHTAG_QUERIES = [
   'hiring minneapolis',
   'hiring charlotte',
   'hiring detroit',
-  'hiring baltimore',
-  'hiring portland',
-  'hiring raleigh',
-  'hiring columbus',
-  'hiring san antonio',
   'hiring pittsburgh',
   'hiring salt lake city',
   'hiring richmond',
@@ -83,6 +78,11 @@ const HASHTAG_QUERIES = [
   '#remotejobs',
   'hiring product manager',
   'hiring help desk',
+  'hiring fixed income new york',
+  'hiring corporate finance new york',
+  'hiring finance switzerland',
+  'hiring customer experience washington dc',
+  'hiring grc remote',
 ]
 
 const GERMAN_HASHTAGS = ['stellenangebot', 'jobsuche', 'neuejobs', 'karriere', 'jobboerse', 'jobangebot', 'stellen', 'wirstellenein']
