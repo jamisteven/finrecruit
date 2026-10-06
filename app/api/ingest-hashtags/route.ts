@@ -25,7 +25,6 @@ const HASHTAG_QUERIES = [
   'hiring zurich',
   'hiring switzerland',
   'hiring bern',
-  'hiring schaffhausen',
   'hiring basel',
   'hiring geneva',
   // US cities
@@ -50,18 +49,13 @@ const HASHTAG_QUERIES = [
   'hiring detroit',
   'hiring baltimore',
   'hiring portland',
-  'hiring las vegas',
   'hiring raleigh',
   'hiring columbus',
-  'hiring indianapolis',
   'hiring san antonio',
   'hiring pittsburgh',
   'hiring salt lake city',
-  'hiring kansas city',
   'hiring cincinnati',
   'hiring richmond',
-  'hiring memphis',
-  'hiring st louis',
   'hiring washington dc',
   'hiring new jersey',
   // UK
@@ -74,6 +68,13 @@ const HASHTAG_QUERIES = [
   'hiring dubai',
   // Canada
   'hiring toronto',
+  // Function-led — driven by what paying users actually search for
+  'hiring corporate finance',
+  'hiring finance new york',
+  'hiring finance chicago',
+  '#financejobs',
+  'hiring strategy',
+  '#remotejobs',
 ]
 
 const GERMAN_HASHTAGS = ['stellenangebot', 'jobsuche', 'neuejobs', 'karriere', 'jobboerse', 'jobangebot', 'stellen', 'wirstellenein']
