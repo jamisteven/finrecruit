@@ -605,8 +605,12 @@ export default function HomePage() {
         const selCities = filters.locations.filter((l) => !REGIONS[l])
         // Exact part match — same rule the chip counts use, so chip number === feed result
         const matchCity = (sel: string) => jobLocs.includes(sel.toLowerCase())
-        if (selRegions.length > 0 && !selRegions.some((r) => jobInRegion(job, r))) return false
-        if (selCities.length > 0 && !selCities.some(matchCity)) return false
+        // Region and city selections are alternatives, not requirements —
+        // "United States" + "Remote" should widen the set, not empty it.
+        const anyLoc =
+          selRegions.some((r) => jobInRegion(job, r)) ||
+          selCities.some(matchCity)
+        if ((selRegions.length > 0 || selCities.length > 0) && !anyLoc) return false
       }
       if (filters.workTypes.length > 0) {
         const wt = job.work_type ?? inferWorkType(job)
