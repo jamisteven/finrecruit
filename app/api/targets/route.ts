@@ -86,3 +86,57 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Could not save' }, { status: 500 })
   }
 }
+// Append to app/api/targets/route.ts — lets the settings page read and clear
+// what a user has already asked for.
+export async function GET() {
+  try {
+    const { getSessionClient } = await import('@/lib/supabase-session')
+    const { createServerClient } = await import('@/lib/supabase')
+    const { data: { user } } = await (await getSessionClient()).auth.getUser()
+    if (!user) return Response.json({ error: 'Sign in first' }, { status: 401 })
+
+    const { data } = await createServerClient()
+      .from('user_targets')
+      .select('keyword, location, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true })
+
+    return Response.json({ targets: data ?? [] })
+  } catch {
+    return Response.json({ targets: [] })
+  }
+}
+
+export async function DELETE() {
+  try {
+    const { getSessionClient } = await import('@/lib/supabase-session')
+    const { createServerClient } = await import('@/lib/supabase')
+    const { data: { user } } = await (await getSessionClient()).auth.getUser()
+    if (!user) return Response.json({ error: 'Sign in first' }, { status: 401 })
+
+    const db = createServerClient()
+
+    // Decrement the shared counter before dropping this user's rows, so a query
+    // nobody still wants goes inactive rather than running forever.
+    const { data: mine } = await db.from('user_targets')
+      .select('keyword, location').eq('user_id', user.id)
+
+    for (const t of mine ?? []) {
+      const queryText = t.location
+        ? `hiring ${t.keyword} ${t.location}`
+        : `hiring ${t.keyword}`
+      const { data: pq } = await db.from('priority_queries')
+        .select('id, user_count').eq('query', queryText).maybeSingle()
+      if (!pq) continue
+      const next = (pq.user_count as number) - 1
+      await db.from('priority_queries')
+        .update({ user_count: Math.max(0, next), active: next > 0 })
+        .eq('id', pq.id)
+    }
+
+    await db.from('user_targets').delete().eq('user_id', user.id)
+    return Response.json({ ok: true })
+  } catch {
+    return Response.json({ error: 'Could not clear' }, { status: 500 })
+  }
+}

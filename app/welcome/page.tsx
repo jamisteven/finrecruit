@@ -110,8 +110,7 @@ function Welcome() {
       <h1>What should we look for?</h1>
       <p className="muted">
         Recruiters post thousands of roles a day. Tell us which ones matter and we&apos;ll
-        point the next sweeps at them — up to three, and you can leave the location blank
-        for anywhere.
+        point the next sweeps at them — up to three, with where you&apos;d work.
       </p>
 
       <div className="tip">
@@ -142,7 +141,7 @@ function Welcome() {
       <button className="btn" onClick={save} disabled={stage === 'saving'}>
         {stage === 'saving' ? 'Saving…' : 'Start my searches'}
       </button>
-      <a className="skip" href="/">Skip for now</a>
+      <a className="skip" href="/">Skip — you can set this later from the menu</a>
     </Shell>
   )
 }
