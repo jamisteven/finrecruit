@@ -17,13 +17,14 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     // Three explicit keyword+location pairs, not a matrix
-    const pairs = (body.pairs ?? [])
+    type Pair = { keyword: string; location: string | null }
+    const pairs: Pair[] = (body.pairs ?? [])
       .slice(0, 3)
       .map((p: { keyword?: string; location?: string }) => ({
         keyword: normaliseKeyword(String(p.keyword ?? '')),
         location: String(p.location ?? '').trim().toLowerCase() || null,
       }))
-      .filter((p: { keyword: string | null }): p is { keyword: string; location: string | null } => !!p.keyword)
+      .filter((p: { keyword: string | null; location: string | null }): p is Pair => !!p.keyword)
 
     if (pairs.length === 0) {
       return NextResponse.json(
