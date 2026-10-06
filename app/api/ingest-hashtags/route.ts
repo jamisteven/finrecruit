@@ -68,6 +68,13 @@ const HASHTAG_QUERIES = [
   'hiring dubai',
   // Canada
   'hiring toronto',
+  // Terms paying users searched and found nothing for
+  'hiring revenue growth management',
+  'hiring grc',
+  'hiring sales enablement',
+  'hiring instructional design',
+  'hiring fixed income',
+  'hiring private equity',
   // Function-led — driven by what paying users actually search for
   'hiring corporate finance',
   'hiring finance new york',
