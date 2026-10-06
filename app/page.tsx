@@ -1023,7 +1023,7 @@ export default function HomePage() {
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Premium active</div>}
                       {hasPass && <button onClick={() => { setMenuOpen(false); openPortal() }} disabled={portalBusy}>Manage billing</button>}
-                      <a href="/targets">What we look for</a>
+                      <a href="/targets">My queries</a>
                       <a href="/offer">Pricing</a>
                       <button onClick={signOut}>Sign out</button>
                     </>
