@@ -150,11 +150,23 @@ function Welcome() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="onb">
-      {children}
+      <header className="onb-top">
+        <a className="onb-wm" href="/"><span className="onb-mk">B</span><span>backchannel<em>.jobs</em></span></a>
+      </header>
+      <div className="onb-body">{children}</div>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
         html, body { background: #F5F2EB; margin: 0; }
-        .onb { max-width: 540px; margin: 0 auto; padding: 72px 22px 90px;
+        .onb { max-width: 540px; margin: 0 auto; padding: 0 22px 90px;
           font-family: 'Inter', system-ui, sans-serif; color: #191713; }
+        .onb-top { padding: 26px 0 0; }
+        .onb-wm { display: inline-flex; align-items: center; gap: 9px;
+          font-family: 'Fraunces', Georgia, serif; font-weight: 600; font-size: 20px;
+          color: #191713; text-decoration: none; }
+        .onb-wm em { font-style: normal; font-weight: 400; opacity: .55; }
+        .onb-mk { width: 28px; height: 28px; border-radius: 8px; background: #14213D;
+          color: #F3F1EA; display: grid; place-items: center; font-size: 16px; }
+        .onb-body { padding-top: 46px; }
         .onb h1 { font-family: 'Fraunces', Georgia, serif; font-size: 27px;
           font-weight: 500; line-height: 1.2; margin: 0 0 10px; }
         .onb .muted { font-size: 14.5px; line-height: 1.65; color: #57544E; margin: 0 0 22px; }
@@ -167,8 +179,8 @@ function Shell({ children }: { children: React.ReactNode }) {
           font-family: inherit; color: #191713; background: #FFF;
           border: 1px solid #DDD6C8; border-radius: 9px; }
         .onb input:focus { outline: none; border-color: #191713; }
-        .onb .btn { display: block; width: 100%; text-align: center; background: #191713;
-          color: #F5F2EB; border: none; font: 500 14.5px 'Inter', sans-serif;
+        .onb .btn { display: block; width: 100%; text-align: center; background: #2F6BF2;
+          color: #FFF; border: none; font: 500 14.5px 'Inter', sans-serif;
           padding: 13px; border-radius: 9px; cursor: pointer; text-decoration: none; }
         .onb .btn:disabled { opacity: 0.6; cursor: default; }
         .onb .skip { display: block; text-align: center; font-size: 13px; color: #8B877F;
