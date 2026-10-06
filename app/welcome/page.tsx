@@ -23,7 +23,6 @@ function Onboarding() {
   }, [])
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('preview') === '1') { setStage('roles'); return }
     if (!sid) { setStage('manual'); setMsg('Missing checkout session.'); return }
     fetch('/api/stripe/claim', {
       method: 'POST',
