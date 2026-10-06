@@ -17,6 +17,10 @@ function Welcome() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    // TEMP: ?preview=1 skips the Stripe gate so the form can be checked
+    if (new URLSearchParams(window.location.search).get('preview') === '1') {
+      setStage('form'); return
+    }
     if (!sid) { setStage('manual'); setMsg('Missing checkout session.'); return }
     fetch('/api/stripe/claim', {
       method: 'POST',
