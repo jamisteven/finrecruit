@@ -79,6 +79,21 @@ export async function POST(req: NextRequest) {
       added.push(label)
     }
 
+    // Kick the new queries off now rather than waiting for the rotation, so a
+    // user who just paid sees results within minutes. Fire and forget.
+    if (added.length > 0) {
+      const origin = new URL(req.url).origin
+      const queries = added.map((label) => {
+        const [k, l] = label.split(' / ')
+        return l ? `hiring ${k} ${l}` : `hiring ${k}`
+      })
+      fetch(`${origin}/api/run-priority`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-ingest-secret': process.env.INGEST_SECRET ?? '' },
+        body: JSON.stringify({ queries }),
+      }).catch(() => {})
+    }
+
     console.log(`[targets] ${user.id}: ${added.length} queued, ${covered.length} covered`)
     return NextResponse.json({ ok: true, added, covered })
   } catch (e) {

@@ -113,8 +113,8 @@ function Targets() {
       </span>
       <h1>Updated.</h1>
       <p className="lede">
-        Your searches are live. We sweep new recruiter posts eight times a day and anything
-        matching lands in your feed — usually within a few hours.
+        We&apos;re searching now. Give us about five minutes, then check your feed — new
+        matches land there as we find them, and we sweep again eight times a day.
       </p>
       <div className="pills">
         {filledRoles.map((r) => <span className="pill" key={r}>{r}</span>)}
