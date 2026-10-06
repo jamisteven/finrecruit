@@ -15,6 +15,11 @@ function Welcome() {
     { keyword: '', location: '' },
   ])
   const [error, setError] = useState('')
+  const [sug, setSug] = useState<{ locations: string[]; titles: string[] }>({ locations: [], titles: [] })
+
+  useEffect(() => {
+    fetch('/api/suggest').then((r) => r.json()).then(setSug).catch(() => {})
+  }, [])
 
   useEffect(() => {
     // TEMP: ?preview=1 skips the Stripe gate so the form can be checked
@@ -119,17 +124,22 @@ function Welcome() {
         without being the job.
       </div>
 
+      <datalist id="sug-titles">{sug.titles.map((t: string) => <option key={t} value={t} />)}</datalist>
+      <datalist id="sug-locations">{sug.locations.map((l: string) => <option key={l} value={l} />)}</datalist>
+
       <div className="rows">
         {rows.map((r, i) => (
           <div className="row" key={i}>
             <input
               value={r.keyword}
-              placeholder={i === 0 ? 'Product manager' : i === 1 ? 'Quantitative developer' : 'Role or job title'}
+              list="sug-titles"
+                  placeholder={i === 0 ? 'Product manager' : i === 1 ? 'Quantitative developer' : 'Role or job title'}
               onChange={(e) => setRow(i, { keyword: e.target.value })}
             />
             <input
               value={r.location}
-              placeholder={i === 0 ? 'United States' : i === 1 ? 'New York' : 'Location (optional)'}
+              list="sug-locations"
+                  placeholder={i === 0 ? 'United States' : i === 1 ? 'New York' : 'Location (optional)'}
               onChange={(e) => setRow(i, { location: e.target.value })}
             />
           </div>

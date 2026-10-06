@@ -15,7 +15,12 @@ export default function TargetsPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [sug, setSug] = useState<{ locations: string[]; titles: string[] }>({ locations: [], titles: [] })
   const [note, setNote] = useState('')
+
+  useEffect(() => {
+    fetch('/api/suggest').then((r) => r.json()).then(setSug).catch(() => {})
+  }, [])
 
   useEffect(() => {
     fetch('/api/targets')
@@ -110,11 +115,13 @@ export default function TargetsPage() {
               <div className="row" key={i}>
                 <input
                   value={r.keyword}
+                  list="sug-titles"
                   placeholder={i === 0 ? 'Product manager' : i === 1 ? 'Quantitative developer' : 'Role or job title'}
                   onChange={(e) => setRow(i, { keyword: e.target.value })}
                 />
                 <input
                   value={r.location}
+                  list="sug-locations"
                   placeholder={i === 0 ? 'United States' : i === 1 ? 'New York' : 'City, state or country'}
                   onChange={(e) => setRow(i, { location: e.target.value })}
                 />
@@ -133,6 +140,9 @@ export default function TargetsPage() {
           )}
         </>
       )}
+
+      <datalist id="sug-titles">{sug.titles.map((t) => <option key={t} value={t} />)}</datalist>
+      <datalist id="sug-locations">{sug.locations.map((l) => <option key={l} value={l} />)}</datalist>
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
