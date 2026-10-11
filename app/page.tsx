@@ -244,8 +244,8 @@ const HOW_STEPS = [
 const BoltIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z" /></svg>
 )
-const ArrowRight = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+const ArrowRight = ({ className }: { className?: string }) => (
+  <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
 )
 const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
@@ -1055,16 +1055,6 @@ export default function HomePage() {
         <div className="hero-copy">
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
           <p className="sub">Roles recruiters and hiring managers share with their networks before posting them publicly - tracked by AI and delivered in real time.</p>
-          {!hasPass && (
-            <div className="offer">
-              <a className="plan" href="/offer" onClick={() => track('cta_click', { where: 'hero_free' })}>
-                <b>Browse free<ArrowRight /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
-              </a>
-              <a className="plan plan-pro" href="/offer" onClick={() => track('cta_click', { where: 'hero_plan' })}>
-                <b><span>Premium</span><ArrowRight /></b>Every role the moment it drops. $9 first month, then $15/month, cancel anytime.
-              </a>
-            </div>
-          )}
         </div>
 
         {renderArt('art-d')}
@@ -1082,6 +1072,29 @@ export default function HomePage() {
       </div>
 
       <div className="art-m-wrap">{renderArt('art-m')}</div>
+
+      {/* Plans come after the pitch and the example. "Browse free" scrolls to the feed
+          below instead of sending people to the pricing page. */}
+      {!hasPass && (
+        <div className="offer-wrap">
+          <div className="offer">
+            <a
+              className="plan"
+              href="#feed"
+              onClick={(e) => {
+                e.preventDefault()
+                track('cta_click', { where: 'hero_free' })
+                document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+            >
+              <b>Browse free<ArrowRight className="down" /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
+            </a>
+            <a className="plan plan-pro" href="/offer" onClick={() => track('cta_click', { where: 'hero_plan' })}>
+              <b><span>Premium</span><ArrowRight /></b>Every role the moment it drops. $9 first month, then $15/month, cancel anytime.
+            </a>
+          </div>
+        </div>
+      )}
 
       </>)}
 
@@ -1582,6 +1595,10 @@ export default function HomePage() {
         .ulj .offer > .plan:focus-visible { outline: 2px solid var(--cta); outline-offset: -2px; }
         .ulj .offer b { display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--ink); margin-bottom: 2px; font-size: 14px; }
         .ulj .offer b svg { width: 14px; height: 14px; flex: none; opacity: .55; }
+        .ulj .offer b svg.down { transform: rotate(90deg); }
+        .ulj .offer-wrap { max-width: 1200px; margin: 0 auto; padding: 4px 28px 32px; }
+        .ulj .offer-wrap .offer { margin-top: 0; }
+        @media (max-width: 760px) { .ulj .offer-wrap { padding: 0 16px 24px; } }
         /* Hero art: a recruiter post becoming a listing */
         .ulj .art { position: relative; width: 100%; max-width: 520px; margin-left: auto; }
         .ulj .art-m-wrap { display: none; }
