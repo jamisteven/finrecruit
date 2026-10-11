@@ -15,6 +15,14 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await session.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Sign in first' }, { status: 401 })
 
+    // Custom searches are a paid feature — a session alone isn't enough
+    const { data: profile } = await createServerClient()
+      .from('profiles').select('pass_expires_at').eq('id', user.id).maybeSingle()
+    const hasPass = !!profile?.pass_expires_at && new Date(profile.pass_expires_at) > new Date()
+    if (!hasPass) {
+      return NextResponse.json({ error: 'Premium members only' }, { status: 403 })
+    }
+
     const body = await req.json()
     // Three explicit keyword+location pairs, not a matrix
     type Pair = { keyword: string; location: string | null }

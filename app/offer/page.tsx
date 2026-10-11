@@ -127,6 +127,7 @@ export default function OfferPage() {
             <div className="pp-price"><b>${PRICE.intro}</b><span>first month<br />then ${PRICE.monthly}/month</span></div>
             <ul>
               <li><b>Every new role the moment it&apos;s posted</b></li>
+              <li><b>We go looking for your roles specifically</b></li>
               <li>Full details + direct recruiter link on every role</li>
               <li>Everything in Free</li>
               <li>Cancel in two clicks, anytime</li>
@@ -155,10 +156,26 @@ export default function OfferPage() {
           </section>
         </div>
 
+        {/* ───────── Custom searches ───────── */}
+        <section className="pp-custom">
+          <h3>We search for your roles, not just ours</h3>
+          <p>
+            Everyone sees the same feed. Premium members get something else — name the
+            titles you want and where you&apos;d work, and those become searches we run on
+            your behalf, rather than filters over whatever we happened to find.
+          </p>
+          <ol>
+            <li><b>Name up to three roles</b><span>&ldquo;Fixed income analyst&rdquo;, &ldquo;Quantitative developer&rdquo; — and the cities you&apos;d take them in.</span></li>
+            <li><b>We start searching within minutes</b><span>Not on a queue. The first sweep for your roles runs as soon as you&apos;ve told us.</span></li>
+            <li><b>They keep running</b><span>Every few hours for as long as you&apos;re a member. Change them whenever you like.</span></li>
+          </ol>
+        </section>
+
         {/* ───────── FAQ ───────── */}
         <section className="pp-faq">
           <h3>Common questions</h3>
           <details><summary>Why does seeing a role early matter?</summary><p>The first applications land in an empty inbox and get read properly. Two days later there can be hundreds. Premium puts you in that first group. Everything older stays free.</p></details>
+          <details><summary>How do the custom searches work?</summary><p>After you join we ask which roles you&apos;re after and where. Those become real searches we run against new recruiter posts every few hours — not just a filter on the feed. Edit them any time from the menu.</p></details>
           <details><summary>How do I cancel?</summary><p>Open the menu in the top right, choose Manage billing, and cancel. You keep Premium until the end of the period you&apos;ve paid for and won&apos;t be charged again.</p></details>
           <details><summary>What happens after the first month?</summary><p>The ${PRICE.intro} covers your first month. After that it renews at ${PRICE.monthly} a month until you cancel.</p></details>
           <details><summary>Does the 3-month option renew?</summary><p>No. It&apos;s one payment for 90 days and then it simply ends. You can buy again or switch to monthly whenever you like.</p></details>
@@ -236,6 +253,17 @@ export default function OfferPage() {
 
 
         /* FAQ */
+        .pp-custom { margin-top: 40px; max-width: 640px; }
+        .pp-custom h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+        .pp-custom > p { font-size: 14px; line-height: 1.6; color: #57544E; margin: 0 0 18px; }
+        .pp-custom ol { list-style: none; counter-reset: pc; padding: 0; margin: 0;
+          display: flex; flex-direction: column; gap: 14px; }
+        .pp-custom li { counter-increment: pc; padding-left: 34px; position: relative; }
+        .pp-custom li::before { content: counter(pc); position: absolute; left: 0; top: 1px;
+          width: 24px; height: 24px; border-radius: 50%; background: #191713; color: #F5F2EB;
+          font-size: 11.5px; display: flex; align-items: center; justify-content: center; }
+        .pp-custom b { display: block; font-size: 14px; font-weight: 600; }
+        .pp-custom span { display: block; font-size: 13px; color: #57544E; margin-top: 2px; line-height: 1.55; }
         .pp-faq { margin-top: 40px; max-width: 640px; }
         .pp-faq h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
         .pp details { border-top: 1px solid var(--hair); padding: 14px 0; }
