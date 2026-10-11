@@ -16,6 +16,8 @@ const SECTORS: { id: Sector; label: string }[] = [
   { id: 'legal',     label: 'Legal' },
   { id: 'marketing', label: 'Marketing' },
   { id: 'realestate', label: 'Real Estate' },
+  { id: 'sales',     label: 'Sales' },
+  { id: 'hr',        label: 'HR & Talent' },
 ]
 
 const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
@@ -45,7 +47,7 @@ const sectorLabel = (s: string) =>
   (s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Other')
 
 // ── Drop schedule (UTC) — mirrors the crons in vercel.json ──
-const DROP_SECTORS_FULL = ['finance', 'tech', 'legal', 'marketing', 'realestate']
+const DROP_SECTORS_FULL = ['finance', 'tech', 'legal', 'marketing', 'realestate', 'sales', 'hr']
 type DropBatch = { days: number[]; utcHour: number; utcMin: number; sectors: string[] }
 // Fallback only — the live schedule comes from /api/schedule, derived from vercel.json
 const DROP_BATCHES_FALLBACK: DropBatch[] = [
@@ -663,6 +665,8 @@ export default function HomePage() {
       legal: allJobs.filter((j) => j.sector === 'legal').length + plus('legal'),
       marketing: allJobs.filter((j) => j.sector === 'marketing').length + plus('marketing'),
       realestate: allJobs.filter((j) => j.sector === 'realestate').length + plus('realestate'),
+      sales: allJobs.filter((j) => j.sector === 'sales').length + plus('sales'),
+      hr: allJobs.filter((j) => j.sector === 'hr').length + plus('hr'),
     }
   }, [allJobs, olderPending])
 
@@ -1469,6 +1473,8 @@ export default function HomePage() {
           --sec-legal:     #eda100;
           --sec-marketing: #e87ba4;
           --sec-realestate:#4a3aa7;
+          --sec-sales:#a8571c;
+          --sec-hr:#1f7a6b;
           --link:      #1B4F82;
           --accent:    #24468f;
           --accent-soft:#E4EAF6;
@@ -1495,6 +1501,8 @@ export default function HomePage() {
           --sec-legal:     #c98500;
           --sec-marketing: #d55181;
           --sec-realestate:#b3a7f2;
+          --sec-sales:#e8a86a;
+          --sec-hr:#6fc9b8;
           --link:      #7FB3E3;
           --accent:    #6F97EE;
           --accent-soft:#212B45;
