@@ -114,7 +114,7 @@ const loadRecent = () => load('recent', RECENT_TTL_MS, (q) => q
 
 // Counting the older roles costs Supabase almost nothing (no rows are sent), so the page can show
 // the full total without downloading them.
-const SECTORS = ['finance', 'tech', 'legal', 'marketing', 'realestate']
+const SECTORS = ['finance', 'tech', 'legal', 'marketing', 'realestate', 'sales', 'hr']
 let countsCache: { v: Record<string, number>; at: number } | undefined
 async function loadArchiveCounts(): Promise<Record<string, number> | undefined> {
   if (countsCache && Date.now() - countsCache.at < ARCHIVE_TTL_MS / 2) return countsCache.v
