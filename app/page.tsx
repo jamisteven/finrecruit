@@ -1060,6 +1060,8 @@ export default function HomePage() {
         {renderArt('art-d')}
       </section>
 
+      <div className="art-m-wrap">{renderArt('art-m')}</div>
+
       <div className="howbar-wrap" id="how">
         <div className="howbar">
           <div className="hb-title">How it works</div>
@@ -1070,8 +1072,6 @@ export default function HomePage() {
           </ol>
         </div>
       </div>
-
-      <div className="art-m-wrap">{renderArt('art-m')}</div>
 
       {/* Plans come after the pitch and the example. "Browse free" scrolls to the feed
           below instead of sending people to the pricing page. */}
