@@ -907,6 +907,27 @@ export default function HomePage() {
     </article>
   )
 
+  // Plan cards. Desktop: inside the hero, as before. Mobile: after the example and
+  // How it works. "Browse free" scrolls to the feed instead of opening the pricing page.
+  const renderOffer = (cls: string) => (
+    <div className={`offer ${cls}`}>
+      <a
+        className="plan"
+        href="#feed"
+        onClick={(e) => {
+          e.preventDefault()
+          track('cta_click', { where: 'hero_free' })
+          document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }}
+      >
+        <b>Browse free<ArrowRight className="down" /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
+      </a>
+      <a className="plan plan-pro" href="/offer" onClick={() => track('cta_click', { where: 'hero_plan' })}>
+        <b><span>Premium</span><ArrowRight /></b>Every role the moment it drops. $9 first month, then $15/month, cancel anytime.
+      </a>
+    </div>
+  )
+
   // The recruiter-post example. Rendered twice: beside the hero copy on wide screens, and below
   // "How it works" on narrow ones (see .art-d / .art-m in the CSS).
   const renderArt = (cls: string) => (
@@ -1055,6 +1076,7 @@ export default function HomePage() {
         <div className="hero-copy">
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
           <p className="sub">Roles recruiters and hiring managers share with their networks before posting them publicly - tracked by AI and delivered in real time.</p>
+          {!hasPass && renderOffer('offer-d')}
         </div>
 
         {renderArt('art-d')}
@@ -1073,28 +1095,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Plans come after the pitch and the example. "Browse free" scrolls to the feed
-          below instead of sending people to the pricing page. */}
-      {!hasPass && (
-        <div className="offer-wrap">
-          <div className="offer">
-            <a
-              className="plan"
-              href="#feed"
-              onClick={(e) => {
-                e.preventDefault()
-                track('cta_click', { where: 'hero_free' })
-                document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }}
-            >
-              <b>Browse free<ArrowRight className="down" /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
-            </a>
-            <a className="plan plan-pro" href="/offer" onClick={() => track('cta_click', { where: 'hero_plan' })}>
-              <b><span>Premium</span><ArrowRight /></b>Every role the moment it drops. $9 first month, then $15/month, cancel anytime.
-            </a>
-          </div>
-        </div>
-      )}
+      {!hasPass && <div className="offer-wrap">{renderOffer('offer-m')}</div>}
 
       </>)}
 
@@ -1596,8 +1597,12 @@ export default function HomePage() {
         .ulj .offer b { display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--ink); margin-bottom: 2px; font-size: 14px; }
         .ulj .offer b svg { width: 14px; height: 14px; flex: none; opacity: .55; }
         .ulj .offer b svg.down { transform: rotate(90deg); }
-        .ulj .offer-wrap { max-width: 1200px; margin: 0 auto; padding: 4px 28px 32px; }
+        .ulj .offer-wrap { display: none; max-width: 1200px; margin: 0 auto; padding: 0 28px 32px; }
         .ulj .offer-wrap .offer { margin-top: 0; }
+        @media (max-width: 900px) {
+          .ulj .offer-d { display: none; }
+          .ulj .offer-wrap { display: block; }
+        }
         @media (max-width: 760px) { .ulj .offer-wrap { padding: 0 16px 24px; } }
         /* Hero art: a recruiter post becoming a listing */
         .ulj .art { position: relative; width: 100%; max-width: 520px; margin-left: auto; }
