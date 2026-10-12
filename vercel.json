@@ -33,26 +33,6 @@
       "schedule": "0 21 * * 1-5"
     },
     {
-      "path": "/api/ingest?sector=finance",
-      "schedule": "20 12 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=tech",
-      "schedule": "30 12 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=legal",
-      "schedule": "40 12 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=marketing",
-      "schedule": "50 12 * * 1-5"
-    },
-    {
-      "path": "/api/ingest?sector=realestate",
-      "schedule": "55 12 * * 1-5"
-    },
-    {
       "path": "/api/ingest-hashtags?offset=0",
       "schedule": "0 10 * * 6,0"
     },
