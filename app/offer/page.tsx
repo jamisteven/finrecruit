@@ -205,7 +205,8 @@ export default function OfferPage() {
         @keyframes pp-pulse { 70% { box-shadow: 0 0 0 7px rgba(10,122,61,0); } 100% { box-shadow: 0 0 0 0 rgba(10,122,61,0); } }
 
         /* Cards */
-        .pp-cards { display: grid; grid-template-columns: 1fr 1.08fr 1fr; gap: 16px; align-items: stretch; margin-top: 12px; }
+        .pp-cards { display: grid; grid-template-columns: 1.08fr 1fr; gap: 18px;
+          align-items: stretch; margin: 12px auto 0; max-width: 760px; }
         .pp-card { position: relative; background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; padding: 26px 22px 20px; display: flex; flex-direction: column; }
         .pp-paid { background: var(--accent-soft); border: 2px solid var(--cta); box-shadow: 0 14px 34px -14px rgba(47,107,242,0.4); }
         .pp-tag { position: absolute; top: -12px; left: 20px; background: var(--cta); color: #fff; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
