@@ -156,21 +156,6 @@ export default function OfferPage() {
           </section>
         </div>
 
-        {/* ───────── Custom searches ───────── */}
-        <section className="pp-custom">
-          <h3>We search for your roles, not just ours</h3>
-          <p>
-            Everyone sees the same feed. Premium members get something else — name the
-            titles you want and where you&apos;d work, and those become searches we run on
-            your behalf, rather than filters over whatever we happened to find.
-          </p>
-          <ol>
-            <li><b>Name up to three roles</b><span>&ldquo;Fixed income analyst&rdquo;, &ldquo;Quantitative developer&rdquo; — and the cities you&apos;d take them in.</span></li>
-            <li><b>We start searching within minutes</b><span>Not on a queue. The first sweep for your roles runs as soon as you&apos;ve told us.</span></li>
-            <li><b>They keep running</b><span>Every few hours for as long as you&apos;re a member. Change them whenever you like.</span></li>
-          </ol>
-        </section>
-
         {/* ───────── FAQ ───────── */}
         <section className="pp-faq">
           <h3>Common questions</h3>
@@ -253,17 +238,6 @@ export default function OfferPage() {
 
 
         /* FAQ */
-        .pp-custom { margin-top: 40px; max-width: 640px; }
-        .pp-custom h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
-        .pp-custom > p { font-size: 14px; line-height: 1.6; color: #57544E; margin: 0 0 18px; }
-        .pp-custom ol { list-style: none; counter-reset: pc; padding: 0; margin: 0;
-          display: flex; flex-direction: column; gap: 14px; }
-        .pp-custom li { counter-increment: pc; padding-left: 34px; position: relative; }
-        .pp-custom li::before { content: counter(pc); position: absolute; left: 0; top: 1px;
-          width: 24px; height: 24px; border-radius: 50%; background: #191713; color: #F5F2EB;
-          font-size: 11.5px; display: flex; align-items: center; justify-content: center; }
-        .pp-custom b { display: block; font-size: 14px; font-weight: 600; }
-        .pp-custom span { display: block; font-size: 13px; color: #57544E; margin-top: 2px; line-height: 1.55; }
         .pp-faq { margin-top: 40px; max-width: 640px; }
         .pp-faq h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
         .pp details { border-top: 1px solid var(--hair); padding: 14px 0; }
