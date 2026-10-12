@@ -108,19 +108,6 @@ export default function OfferPage() {
 
         {/* ───────── Pricing, above the fold ───────── */}
         <div className="pp-cards" ref={cardsRef}>
-          <section className="pp-card pp-free">
-            <h2>Free</h2>
-            <div className="pp-price"><b>$0</b><span>old roles only</span></div>
-            <ul>
-              <li>Every role older than {FREE_DELAY_HOURS} hours</li>
-              <li>3 fresh roles in full each day</li>
-              <li className="no">Nothing posted in the last {FREE_DELAY_HOURS} hours</li>
-              <li className="no">No first look at new recruiter posts</li>
-            </ul>
-            <a className="pp-btn pp-btn-ghost" href="/login" onClick={() => track('cta_click', { where: 'offer_free_account' })}>Create a free account</a>
-            <p className="pp-fine"><a href="/" onClick={() => track('cta_click', { where: 'offer_free_browse' })}>or just keep browsing</a></p>
-          </section>
-
           <section className="pp-card pp-paid">
             <span className="pp-tag">Best way to start</span>
             <h2>Premium monthly</h2>
@@ -156,20 +143,11 @@ export default function OfferPage() {
           </section>
         </div>
 
-        {/* ───────── Custom searches ───────── */}
-        <section className="pp-custom">
-          <h3>We search for your roles, not just ours</h3>
-          <p>
-            Everyone sees the same feed. Premium members get something else — name the
-            titles you want and where you&apos;d work, and those become searches we run on
-            your behalf, rather than filters over whatever we happened to find.
-          </p>
-          <ol>
-            <li><b>Name up to three roles</b><span>&ldquo;Fixed income analyst&rdquo;, &ldquo;Quantitative developer&rdquo; — and the cities you&apos;d take them in.</span></li>
-            <li><b>We start searching within minutes</b><span>Not on a queue. The first sweep for your roles runs as soon as you&apos;ve told us.</span></li>
-            <li><b>They keep running</b><span>Every few hours for as long as you&apos;re a member. Change them whenever you like.</span></li>
-          </ol>
-        </section>
+        <p className="pp-current">
+          {hasPass
+            ? <>You&apos;re on Premium — every role the moment it&apos;s posted.</>
+            : <>You&apos;re on the free plan: roles appear after {FREE_DELAY_HOURS} hours, once the applications have piled up. <a href="/">Keep browsing →</a></>}
+        </p>
 
         {/* ───────── FAQ ───────── */}
         <section className="pp-faq">
@@ -264,6 +242,9 @@ export default function OfferPage() {
           font-size: 11.5px; display: flex; align-items: center; justify-content: center; }
         .pp-custom b { display: block; font-size: 14px; font-weight: 600; }
         .pp-custom span { display: block; font-size: 13px; color: #57544E; margin-top: 2px; line-height: 1.55; }
+        .pp-current { max-width: 640px; margin: 22px auto 0; text-align: center;
+          font-size: 13.5px; line-height: 1.6; color: #8B877F; }
+        .pp-current a { color: #57544E; }
         .pp-faq { margin-top: 40px; max-width: 640px; }
         .pp-faq h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
         .pp details { border-top: 1px solid var(--hair); padding: 14px 0; }
