@@ -108,19 +108,6 @@ export default function OfferPage() {
 
         {/* ───────── Pricing, above the fold ───────── */}
         <div className="pp-cards" ref={cardsRef}>
-          <section className="pp-card pp-free">
-            <h2>Free</h2>
-            <div className="pp-price"><b>$0</b><span>old roles only</span></div>
-            <ul>
-              <li>Every role older than {FREE_DELAY_HOURS} hours</li>
-              <li>3 fresh roles in full each day</li>
-              <li className="no">Nothing posted in the last {FREE_DELAY_HOURS} hours</li>
-              <li className="no">No first look at new recruiter posts</li>
-            </ul>
-            <a className="pp-btn pp-btn-ghost" href="/login" onClick={() => track('cta_click', { where: 'offer_free_account' })}>Create a free account</a>
-            <p className="pp-fine"><a href="/" onClick={() => track('cta_click', { where: 'offer_free_browse' })}>or just keep browsing</a></p>
-          </section>
-
           <section className="pp-card pp-paid">
             <span className="pp-tag">Best way to start</span>
             <h2>Premium monthly</h2>
