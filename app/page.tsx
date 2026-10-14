@@ -632,9 +632,6 @@ export default function HomePage() {
     const active = filters.search || filters.sector !== 'all'
       || filters.locations.length > 0 || filters.workTypes.length > 0
     if (!active) return
-    // Wait for the archive: logging before it lands records counts against a
-    // partial array, which is where the phantom "0 results" rows came from.
-    if (!archiveDone) return
     const t = setTimeout(() => {
       fetch('/api/track-search', {
         method: 'POST',
@@ -650,7 +647,7 @@ export default function HomePage() {
       }).catch(() => {})
     }, 1200)
     return () => clearTimeout(t)
-  }, [filters.search, filters.sector, filters.locations, filters.workTypes, displayJobs.length, archiveDone])
+  }, [filters.search, filters.sector, filters.locations, filters.workTypes, displayJobs.length])
 
   // Until the older roles are downloaded, add the server's count of them so the totals cover the whole month
   const olderPending = archiveCounts && !archiveDone ? archiveCounts : null
@@ -1004,11 +1001,9 @@ export default function HomePage() {
               aria-expanded={showSug}
               aria-controls="search-sug"
             />
-            {!archiveDone && filters.search.trim().length > 1
-              ? <span className="search-loading">loading older roles…</span>
-              : showFreshUpsell
-                ? <a className="bar-up" href="/offer" onClick={() => track('cta_click', { where: 'search_bar', q: freshQuery, n: freshMatches })}>+{freshMatches} new<span>&nbsp;· Premium</span></a>
-                : <span className="slash">/</span>}
+            {showFreshUpsell
+              ? <a className="bar-up" href="/offer" onClick={() => track('cta_click', { where: 'search_bar', q: freshQuery, n: freshMatches })}>+{freshMatches} new<span>&nbsp;· Premium</span></a>
+              : <span className="slash">/</span>}
             {showSugBox && (
               <div className="sug" id="search-sug" role="listbox">
                 {sugList.map((j, n) => (
@@ -1825,8 +1820,6 @@ export default function HomePage() {
           .ulj .wordmark .mark { width: 26px; height: 26px; font-size: 16px; border-radius: 6px; }
           .ulj .wordmark { gap: 8px; }
         }
-        .ulj .search-loading { font-size: 11.5px; color: var(--ink-3);
-          white-space: nowrap; flex: none; }
         .ulj .acct-wrap { position: relative; }
         .ulj .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
           min-width: 200px; background: #FFFDF9; border: 1px solid #DDD6C8;
