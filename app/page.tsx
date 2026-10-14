@@ -1489,6 +1489,24 @@ export default function HomePage() {
                 <ArrowRight />
               </a>
             )}
+
+            {relaxed && displayJobs.length > 0 &&
+             (relaxed.noLocation > displayJobs.length || relaxed.noSector > displayJobs.length || relaxed.noWorkType > displayJobs.length) && (
+              <div className="relax-inline">
+                <span>Not many here. More if you widen it:</span>
+                <div className="relax">
+                  {relaxed.noLocation > displayJobs.length && (
+                    <button onClick={() => setFilters({ ...filters, locations: [] })}>{relaxed.noLocation} in other locations</button>
+                  )}
+                  {relaxed.noSector > displayJobs.length && (
+                    <button onClick={() => setFilters({ ...filters, sector: 'all' })}>{relaxed.noSector} in other sectors</button>
+                  )}
+                  {relaxed.noWorkType > displayJobs.length && (
+                    <button onClick={() => setFilters({ ...filters, workTypes: [] })}>{relaxed.noWorkType} in other work types</button>
+                  )}
+                </div>
+              </div>
+            )}
             </>
           )}
 
@@ -1872,6 +1890,8 @@ export default function HomePage() {
         .ulj .search-spin { flex: none; color: var(--ink-3); animation: spin .9s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg) } }
         @media (prefers-reduced-motion: reduce) { .ulj .search-spin { animation: none } }
+        .ulj .relax-inline { text-align: center; padding: 26px 0 8px; }
+        .ulj .relax-inline > span { display: block; font-size: 13.5px; color: var(--ink-2); margin-bottom: 10px; }
         .ulj .relax { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 14px 0 18px; }
         .ulj .relax button { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 15px; font: 500 13px 'Inter', sans-serif; color: var(--ink); cursor: pointer; }
         .ulj .relax button:hover { border-color: var(--ink); }
