@@ -630,7 +630,6 @@ export default function HomePage() {
   // When a search comes back thin, work out what relaxing each filter would give.
   // allJobs is already search-filtered server-side, so these are cheap recounts.
   const relaxed = useMemo(() => {
-    console.log('[relax]', { display: displayJobs.length, all: allJobs.length, locs: filters.locations })
     if (displayJobs.length >= 5) return null
     const passesSector = (j: JobPost) => filters.sector === 'all' || j.sector === filters.sector
     const passesWork = (j: JobPost) => {
@@ -1063,6 +1062,16 @@ export default function HomePage() {
                   <a className="sug-up" href="/offer" onClick={() => track('cta_click', { where: 'search_dropdown', q: freshQuery, n: freshMatches })}>
                     <BoltIcon /><span><b>{freshMatches} newer {freshMatches === 1 ? 'role matches' : 'roles match'}</b> this search. Premium shows them now.</span>
                   </a>
+                )}
+                {relaxed && relaxed.noLocation > displayJobs.length && (
+                  <button type="button" className="sug-relax" onClick={() => { setFilters({ ...filters, locations: [] }); setSugOpen(false) }}>
+                    <span><b>{relaxed.noLocation} match</b> this search in other locations.</span>
+                  </button>
+                )}
+                {relaxed && relaxed.noSector > displayJobs.length && (
+                  <button type="button" className="sug-relax" onClick={() => { setFilters({ ...filters, sector: 'all' }); setSugOpen(false) }}>
+                    <span><b>{relaxed.noSector} match</b> this search in other sectors.</span>
+                  </button>
                 )}
               </div>
             )}
@@ -1891,6 +1900,11 @@ export default function HomePage() {
         .ulj .search-spin { flex: none; color: var(--ink-3); animation: spin .9s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg) } }
         @media (prefers-reduced-motion: reduce) { .ulj .search-spin { animation: none } }
+        .ulj .sug-relax { display: flex; width: 100%; text-align: left; gap: 8px; align-items: center;
+          padding: 10px 13px; background: none; border: 0; border-top: 1px solid var(--hairline);
+          font: 400 13px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; }
+        .ulj .sug-relax:hover { background: var(--surface-2); }
+        .ulj .sug-relax b { color: var(--ink); font-weight: 600; }
         .ulj .relax-inline { text-align: center; padding: 26px 0 8px; }
         .ulj .relax-inline > span { display: block; font-size: 13.5px; color: var(--ink-2); margin-bottom: 10px; }
         .ulj .relax { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 14px 0 18px; }
