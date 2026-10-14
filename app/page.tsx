@@ -627,6 +627,34 @@ export default function HomePage() {
     })
   }, [allJobs, filters.sector, filters.locations, filters.workTypes, filters.sortBy])
 
+  // When a search comes back thin, work out what relaxing each filter would give.
+  // allJobs is already search-filtered server-side, so these are cheap recounts.
+  const relaxed = useMemo(() => {
+    if (displayJobs.length >= 5) return null
+    const passesSector = (j: JobPost) => filters.sector === 'all' || j.sector === filters.sector
+    const passesWork = (j: JobPost) => {
+      if (filters.workTypes.length === 0) return true
+      const wt = j.work_type ?? inferWorkType(j)
+      return !!wt && filters.workTypes.includes(wt)
+    }
+    const passesLoc = (j: JobPost) => {
+      if (filters.locations.length === 0) return true
+      if (!j.location) return false
+      const jobLocs = locParts(j.location)
+      const selRegions = filters.locations.filter((l) => REGIONS[l])
+      const selCities = filters.locations.filter((l) => !REGIONS[l])
+      return selRegions.some((r) => jobInRegion(j, r)) || selCities.some((s) => jobLocs.includes(s.toLowerCase()))
+    }
+    return {
+      noLocation: filters.locations.length > 0
+        ? allJobs.filter((j) => passesSector(j) && passesWork(j)).length : 0,
+      noSector: filters.sector !== 'all'
+        ? allJobs.filter((j) => passesLoc(j) && passesWork(j)).length : 0,
+      noWorkType: filters.workTypes.length > 0
+        ? allJobs.filter((j) => passesSector(j) && passesLoc(j)).length : 0,
+    }
+  }, [displayJobs.length, allJobs, filters.sector, filters.locations, filters.workTypes])
+
   // Log settled filter states — not every keystroke, and not the default view
   useEffect(() => {
     const active = filters.search || filters.sector !== 'all'
@@ -1307,8 +1335,25 @@ export default function HomePage() {
             ) : (
             <div className="empty">
               <h3>Nothing matches those filters.</h3>
-              <p>Try widening the sector, location, or work-type selection.</p>
-              <button onClick={resetAll}>Reset all filters</button>
+              {relaxed && (relaxed.noLocation > 0 || relaxed.noSector > 0 || relaxed.noWorkType > 0) ? (
+                <>
+                  <p>There are more if you widen the search:</p>
+                  <div className="relax">
+                    {relaxed.noLocation > 0 && (
+                      <button onClick={() => setFilters({ ...filters, locations: [] })}>{relaxed.noLocation} in other locations</button>
+                    )}
+                    {relaxed.noSector > 0 && (
+                      <button onClick={() => setFilters({ ...filters, sector: 'all' })}>{relaxed.noSector} in other sectors</button>
+                    )}
+                    {relaxed.noWorkType > 0 && (
+                      <button onClick={() => setFilters({ ...filters, workTypes: [] })}>{relaxed.noWorkType} in other work types</button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p>Try widening the sector, location, or work-type selection.</p>
+              )}
+              <button className="reset-all" onClick={resetAll}>Reset all filters</button>
             </div>
             )
           ) : (
@@ -1827,6 +1872,9 @@ export default function HomePage() {
         .ulj .search-spin { flex: none; color: var(--ink-3); animation: spin .9s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg) } }
         @media (prefers-reduced-motion: reduce) { .ulj .search-spin { animation: none } }
+        .ulj .relax { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 14px 0 18px; }
+        .ulj .relax button { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 15px; font: 500 13px 'Inter', sans-serif; color: var(--ink); cursor: pointer; }
+        .ulj .relax button:hover { border-color: var(--ink); }
         .ulj .acct-wrap { position: relative; }
         .ulj .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
           min-width: 200px; background: #FFFDF9; border: 1px solid #DDD6C8;
