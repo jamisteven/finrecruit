@@ -632,6 +632,8 @@ export default function HomePage() {
     const active = filters.search || filters.sector !== 'all'
       || filters.locations.length > 0 || filters.workTypes.length > 0
     if (!active) return
+    // Logging before the archive lands records counts against a partial array
+    if (!archiveDone) return
     const t = setTimeout(() => {
       fetch('/api/track-search', {
         method: 'POST',
@@ -647,7 +649,7 @@ export default function HomePage() {
       }).catch(() => {})
     }, 1200)
     return () => clearTimeout(t)
-  }, [filters.search, filters.sector, filters.locations, filters.workTypes, displayJobs.length])
+  }, [filters.search, filters.sector, filters.locations, filters.workTypes, displayJobs.length, archiveDone])
 
   // Until the older roles are downloaded, add the server's count of them so the totals cover the whole month
   const olderPending = archiveCounts && !archiveDone ? archiveCounts : null
@@ -1001,9 +1003,11 @@ export default function HomePage() {
               aria-expanded={showSug}
               aria-controls="search-sug"
             />
-            {showFreshUpsell
-              ? <a className="bar-up" href="/offer" onClick={() => track('cta_click', { where: 'search_bar', q: freshQuery, n: freshMatches })}>+{freshMatches} new<span>&nbsp;· Premium</span></a>
-              : <span className="slash">/</span>}
+            {!archiveDone && filters.search.trim().length > 1
+              ? <svg className="search-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-label="Loading older roles"><path d="M21 12a9 9 0 1 1-6.22-8.56" /></svg>
+              : showFreshUpsell
+                ? <a className="bar-up" href="/offer" onClick={() => track('cta_click', { where: 'search_bar', q: freshQuery, n: freshMatches })}>+{freshMatches} new<span>&nbsp;· Premium</span></a>
+                : <span className="slash">/</span>}
             {showSugBox && (
               <div className="sug" id="search-sug" role="listbox">
                 {sugList.map((j, n) => (
@@ -1820,6 +1824,9 @@ export default function HomePage() {
           .ulj .wordmark .mark { width: 26px; height: 26px; font-size: 16px; border-radius: 6px; }
           .ulj .wordmark { gap: 8px; }
         }
+        .ulj .search-spin { flex: none; color: var(--ink-3); animation: spin .9s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg) } }
+        @media (prefers-reduced-motion: reduce) { .ulj .search-spin { animation: none } }
         .ulj .acct-wrap { position: relative; }
         .ulj .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
           min-width: 200px; background: #FFFDF9; border: 1px solid #DDD6C8;
