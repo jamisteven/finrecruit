@@ -630,6 +630,7 @@ export default function HomePage() {
   // When a search comes back thin, work out what relaxing each filter would give.
   // allJobs is already search-filtered server-side, so these are cheap recounts.
   const relaxed = useMemo(() => {
+    console.log('[relax]', { display: displayJobs.length, all: allJobs.length, locs: filters.locations })
     if (displayJobs.length >= 5) return null
     const passesSector = (j: JobPost) => filters.sector === 'all' || j.sector === filters.sector
     const passesWork = (j: JobPost) => {
