@@ -1725,8 +1725,14 @@ export default function HomePage() {
 
         /* ── Hero ── */
         .ulj .hero { max-width: 1200px; margin: 0 auto; padding: 40px 28px 30px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 32px 48px; align-items: center; }
-        /* The copy column sits on the art's baseline, so the plan cards end flush with the bottom of the example job card */
-        .ulj .hero-copy { align-self: stretch; display: flex; flex-direction: column; justify-content: flex-end; }
+        /* The copy column spans the art's full height: headline and sub stay vertically centred, while the promises
+           and plan cards are pushed to the bottom so they end flush with the example job card */
+        .ulj .hero-copy { align-self: stretch; display: flex; flex-direction: column; }
+        /* two auto margins split the spare height equally: the headline stays where the centred layout put it,
+           and the promises + plan cards drop to the baseline */
+        .ulj .hero-copy > h1 { margin-top: auto; }
+        .ulj .hero-copy > .promises { margin-top: auto; }
+        @media (max-width: 900px) { .ulj .hero-copy > h1, .ulj .hero-copy > .promises { margin-top: 0; } }
         .ulj .hero h1 {
           font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(38px, 5.4vw, 64px);
           line-height: 1.04; letter-spacing: -0.025em; margin-bottom: 18px;
