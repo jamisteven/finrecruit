@@ -186,12 +186,20 @@ export default function OfferPage() {
       </header>
 
       <main className="pp-main">
-        {/* ───────── Hero: copy left, pricing right, so the offer is visible without scrolling ───────── */}
+        {/* ───────── Hero: copy left, pricing right, so the offer is visible without scrolling.
+            On mobile, .pp-hero-copy switches to display:contents (see the media query further
+            down) so hook/trust-grid/tip/how/testimonial become direct flex children of .pp-hero
+            right alongside pp-hero-price, and flex `order` puts price after the short hook+trust+tip
+            but before the deeper how-it-works/testimonial content: the "Free" context in the tip
+            shows up BEFORE the price that way, not after it. ───────── */}
         <section className="pp-hero">
           <div className="pp-hero-copy">
-            <span className="pp-eyebrow"><BoltIcon /> Premium access</span>
-            <h1>The jobs LinkedIn doesn&apos;t show you <em>until it&apos;s too late.</em></h1>
-            <p className="pp-sub">{`Free sees a role ${FREE_DELAY_HOURS} hours after it's posted, once hundreds of people have already applied. Premium sees every recruiter post the moment it goes live.`}</p>
+            <div className="pp-hero-hook">
+              <span className="pp-eyebrow"><BoltIcon /> Premium access</span>
+              <h1>The jobs LinkedIn doesn&apos;t show you <em>until it&apos;s too late.</em></h1>
+              <p className="pp-sub">{`Free sees a role ${FREE_DELAY_HOURS} hours after it's posted, once hundreds of people have already applied. Premium sees every recruiter post the moment it goes live.`}</p>
+              {hasPass && <p className="pp-have">You already have Premium. <a href="/">See today&apos;s new roles →</a> Buying again adds more time.</p>}
+            </div>
 
             <ul className="pp-trustgrid">
               {TRUST_ITEMS.map((t) => (
@@ -199,26 +207,27 @@ export default function OfferPage() {
               ))}
             </ul>
 
-            {hasPass && <p className="pp-have">You already have Premium. <a href="/">See today&apos;s new roles →</a> Buying again adds more time.</p>}
+            {!hasPass && (
+              <div className="pp-tip">
+                <span className="pp-tip-icon"><ClockIcon /></span>
+                {fresh > 0 ? (
+                  <span>
+                    <b>{freshTxt} new roles</b> posted in the last {FREE_DELAY_HOURS}h.{' '}
+                    {hidden > 0 ? `${hidden.toLocaleString()} locked on Free.` : "Free can't see them yet."}
+                  </span>
+                ) : (
+                  <span><b>New roles drop every weekday.</b> Premium sees them the second they land, while Free waits {FREE_DELAY_HOURS} hours.</span>
+                )}
+              </div>
+            )}
 
             {!hasPass && (
               <>
-                <div className="pp-tip">
-                  <span className="pp-tip-icon"><ClockIcon /></span>
-                  {fresh > 0 ? (
-                    <span>
-                      <b>{freshTxt} new roles</b> posted in the last {FREE_DELAY_HOURS}h.{' '}
-                      {hidden > 0 ? `${hidden.toLocaleString()} locked on Free.` : "Free can't see them yet."}
-                    </span>
-                  ) : (
-                    <span><b>New roles drop every weekday.</b> Premium sees them the second they land, while Free waits {FREE_DELAY_HOURS} hours.</span>
-                  )}
-                </div>
-
-                {/* Fills the space beside the (taller) pricing column instead of leaving it blank.
-                    Real explanatory content, not padding for padding's sake: this is the "how it
+                {/* Real explanatory content, not padding for padding's sake: this is the "how it
                     works" recap that got cut from the top of the page for being one too many boxes
-                    there; it has a natural home here instead. */}
+                    there; it has a natural home here instead. On desktop it just sits below the tip;
+                    on mobile it's pushed after the price (see the media query), since it's for
+                    whoever is still reading, not a precondition for seeing the offer. */}
                 <ol className="pp-hero-how">
                   {HOW_IT_WORKS.map((s) => (
                     <li key={s.step}>
@@ -229,9 +238,8 @@ export default function OfferPage() {
                 </ol>
 
                 {/* TESTIMONIAL is null until there's a real one; this is deliberately the slot for it
-                    (same reasoning as the note further down near "Why it's worth it": no invented name
-                    or quote, even as a placeholder). Once TESTIMONIAL is set, it renders right here,
-                    beside the price, which is exactly where proof should sit. */}
+                    (same reasoning as the note further down near "Why it's worth it": no invented
+                    name or quote, even as a placeholder). Once TESTIMONIAL is set, it renders here. */}
                 {TESTIMONIAL && (
                   <blockquote className="pp-hero-quote">
                     <p>&ldquo;{TESTIMONIAL.quote}&rdquo;</p>
@@ -405,6 +413,7 @@ export default function OfferPage() {
 
         /* Hero: copy left, pricing right */
         .pp-hero { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 40px; align-items: start; margin-bottom: 56px; }
+        .pp-hero-hook { min-width: 0; }
         .pp-eyebrow { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 5px 11px 5px 9px; border-radius: 999px; margin-bottom: 14px; }
         .pp h1 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(28px, 3.2vw, 40px); line-height: 1.14; letter-spacing: -0.02em; margin: 0 0 14px; }
         .pp h1 em { font-style: normal; color: var(--accent); }
@@ -525,8 +534,17 @@ export default function OfferPage() {
           .pp-why-grid { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 860px) {
-          .pp-hero { grid-template-columns: 1fr; gap: 28px; margin-bottom: 44px; }
-          .pp-hero-price { order: -1; }
+          /* pp-hero-copy's own box disappears (display:contents), so its children (hook, trust
+             grid, tip, how-it-works, testimonial) become direct flex children of pp-hero right
+             alongside pp-hero-price, and the explicit order values below control the read order:
+             hook/trust/tip (1), then price (2), then how-it-works/testimonial (3). That puts the
+             "Free" context in the tip BEFORE the price, not after it like the old order:-1 did,
+             while still surfacing price well before the deeper explanatory content. */
+          .pp-hero { display: flex; flex-direction: column; margin-bottom: 44px; }
+          .pp-hero-copy { display: contents; }
+          .pp-hero-hook, .pp-trustgrid, .pp-tip { order: 1; }
+          .pp-hero-price { order: 2; margin-bottom: 24px; }
+          .pp-hero-how, .pp-hero-quote { order: 3; }
           .pp-compare-grid { grid-template-columns: 1fr; gap: 24px; }
         }
         @media (max-width: 640px) {
