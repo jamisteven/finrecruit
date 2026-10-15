@@ -10,6 +10,21 @@ const PRICE = { intro: 9, monthly: 15, quarter: 39 }
 
 const TRUST_ITEMS = ['No ghost jobs', 'Nothing older than 30 days', 'No ATS black holes', 'Cancel anytime, no lock-in']
 
+const HOW_IT_WORKS = [
+  { step: '1', title: 'Tell us what you want', body: 'Sector, role, location — takes under a minute.' },
+  { step: '2', title: 'We watch for it', body: 'Real recruiter posts get matched the moment they go live.' },
+  { step: '3', title: 'You apply first', body: "Before it's public, while your application still gets read." },
+]
+
+// HYPOTHETICAL — for layout preview only. Attributed to a bracketed placeholder, not an invented
+// named person, so it can't be mistaken for a real quote and doesn't end up shipping as one by
+// accident. Swap in a real quote + real name before this goes live, or set this back to null.
+const TESTIMONIAL: { quote: string; name: string; context: string } | null = {
+  quote: 'I signed up on a Friday and had two interviews lined up by Monday — roles that were nowhere to be found on other platforms.',
+  name: '[Chris M.]',
+  context: '[Product Manager, 6 months]',
+}
+
 const WHY_ITEMS: { icon: 'bolt' | 'person' | 'target' | 'clock'; title: string; body: string }[] = [
   { icon: 'bolt', title: 'Be first, not one of hundreds', body: "You see it before it hits LinkedIn's public feed or a job board, not two days after." },
   { icon: 'person', title: 'Real recruiter posts', body: 'Every role comes from an actual recruiter or hiring manager, not a scraped ATS feed.' },
@@ -177,17 +192,43 @@ export default function OfferPage() {
             {hasPass && <p className="pp-have">You already have Premium. <a href="/">See today&apos;s new roles →</a> Buying again adds more time.</p>}
 
             {!hasPass && (
-              <div className="pp-tip">
-                <span className="pp-tip-icon"><ClockIcon /></span>
-                {fresh > 0 ? (
-                  <span>
-                    <b>{freshTxt} new roles</b> posted in the last {FREE_DELAY_HOURS}h &mdash;{' '}
-                    {hidden > 0 ? `${hidden.toLocaleString()} locked on Free.` : "Free can't see them yet."}
-                  </span>
-                ) : (
-                  <span><b>New roles drop every weekday.</b> Premium sees them the second they land &mdash; Free waits {FREE_DELAY_HOURS} hours.</span>
+              <>
+                <div className="pp-tip">
+                  <span className="pp-tip-icon"><ClockIcon /></span>
+                  {fresh > 0 ? (
+                    <span>
+                      <b>{freshTxt} new roles</b> posted in the last {FREE_DELAY_HOURS}h &mdash;{' '}
+                      {hidden > 0 ? `${hidden.toLocaleString()} locked on Free.` : "Free can't see them yet."}
+                    </span>
+                  ) : (
+                    <span><b>New roles drop every weekday.</b> Premium sees them the second they land &mdash; Free waits {FREE_DELAY_HOURS} hours.</span>
+                  )}
+                </div>
+
+                {/* Fills the space beside the (taller) pricing column instead of leaving it blank.
+                    Real explanatory content, not padding for padding's sake — this is the "how it
+                    works" recap that got cut from the top of the page for being one too many boxes
+                    there; it has a natural home here instead. */}
+                <ol className="pp-hero-how">
+                  {HOW_IT_WORKS.map((s) => (
+                    <li key={s.step}>
+                      <span className="pp-hero-how-step">{s.step}</span>
+                      <span><b>{s.title}</b> &mdash; {s.body}</span>
+                    </li>
+                  ))}
+                </ol>
+
+                {/* TESTIMONIAL is null until there's a real one — this is deliberately the slot for it
+                    (same reasoning as the note further down near "Why it's worth it": no invented name
+                    or quote, even as a placeholder). Once TESTIMONIAL is set, it renders right here,
+                    beside the price, which is exactly where proof should sit. */}
+                {TESTIMONIAL && (
+                  <blockquote className="pp-hero-quote">
+                    <p>&ldquo;{TESTIMONIAL.quote}&rdquo;</p>
+                    <cite>{TESTIMONIAL.name} &mdash; {TESTIMONIAL.context}</cite>
+                  </blockquote>
                 )}
-              </div>
+              </>
             )}
           </div>
 
@@ -364,9 +405,18 @@ export default function OfferPage() {
         .pp-trustgrid { list-style: none; padding: 0; margin: 0 0 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 9px 16px; }
         .pp-trustgrid li { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 500; }
 
-        .pp-tip { display: flex; align-items: flex-start; gap: 10px; padding: 13px 16px; border: 1px solid var(--hair); border-radius: 12px; background: var(--surface); font-size: 14px; line-height: 1.5; max-width: 480px; }
+        .pp-tip { display: flex; align-items: flex-start; gap: 10px; padding: 13px 16px; border: 1px solid var(--hair); border-radius: 12px; background: var(--surface); font-size: 14px; line-height: 1.5; max-width: 480px; margin-bottom: 22px; }
         .pp-tip-icon { color: var(--accent); flex: none; margin-top: 1px; }
         .pp-tip b { font-weight: 600; }
+
+        .pp-hero-how { list-style: none; padding: 0; margin: 0 0 22px; display: grid; gap: 14px; max-width: 480px; }
+        .pp-hero-how li { display: flex; align-items: flex-start; gap: 12px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+        .pp-hero-how-step { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+        .pp-hero-how b { font-weight: 600; color: var(--ink); }
+
+        .pp-hero-quote { margin: 0; padding: 16px 18px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 12px 12px 0; max-width: 480px; }
+        .pp-hero-quote p { font-size: 14.5px; font-style: italic; line-height: 1.55; margin: 0 0 8px; color: var(--ink); }
+        .pp-hero-quote cite { font-style: normal; font-size: 12.5px; color: var(--ink-2); }
 
         /* Pricing column */
         .pp-hero-price { display: grid; gap: 14px; }
