@@ -594,7 +594,43 @@ export default function HomePage() {
     }
   }, [nowTs, dropBatches])
 
+  // Roles the member asked us to watch for, set during onboarding
+  const [myTargets, setMyTargets] = useState<{ keyword: string; location: string | null }[]>([])
+  const [myFeedOn, setMyFeedOn] = useState(false)
+  useEffect(() => {
+    fetch('/api/targets')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setMyTargets(d?.targets ?? []))
+      .catch(() => {})
+  }, [])
+
+  // exact = the keyword in the title and the location matches; rough = keyword anywhere
+  const matchesTargets = useCallback((j: JobPost, strict: boolean) => {
+    if (myTargets.length === 0) return false
+    const title = (j.title ?? '').toLowerCase()
+    const blob = `${title} ${(j.summary ?? '').toLowerCase()}`
+    const loc = (j.location ?? '').toLowerCase()
+    return myTargets.some((t) => {
+      const k = t.keyword.toLowerCase()
+      const hitKeyword = strict ? title.includes(k) : blob.includes(k)
+      if (!hitKeyword) return false
+      if (!strict || !t.location) return true
+      return loc.includes(t.location.toLowerCase())
+    })
+  }, [myTargets])
+
+  const myExact = useMemo(() => allJobs.filter((j) => matchesTargets(j, true)), [allJobs, matchesTargets])
+  const myRough = useMemo(
+    () => allJobs.filter((j) => !matchesTargets(j, true) && matchesTargets(j, false)),
+    [allJobs, matchesTargets])
+
   const displayJobs = useMemo(() => {
+    if (myFeedOn) {
+      return [...myExact, ...myRough].sort((a, b) => {
+        const d = toTime(b.posted_at) - toTime(a.posted_at)
+        return filters.sortBy === 'newest' ? d : -d
+      })
+    }
     const list = allJobs.filter((job) => {
       if (filters.sector !== 'all' && job.sector !== filters.sector) return false
       if (filters.locations.length > 0) {
@@ -625,7 +661,7 @@ export default function HomePage() {
       const d = toTime(b.posted_at) - toTime(a.posted_at)
       return filters.sortBy === 'newest' ? d : -d
     })
-  }, [allJobs, filters.sector, filters.locations, filters.workTypes, filters.sortBy])
+  }, [allJobs, filters.sector, filters.locations, filters.workTypes, filters.sortBy, myFeedOn, myExact, myRough])
 
   // When a search comes back thin, work out what relaxing each filter would give.
   // allJobs is already search-filtered server-side, so these are cheap recounts.
@@ -1307,6 +1343,16 @@ export default function HomePage() {
               <span className="new-today"><span className="nd" />{addedToday} new today</span>
             )}
             {anyFilter && <button className="clear" onClick={resetAll}>Reset filters</button>}
+            {myTargets.length > 0 && (
+              <div className="feed-tabs" role="tablist">
+                <button role="tab" aria-selected={!myFeedOn} className={myFeedOn ? '' : 'on'}
+                  onClick={() => { setMyFeedOn(false); track('feed_tab', { tab: 'all' }) }}>All roles</button>
+                <button role="tab" aria-selected={myFeedOn} className={myFeedOn ? 'on' : ''}
+                  onClick={() => { setMyFeedOn(true); track('feed_tab', { tab: 'mine' }) }}>
+                  My roles {myExact.length > 0 && <span>{myExact.length}</span>}
+                </button>
+              </div>
+            )}
             <div className="sort-wrap">
               <select value={filters.sortBy} onChange={(e) => setFilters({ ...filters, sortBy: e.target.value as 'newest' | 'oldest' })}>
                 <option value="newest">Newest first</option>
@@ -1905,6 +1951,13 @@ export default function HomePage() {
           font: 400 13px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; }
         .ulj .sug-relax:hover { background: var(--surface-2); }
         .ulj .sug-relax b { color: var(--ink); font-weight: 600; }
+        .ulj .feed-tabs { display: inline-flex; gap: 2px; background: var(--surface-2);
+          border-radius: 9px; padding: 2px; margin-left: auto; }
+        .ulj .feed-tabs button { background: none; border: 0; border-radius: 7px;
+          padding: 6px 12px; font: 500 12.5px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; }
+        .ulj .feed-tabs button.on { background: var(--surface); color: var(--ink);
+          box-shadow: 0 1px 2px rgba(25,23,19,.08); }
+        .ulj .feed-tabs span { font-variant-numeric: tabular-nums; opacity: .7; margin-left: 3px; }
         .ulj .relax-inline { text-align: center; padding: 26px 0 8px; }
         .ulj .relax-inline > span { display: block; font-size: 13.5px; color: var(--ink-2); margin-bottom: 10px; }
         .ulj .relax { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 14px 0 18px; }
