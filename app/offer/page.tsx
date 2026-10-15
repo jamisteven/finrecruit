@@ -114,7 +114,7 @@ export default function OfferPage() {
         if (!d) return
         // Pick the example from lockedJobs that best represents what Premium actually unlocks: the
         // most recent role with a recognized sector. An uncategorized ("Other") sector is usually a
-        // sign of a thin or miscategorized listing — not what should lead the pitch on this page. If
+        // sign of a thin or miscategorized listing, not what should lead the pitch on this page. If
         // nothing in lockedJobs has a recognized sector, show no specific example rather than a weak
         // one; the UI already falls back to generic copy ("A new role, locked") when example is null.
         const candidates: LockedExample[] = Array.isArray(d.lockedJobs)
@@ -307,7 +307,7 @@ export default function OfferPage() {
                   </div>
                 </div>
                 <div className="pp-job-card pp-job-locked">
-                  <span className="pp-job-tag pp-job-tag-free">Free</span>
+                  <span className="pp-job-tag pp-job-tag-free">Locked</span>
                   <div className="pp-job-title">{live?.example?.title ?? 'A new role, locked'}</div>
                   <div className="pp-job-meta">{live?.example ? sectorLabel(live.example.sector) : 'Sector hidden'}{exampleAgo ? ` · ${exampleAgo}` : ''}</div>
                   <div className="pp-example-skeleton" aria-hidden="true"><span /><span /><span /></div>
