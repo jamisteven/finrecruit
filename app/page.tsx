@@ -1753,11 +1753,12 @@ export default function HomePage() {
         @media (max-width: 760px) { .ulj .offer-wrap { padding: 0 16px 24px; } }
 
         /* ── Hero promises: three lines, each ticked off in turn after the page lands ── */
-        .ulj .promises { list-style: none; padding: 0; margin: -6px 0 2px; display: grid; gap: 9px; }
-        .ulj .promises li { --t: calc(500ms + var(--i) * 600ms); display: flex; align-items: center; gap: 11px; font-size: 15.5px; font-weight: 500; color: var(--ink-3); animation: pm-text .35s ease-out var(--t) both; }
+        /* One row, spanning the same 640px as the two plan cards below so it reads as a promise about every role, not the free tier */
+        .ulj .promises { list-style: none; padding: 0; margin: -4px 0 0; max-width: 640px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 18px; }
+        .ulj .promises li { --t: calc(500ms + var(--i) * 600ms); display: flex; align-items: center; gap: 9px; font-size: 14.5px; font-weight: 500; color: var(--ink-3); white-space: nowrap; animation: pm-text .35s ease-out var(--t) both; }
         @keyframes pm-text { to { color: var(--ink); } }
         .ulj .pm-check {
-          flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+          flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
           color: #fff; border: 1.5px solid var(--hairline-2); background: transparent;
           animation: pm-fill .4s cubic-bezier(.3,1.5,.5,1) var(--t) both;
         }
@@ -1767,10 +1768,11 @@ export default function HomePage() {
           100% { transform: scale(1); background: var(--live); border-color: var(--live); }
         }
         /* the tick draws itself in, left to right, just after the circle fills */
-        .ulj .pm-check svg { width: 13px; height: 13px; }
+        .ulj .pm-check svg { width: 12px; height: 12px; }
         .ulj .pm-check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: pm-draw .3s cubic-bezier(.4,0,.2,1) calc(var(--t) + 180ms) forwards; }
         @keyframes pm-draw { to { stroke-dashoffset: 0; } }
-        @media (max-width: 760px) { .ulj .promises li { font-size: 14.5px; } .ulj .promises { gap: 8px; } }
+        /* phones: back to a stacked list, matching the plan cards stacking below */
+        @media (max-width: 760px) { .ulj .promises { flex-direction: column; gap: 8px; } }
         @media (prefers-reduced-motion: reduce) {
           .ulj .promises li, .ulj .pm-check, .ulj .pm-check path { animation-duration: 0s; animation-delay: 0s; }
         }
