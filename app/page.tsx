@@ -1952,7 +1952,9 @@ export default function HomePage() {
         .ulj .sug-relax:hover { background: var(--surface-2); }
         .ulj .sug-relax b { color: var(--ink); font-weight: 600; }
         .ulj .feed-tabs { display: inline-flex; gap: 2px; background: var(--surface-2);
-          border-radius: 9px; padding: 2px; margin-left: auto; }
+          border-radius: 9px; padding: 2px; margin-left: auto; align-self: center; }
+        /* the tabs claim the gap; the dropdown sits straight after them */
+        .ulj .feed-tabs + .sort-wrap { margin-left: 10px !important; }
         .ulj .feed-tabs button { background: none; border: 0; border-radius: 7px;
           padding: 6px 12px; font: 500 12.5px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; }
         .ulj .feed-tabs button.on { background: var(--surface); color: var(--ink);
