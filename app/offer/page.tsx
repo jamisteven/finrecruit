@@ -8,9 +8,6 @@ const FREE_DELAY_HOURS = 48
 // Keep these in sync with Stripe. Copy below is derived from them so price changes stay consistent.
 const PRICE = { intro: 9, monthly: 15, quarter: 39 }
 
-// Short one-line recap of the mechanism, for anyone who lands here without having seen the homepage demo.
-const HOW_IT_WORKS = ['We watch recruiter posts', 'We pick out real roles', 'You see them first']
-
 // TODO(real numbers): these three are placeholders so the layout ships complete — swap them for
 // real metrics (roles delivered, weekly signups, etc.) before this goes live. Do not launch with
 // fabricated stats.
@@ -136,18 +133,10 @@ export default function OfferPage() {
 
         {!hasPass && (
           <>
-            {/* ───────── How it works — a one-line recap, not a boxed block, so it doesn't push pricing down ───────── */}
-            <p className="pp-how">
-              {HOW_IT_WORKS.map((s, i) => (
-                <span className="pp-how-step" key={s}>
-                  <b>{i + 1}.</b> {s}
-                  {i < HOW_IT_WORKS.length - 1 && <span className="pp-how-arrow">→</span>}
-                </span>
-              ))}
-            </p>
-
-            {/* ───────── Live urgency banner (always rendered, never disappears) merged with the concrete
-                locked-role example into one compact card instead of two stacked blocks ───────── */}
+            {/* ───────── Live urgency banner — always rendered, never disappears. The concrete locked-role
+                example lives inside it as a quiet second line, not its own separate block. "How it works"
+                was dropped from here entirely — it's one more box fighting for attention right where the
+                page should feel confident and clean; the mechanism is one click away in the FAQ below. ───────── */}
             <div className="pp-live">
               <div className="pp-live-row">
                 <span className={`pp-dot${fresh > 0 ? '' : ' pp-dot-quiet'}`} />
@@ -169,7 +158,7 @@ export default function OfferPage() {
               )}
             </div>
 
-            {/* ───────── Trust strip — one muted line, not a tile grid ───────── */}
+            {/* ───────── Trust line — a quiet caption, not a bordered block ───────── */}
             <p className="pp-trust">{TRUST_STATS.map((s) => `${s.value} ${s.label}`).join(' · ')}</p>
           </>
         )}
@@ -251,40 +240,35 @@ export default function OfferPage() {
         .pp-brand span { color: var(--ink-2); font-weight: 400; }
         .pp-back { font-size: 12.5px; color: var(--ink-2); text-decoration: none; opacity: 0.7; }
         .pp-back:hover { color: var(--ink); opacity: 1; }
-        .pp-main { max-width: 1080px; margin: 0 auto; padding: 18px 20px 72px; }
+        .pp-main { max-width: 1080px; margin: 0 auto; padding: 24px 20px 72px; }
 
         /* Hero (kept short so the cards sit above the fold) */
-        .pp h1 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(26px, 3.6vw, 36px); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 8px; max-width: 760px; }
+        .pp h1 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(28px, 3.8vw, 38px); line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 12px; max-width: 760px; }
         .pp h1 em { font-style: normal; color: var(--accent); }
         .pp-promises { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 18px;
-          padding: 0; margin: 0 0 12px; }
+          padding: 0; margin: 0 0 20px; }
         .pp-promises li { display: inline-flex; align-items: center; gap: 7px;
           font-size: 13.5px; font-weight: 500; color: var(--ink); }
         .pp-promises li::before { content: ''; width: 6px; height: 6px; border-radius: 50%;
           background: var(--live, #1D9E75); flex: none; }
         @media (max-width: 560px) { .pp-promises { gap: 6px 14px; } .pp-promises li { font-size: 12.5px; } }
-        .pp-sub { font-size: 15px; line-height: 1.45; color: var(--ink-2); max-width: 640px; margin: 0 0 10px; }
-        .pp-have { margin: 0 0 14px; font-size: 14px; color: var(--ink-2); }
+        .pp-sub { font-size: 16px; line-height: 1.5; color: var(--ink-2); max-width: 620px; margin: 0 0 18px; }
+        .pp-have { margin: 0 0 18px; font-size: 14px; color: var(--ink-2); }
         .pp-have a { color: var(--cta); font-weight: 600; }
 
-        /* How it works — a single wrapping line, not a boxed block, to save vertical space */
-        .pp-how { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12.5px; color: var(--ink-2); margin: 0 0 12px; }
-        .pp-how-step { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-        .pp-how-step b { color: var(--accent); font-weight: 600; }
-        .pp-how-arrow { color: var(--hair); margin-left: 4px; }
-
-        /* Live banner + locked-role example — one compact card (its quiet fallback never disappears entirely) */
-        .pp-live { display: inline-block; margin: 0 0 12px; padding: 9px 14px; border: 1px solid var(--hair); border-radius: 16px; background: var(--surface); font-size: 13.5px; line-height: 1.4; max-width: 620px; }
-        .pp-live-row { display: flex; align-items: center; gap: 8px; }
+        /* Live banner + locked-role example — one confident card, given real room to breathe.
+           Its quiet fallback (no fresh count) never disappears entirely. */
+        .pp-live { display: inline-block; margin: 0 0 14px; padding: 14px 20px; border: 1px solid var(--hair); border-radius: 14px; background: var(--surface); font-size: 14.5px; line-height: 1.5; max-width: 640px; }
+        .pp-live-row { display: flex; align-items: center; gap: 10px; }
         .pp-live b { font-weight: 600; }
-        .pp-live-example { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hair); font-size: 12.5px; color: var(--ink-2); }
+        .pp-live-example { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--hair); font-size: 13px; color: var(--ink-2); }
         .pp-live-example b { color: var(--ink); font-weight: 600; }
         .pp-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); vertical-align: 1px; box-shadow: 0 0 0 0 rgba(10,122,61,.5); animation: pp-pulse 2s infinite; flex: none; }
         .pp-dot-quiet { background: var(--ink-2); animation: none; box-shadow: none; }
         @keyframes pp-pulse { 70% { box-shadow: 0 0 0 7px rgba(10,122,61,0); } 100% { box-shadow: 0 0 0 0 rgba(10,122,61,0); } }
 
-        /* Trust strip — one muted line, not a tile grid */
-        .pp-trust { font-size: 11.5px; color: var(--ink-2); padding: 7px 0; margin: 0 0 14px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); max-width: 640px; }
+        /* Trust line — a quiet caption, no border, so it doesn't read as another boxed element */
+        .pp-trust { font-size: 12px; color: var(--ink-2); opacity: 0.85; margin: 0 0 24px; max-width: 620px; }
 
         /* Cards */
         .pp-cards { display: grid; grid-template-columns: 1.08fr 1fr; gap: 18px;
