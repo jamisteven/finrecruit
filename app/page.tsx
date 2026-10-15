@@ -377,20 +377,6 @@ export default function HomePage() {
     } catch { /* storage blocked */ }
   }, [])
 
-  // The three frustrations strike through as they scroll into view — once per visitor.
-  const frusRef = useRef<HTMLUListElement>(null)
-  const [frusOn, setFrusOn] = useState(false)
-  useEffect(() => {
-    const el = frusRef.current
-    if (!el) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setFrusOn(true); return }
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) { setFrusOn(true); io.disconnect() }
-    }, { threshold: 0.4 })
-    io.observe(el)
-    return () => io.disconnect()
-  }, [])
-
   const searchRef = useRef<HTMLInputElement>(null)
   const prevSlotKey = useRef<string | null>(null)
 
@@ -1036,13 +1022,6 @@ export default function HomePage() {
           <div className="art-tags"><span>Product</span><span>SaaS</span><span>Remote friendly</span></div>
           <div className="art-actions"><a className="btn-ghost sm" href="#feed">See live roles <ArrowRight /></a></div>
         </div>
-
-        <ul className={`frus${frusOn ? ' go' : ''}`} ref={cls === 'art-d' ? frusRef : undefined}>
-          <li><span>Ghost jobs that were never real</span></li>
-          <li><span>Six month old job listings</span></li>
-          <li><span>ATS black holes</span></li>
-        </ul>
-        <p className={`frus-end${frusOn ? ' go' : ''}`}>Not here. Every role is a real person hiring, posted this month.</p>
       </div>
   )
 
@@ -1147,7 +1126,7 @@ export default function HomePage() {
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Premium active</div>}
                       {hasPass && <button onClick={() => { setMenuOpen(false); openPortal() }} disabled={portalBusy}>Manage billing</button>}
-                      <a href="/targets">My targets</a>
+                      <a href="/targets">My queries</a>
                       <a href="/offer">Pricing</a>
                       <button onClick={signOut}>Sign out</button>
                     </>
@@ -1363,7 +1342,6 @@ export default function HomePage() {
             {!anyFilter && addedToday > 0 && (
               <span className="new-today"><span className="nd" />{addedToday} new today</span>
             )}
-            {!anyFilter && <span className="fresh-note">nothing older than 30 days</span>}
             {anyFilter && <button className="clear" onClick={resetAll}>Reset filters</button>}
             {myTargets.length > 0 && (
               <div className="feed-tabs" role="tablist">
@@ -1371,7 +1349,7 @@ export default function HomePage() {
                   onClick={() => { setMyFeedOn(false); track('feed_tab', { tab: 'all' }) }}>All roles</button>
                 <button role="tab" aria-selected={myFeedOn} className={myFeedOn ? 'on' : ''}
                   onClick={() => { setMyFeedOn(true); track('feed_tab', { tab: 'mine' }) }}>
-                  My matches {myExact.length > 0 && <span>{myExact.length}</span>}
+                  My roles {myExact.length > 0 && <span>{myExact.length}</span>}
                 </button>
               </div>
             )}
@@ -1973,35 +1951,6 @@ export default function HomePage() {
           font: 400 13px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; }
         .ulj .sug-relax:hover { background: var(--surface-2); }
         .ulj .sug-relax b { color: var(--ink); font-weight: 600; }
-        .ulj .fresh-note { align-self: center; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
-        @media (max-width: 760px) { .ulj .fresh-note { display: none } }
-        .ulj .frus { list-style: none; padding: 0; margin: 18px 0 0;
-          display: flex; flex-direction: column; gap: 9px; }
-        .ulj .frus li { display: flex; align-items: center; gap: 9px;
-          font: 400 14px 'Inter', sans-serif; color: var(--ink-2);
-          opacity: .3; transition: opacity .45s ease; }
-        .ulj .frus li::before { content: '×'; color: #A32D2D;
-          font-size: 17px; line-height: 1; opacity: 0; transition: opacity .3s ease .35s; }
-        .ulj .frus li span { position: relative; }
-        .ulj .frus li span::after { content: ''; position: absolute; left: -2px; top: 53%;
-          height: 1.5px; width: 0; background: #A32D2D; transition: width .4s ease .35s; }
-        .ulj .frus.go li { opacity: 1; }
-        .ulj .frus.go li::before { opacity: 1; }
-        .ulj .frus.go li span::after { width: calc(100% + 4px); }
-        .ulj .frus.go li:nth-child(2) { transition-delay: .5s; }
-        .ulj .frus.go li:nth-child(2)::before,
-        .ulj .frus.go li:nth-child(2) span::after { transition-delay: .85s; }
-        .ulj .frus.go li:nth-child(3) { transition-delay: 1s; }
-        .ulj .frus.go li:nth-child(3)::before,
-        .ulj .frus.go li:nth-child(3) span::after { transition-delay: 1.35s; }
-        .ulj .frus-end { margin: 14px 0 0; padding-top: 13px; border-top: 1px solid var(--hairline);
-          font: 500 14px 'Inter', sans-serif; color: var(--ink);
-          opacity: 0; transform: translateY(4px);
-          transition: opacity .5s ease 1.9s, transform .5s ease 1.9s; }
-        .ulj .frus-end.go { opacity: 1; transform: none; }
-        @media (prefers-reduced-motion: reduce) {
-          .ulj .frus li, .ulj .frus li::before, .ulj .frus li span::after, .ulj .frus-end { transition: none; }
-        }
         .ulj .feed-tabs { display: inline-flex; gap: 2px; background: var(--surface-2);
           border-radius: 9px; padding: 2px; margin-left: auto; align-self: center; }
         /* the tabs claim the gap; the dropdown sits straight after them */
