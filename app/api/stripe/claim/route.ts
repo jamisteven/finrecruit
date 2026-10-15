@@ -41,9 +41,21 @@ export async function POST(req: NextRequest) {
     }
   }
   if (userId) {
+    // The webhook is the source of truth for entitlement and usually lands first.
+    // This is only a fallback for when it hasn't — so respect the plan, and never
+    // move an existing expiry backwards (a quarter was being overwritten with 14 days).
+    const PASS_DAYS: Record<string, number> = { pass: 14, quarter: 90 }
+    const days = PASS_DAYS[s.metadata?.plan ?? 'pass'] ?? 14
+    const until = new Date(Date.now() + days * 86400_000)
+
+    const { data: cur } = await db.from('profiles')
+      .select('pass_expires_at').eq('id', userId).maybeSingle()
+    const current = cur?.pass_expires_at ? new Date(cur.pass_expires_at as string) : null
+    const next = current && current > until ? current : until
+
     await db.from('profiles')
       .update({
-        pass_expires_at: new Date(Date.now() + 14 * 86400_000).toISOString(),
+        pass_expires_at: next.toISOString(),
         stripe_customer_id: String(s.customer ?? ''),
       })
       .eq('id', userId)
