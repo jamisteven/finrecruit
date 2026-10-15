@@ -9,16 +9,23 @@ const FREE_DELAY_HOURS = 48
 const PRICE = { intro: 9, monthly: 15, quarter: 39 }
 
 // TODO(real numbers): these three are placeholders so the layout ships complete — swap them for
-// real metrics (roles delivered, weekly signups, etc.) before this goes live. Do not launch with
-// fabricated stats.
+// real metrics before this goes live. Use the exact figure, not a rounded one, once you have it
+// ("6,214" reads as real data; "6,200+" reads as a guess) — do not launch with fabricated stats.
 const TRUST_STATS = [
   { value: '6,200+', label: 'roles delivered this month' },
   { value: '1,400+', label: 'job seekers get first access weekly' },
   { value: '48 hrs', label: 'ahead of the public LinkedIn feed' },
 ]
 
+// Mirrors the sector labels on the homepage, kept small here since this page only needs it for one chip.
+const SECTOR_LABELS: Record<string, string> = {
+  finance: 'Finance', tech: 'Tech', legal: 'Legal', marketing: 'Marketing',
+  realestate: 'Real Estate', sales: 'Sales', hr: 'HR & Talent',
+}
+const sectorLabel = (s?: string | null) => (s && SECTOR_LABELS[s]) || 'Other'
+
 type Plan = 'monthly' | 'quarter'
-type LockedExample = { title: string; postedAt: string | null }
+type LockedExample = { title: string; sector: string | null; postedAt: string | null }
 type Live = { fresh: number; shown: number; hasPass: boolean; example: LockedExample | null }
 
 function timeAgo(iso?: string | null): string | null {
@@ -64,7 +71,7 @@ export default function OfferPage() {
           shown: d.previewCount ?? 0,
           fresh: (d.withheld ?? 0) + (d.previewCount ?? 0),
           hasPass: !!d.hasPass,
-          example: lj ? { title: lj.title, postedAt: lj.posted_at ?? null } : null,
+          example: lj ? { title: lj.title, sector: lj.sector ?? null, postedAt: lj.posted_at ?? null } : null,
         }
         setLive(next)
         track('offer_view', { fresh: next.fresh, has_pass: next.hasPass, src: srcRef.current })
@@ -152,8 +159,20 @@ export default function OfferPage() {
                 )}
               </div>
               {live?.example && (
-                <div className="pp-live-example">
-                  e.g. <b>{live.example.title}</b>{exampleAgo ? ` · ${exampleAgo}` : ''} &mdash; unlocks with Premium
+                <div className="pp-example-card">
+                  <div className="pp-example-top">
+                    <span className="pp-example-sector">{sectorLabel(live.example.sector)}</span>
+                    {exampleAgo && <span className="pp-example-time">{exampleAgo}</span>}
+                  </div>
+                  <div className="pp-example-title">{live.example.title}</div>
+                  <div className="pp-example-skeleton" aria-hidden="true">
+                    <span />
+                    <span />
+                  </div>
+                  <div className="pp-example-lock">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                    Company &amp; recruiter unlock with Premium
+                  </div>
                 </div>
               )}
             </div>
@@ -180,7 +199,7 @@ export default function OfferPage() {
               <li>Everything in Free</li>
             </ul>
             <button type="button" className="pp-btn pp-btn-primary" onClick={() => checkout('monthly', 'offer_card')} disabled={busy !== null}>
-              {busy === 'monthly' ? 'Opening secure checkout…' : fresh > 0 ? `Unlock ${freshTxt} new roles · $${PRICE.intro}` : `Get early access · $${PRICE.intro}`}
+              {busy === 'monthly' ? 'Opening secure checkout…' : fresh > 0 ? `Unlock my ${freshTxt} new roles · $${PRICE.intro}` : `Get my early access · $${PRICE.intro}`}
             </button>
             <p className="pp-cancel">Cancel in 2 clicks, anytime &mdash; no questions asked.</p>
             <p className="pp-fine">Then ${PRICE.monthly}/month until you cancel. Secure payment by Stripe.</p>
@@ -190,7 +209,11 @@ export default function OfferPage() {
           <section className="pp-card">
             <span className="pp-tag pp-tag-quiet">No subscription</span>
             <h2>Premium 3 months</h2>
-            <div className="pp-price"><b>${PRICE.quarter}</b><span className="pp-price-sub">one payment<br />90 days</span></div>
+            <div className="pp-price">
+              <b>${PRICE.quarter}</b>
+              <span className="pp-strike">${PRICE.monthly * 3}</span>
+              <span className="pp-price-sub">one payment<br />90 days</span>
+            </div>
             <ul>
               <li><b>Everything in Premium monthly</b></li>
               <li>About ${Math.round(PRICE.quarter / 3)} a month, paid once</li>
@@ -198,7 +221,7 @@ export default function OfferPage() {
               <li>Never renews, nothing to cancel</li>
             </ul>
             <button type="button" className="pp-btn pp-btn-secondary" onClick={() => checkout('quarter', 'offer_card')} disabled={busy !== null}>
-              {busy === 'quarter' ? 'Opening secure checkout…' : `Get 90 days · $${PRICE.quarter}`}
+              {busy === 'quarter' ? 'Opening secure checkout…' : `Get my 90 days · $${PRICE.quarter}`}
             </button>
             <p className="pp-fine">Single payment. Secure payment by Stripe.</p>
             {err && erroredPlan === 'quarter' && errMsg}
@@ -261,8 +284,19 @@ export default function OfferPage() {
         .pp-live { display: inline-block; margin: 0 0 14px; padding: 14px 20px; border: 1px solid var(--hair); border-radius: 14px; background: var(--surface); font-size: 14.5px; line-height: 1.5; max-width: 640px; }
         .pp-live-row { display: flex; align-items: center; gap: 10px; }
         .pp-live b { font-weight: 600; }
-        .pp-live-example { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--hair); font-size: 13px; color: var(--ink-2); }
-        .pp-live-example b { color: var(--ink); font-weight: 600; }
+
+        /* The locked-role teaser is a small mockup of a real feed card, not a line of text describing
+           one — showing the product being gated reads as proof; describing it reads as a claim. */
+        .pp-example-card { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hair); }
+        .pp-example-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+        .pp-example-sector { font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 2px 7px; border-radius: 6px; }
+        .pp-example-time { font-size: 11.5px; color: var(--ink-2); }
+        .pp-example-title { font-size: 14.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+        .pp-example-skeleton { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
+        .pp-example-skeleton span { display: block; height: 7px; border-radius: 4px; background: var(--hair); opacity: 0.6; }
+        .pp-example-skeleton span:first-child { width: 62%; }
+        .pp-example-skeleton span:last-child { width: 40%; }
+        .pp-example-lock { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
         .pp-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); vertical-align: 1px; box-shadow: 0 0 0 0 rgba(10,122,61,.5); animation: pp-pulse 2s infinite; flex: none; }
         .pp-dot-quiet { background: var(--ink-2); animation: none; box-shadow: none; }
         @keyframes pp-pulse { 70% { box-shadow: 0 0 0 7px rgba(10,122,61,0); } 100% { box-shadow: 0 0 0 0 rgba(10,122,61,0); } }
