@@ -11,18 +11,18 @@ const PRICE = { intro: 9, monthly: 15, quarter: 39 }
 const TRUST_ITEMS = ['No ghost jobs', 'Nothing older than 30 days', 'No ATS black holes', 'Cancel anytime, no lock-in']
 
 const HOW_IT_WORKS = [
-  { step: '1', title: 'Tell us what you want', body: 'Sector, role, location — takes under a minute.' },
-  { step: '2', title: 'We watch for it', body: 'Real recruiter posts get matched the moment they go live.' },
-  { step: '3', title: 'You apply first', body: "Before it's public, while your application still gets read." },
+  { step: '1', title: 'Tell us your targets - Sector, role, location - takes under a minute.' },
+  { step: '2', title: 'We watch for it - Real recruiter posts get matched the moment they go live.' },
+  { step: '3', title: 'You apply first - Before it's public, while your application still gets read." },
 ]
 
 // HYPOTHETICAL — for layout preview only. Attributed to a bracketed placeholder, not an invented
 // named person, so it can't be mistaken for a real quote and doesn't end up shipping as one by
 // accident. Swap in a real quote + real name before this goes live, or set this back to null.
 const TESTIMONIAL: { quote: string; name: string; context: string } | null = {
-  quote: 'I signed up on a Friday and had two interviews lined up by Monday — roles that were nowhere to be found on other platforms.',
+  quote: 'I signed up on a Monday and had two interviews lined up by the end of the following week — roles that were nowhere to be found on other platforms.',
   name: '[Chris M.]',
-  context: '[Product Manager, 6 months]',
+  context: '[Product Manager, 6 months of searching]',
 }
 
 const WHY_ITEMS: { icon: 'bolt' | 'person' | 'target' | 'clock'; title: string; body: string }[] = [
@@ -181,7 +181,7 @@ export default function OfferPage() {
           <div className="pp-hero-copy">
             <span className="pp-eyebrow"><BoltIcon /> Premium access</span>
             <h1>The jobs LinkedIn doesn&apos;t show you <em>&mdash; until it&apos;s too late.</em></h1>
-            <p className="pp-sub">{`Free sees a role ${FREE_DELAY_HOURS} hours after it's posted, once hundreds of people have already applied. Premium sees every recruiter post the moment it goes live.`}</p>
+            <p className="pp-sub">{`By the time a role goes public, hundreds of people have already applied. Premium puts you there the moment a recruiter posts it, not days later.`}</p>
 
             <ul className="pp-trustgrid">
               {TRUST_ITEMS.map((t) => (
