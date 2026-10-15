@@ -8,12 +8,8 @@ const FREE_DELAY_HOURS = 48
 // Keep these in sync with Stripe. Copy below is derived from them so price changes stay consistent.
 const PRICE = { intro: 9, monthly: 15, quarter: 39 }
 
-// Short recap of the mechanism, for anyone who lands here without having seen the homepage demo.
-const HOW_IT_WORKS = [
-  { t: 'We watch recruiter posts', d: 'AI tracks public posts from recruiters and talent teams.' },
-  { t: 'We pick out real roles', d: 'Genuine openings, not generic career content.' },
-  { t: 'You see them first', d: 'Roles land here before the job boards, and before most people know they exist.' },
-]
+// Short one-line recap of the mechanism, for anyone who lands here without having seen the homepage demo.
+const HOW_IT_WORKS = ['We watch recruiter posts', 'We pick out real roles', 'You see them first']
 
 // TODO(real numbers): these three are placeholders so the layout ships complete — swap them for
 // real metrics (roles delivered, weekly signups, etc.) before this goes live. Do not launch with
@@ -128,9 +124,7 @@ export default function OfferPage() {
       <main className="pp-main">
         {/* ───────── Compact hero ───────── */}
         <h1>The jobs LinkedIn doesn&apos;t show you <em>&mdash; until it&apos;s too late.</em></h1>
-        <p className="pp-sub">
-          Free sees a role {FREE_DELAY_HOURS} hours after it&apos;s posted, once hundreds of people have already applied. Premium sees every recruiter post the moment it goes live.
-        </p>
+        <p className="pp-sub">{`Free sees a role ${FREE_DELAY_HOURS} hours after it's posted, once hundreds of people have already applied. Premium sees every recruiter post the moment it goes live.`}</p>
 
         <ul className="pp-promises">
           <li>No ghost jobs</li>
@@ -142,56 +136,41 @@ export default function OfferPage() {
 
         {!hasPass && (
           <>
-            {/* ───────── How it works — recap the mechanism before asking for money ───────── */}
-            <div className="pp-how">
+            {/* ───────── How it works — a one-line recap, not a boxed block, so it doesn't push pricing down ───────── */}
+            <p className="pp-how">
               {HOW_IT_WORKS.map((s, i) => (
-                <div className="pp-how-item" key={s.t}>
-                  <i className="pp-how-num">{i + 1}</i>
-                  <div>
-                    <b>{s.t}</b>
-                    <span>{s.d}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* ───────── Live urgency banner — always rendered, never disappears ───────── */}
-            {fresh > 0 ? (
-              <p className="pp-live" aria-live="polite">
-                <span className="pp-dot" />
-                <b>{freshTxt} new roles posted in the last {FREE_DELAY_HOURS}h.</b>{' '}
-                {hidden > 0 ? <>{hidden.toLocaleString()} are locked on Free.</> : <>Free can&apos;t see them yet.</>}
-              </p>
-            ) : (
-              <p className="pp-live pp-live-quiet" aria-live="polite">
-                <span className="pp-dot pp-dot-quiet" />
-                <b>New roles drop every weekday.</b> Premium sees them the second they land &mdash; Free waits {FREE_DELAY_HOURS} hours.
-              </p>
-            )}
-
-            {/* ───────── A concrete example of what's locked, not just a count ───────── */}
-            {live?.example && (
-              <div className="pp-example">
-                <span className="pp-example-icon" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                <span className="pp-how-step" key={s}>
+                  <b>{i + 1}.</b> {s}
+                  {i < HOW_IT_WORKS.length - 1 && <span className="pp-how-arrow">→</span>}
                 </span>
-                <div>
-                  <div className="pp-example-meta">{exampleAgo ? `Posted ${exampleAgo}` : 'Recently posted'} &middot; locked on Free</div>
-                  <div className="pp-example-title">{live.example.title}</div>
-                  <div className="pp-example-blur">Full details, company &amp; recruiter contact unlock with Premium</div>
-                </div>
-              </div>
-            )}
-
-            {/* ───────── Trust strip ───────── */}
-            <div className="pp-stats">
-              {TRUST_STATS.map((s) => (
-                <div className="pp-stat" key={s.label}>
-                  <div className="pp-stat-val">{s.value}</div>
-                  <div className="pp-stat-label">{s.label}</div>
-                </div>
               ))}
+            </p>
+
+            {/* ───────── Live urgency banner (always rendered, never disappears) merged with the concrete
+                locked-role example into one compact card instead of two stacked blocks ───────── */}
+            <div className="pp-live">
+              <div className="pp-live-row">
+                <span className={`pp-dot${fresh > 0 ? '' : ' pp-dot-quiet'}`} />
+                {fresh > 0 ? (
+                  <span>
+                    <b>{freshTxt} new roles</b> posted in the last {FREE_DELAY_HOURS}h &mdash;{' '}
+                    {hidden > 0 ? `${hidden.toLocaleString()} locked on Free.` : "Free can't see them yet."}
+                  </span>
+                ) : (
+                  <span>
+                    <b>New roles drop every weekday.</b> Premium sees them the second they land &mdash; Free waits {FREE_DELAY_HOURS} hours.
+                  </span>
+                )}
+              </div>
+              {live?.example && (
+                <div className="pp-live-example">
+                  e.g. <b>{live.example.title}</b>{exampleAgo ? ` · ${exampleAgo}` : ''} &mdash; unlocks with Premium
+                </div>
+              )}
             </div>
+
+            {/* ───────── Trust strip — one muted line, not a tile grid ───────── */}
+            <p className="pp-trust">{TRUST_STATS.map((s) => `${s.value} ${s.label}`).join(' · ')}</p>
           </>
         )}
 
@@ -267,68 +246,59 @@ export default function OfferPage() {
         .pp { --page:#F5F2EB; --surface:#FDFCFA; --ink:#191713; --ink-2:#5C574D; --hair:#D8D2C2; --accent-soft:#E4EAF6; --cta:#2F6BF2; --cta-h:#2458D4; --accent:#24468f; --good:#0A7A3D;
           min-height: 100vh; background: var(--page); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
         .pp *, .pp *::before, .pp *::after { box-sizing: border-box; }
-        .pp-top { max-width: 1000px; margin: 0 auto; padding: 18px 20px 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .pp-top { max-width: 1080px; margin: 0 auto; padding: 16px 20px 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
         .pp-brand { font-family: 'Fraunces', Georgia, serif; font-size: 22px; font-weight: 600; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
         .pp-brand span { color: var(--ink-2); font-weight: 400; }
         .pp-back { font-size: 12.5px; color: var(--ink-2); text-decoration: none; opacity: 0.7; }
         .pp-back:hover { color: var(--ink); opacity: 1; }
-        .pp-main { max-width: 1000px; margin: 0 auto; padding: 26px 20px 72px; }
+        .pp-main { max-width: 1080px; margin: 0 auto; padding: 18px 20px 72px; }
 
         /* Hero (kept short so the cards sit above the fold) */
-        .pp h1 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(28px, 4.4vw, 40px); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 10px; max-width: 760px; }
+        .pp h1 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(26px, 3.6vw, 36px); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 8px; max-width: 760px; }
         .pp h1 em { font-style: normal; color: var(--accent); }
         .pp-promises { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 18px;
-          padding: 0; margin: 0 0 18px; }
+          padding: 0; margin: 0 0 12px; }
         .pp-promises li { display: inline-flex; align-items: center; gap: 7px;
           font-size: 13.5px; font-weight: 500; color: var(--ink); }
         .pp-promises li::before { content: ''; width: 6px; height: 6px; border-radius: 50%;
           background: var(--live, #1D9E75); flex: none; }
         @media (max-width: 560px) { .pp-promises { gap: 6px 14px; } .pp-promises li { font-size: 12.5px; } }
-        .pp-sub { font-size: 16px; line-height: 1.5; color: var(--ink-2); max-width: 640px; margin: 0 0 14px; }
+        .pp-sub { font-size: 15px; line-height: 1.45; color: var(--ink-2); max-width: 640px; margin: 0 0 10px; }
         .pp-have { margin: 0 0 14px; font-size: 14px; color: var(--ink-2); }
         .pp-have a { color: var(--cta); font-weight: 600; }
 
-        /* How it works */
-        .pp-how { display: flex; flex-wrap: wrap; gap: 16px; margin: 4px 0 22px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; }
-        .pp-how-item { flex: 1 1 200px; display: flex; gap: 11px; align-items: flex-start; }
-        .pp-how-num { font-style: normal; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; font-family: 'Fraunces', Georgia, serif; font-weight: 600; font-size: 12.5px; flex: none; }
-        .pp-how-item div { display: flex; flex-direction: column; gap: 2px; }
-        .pp-how-item b { font-size: 13.5px; font-weight: 600; }
-        .pp-how-item span { font-size: 12.5px; color: var(--ink-2); line-height: 1.4; }
+        /* How it works — a single wrapping line, not a boxed block, to save vertical space */
+        .pp-how { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12.5px; color: var(--ink-2); margin: 0 0 12px; }
+        .pp-how-step { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .pp-how-step b { color: var(--accent); font-weight: 600; }
+        .pp-how-arrow { color: var(--hair); margin-left: 4px; }
 
-        /* Live banner (and its quiet fallback — never disappears entirely) */
-        .pp-live { display: inline-flex; align-items: center; margin: 0 0 16px; padding: 8px 14px; border: 1px solid var(--hair); border-radius: 999px; background: var(--surface); font-size: 14px; line-height: 1.4; }
+        /* Live banner + locked-role example — one compact card (its quiet fallback never disappears entirely) */
+        .pp-live { display: inline-block; margin: 0 0 12px; padding: 9px 14px; border: 1px solid var(--hair); border-radius: 16px; background: var(--surface); font-size: 13.5px; line-height: 1.4; max-width: 620px; }
+        .pp-live-row { display: flex; align-items: center; gap: 8px; }
         .pp-live b { font-weight: 600; }
-        .pp-live-quiet { color: var(--ink); }
-        .pp-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); margin-right: 8px; vertical-align: 1px; box-shadow: 0 0 0 0 rgba(10,122,61,.5); animation: pp-pulse 2s infinite; flex: none; }
+        .pp-live-example { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hair); font-size: 12.5px; color: var(--ink-2); }
+        .pp-live-example b { color: var(--ink); font-weight: 600; }
+        .pp-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); vertical-align: 1px; box-shadow: 0 0 0 0 rgba(10,122,61,.5); animation: pp-pulse 2s infinite; flex: none; }
         .pp-dot-quiet { background: var(--ink-2); animation: none; box-shadow: none; }
         @keyframes pp-pulse { 70% { box-shadow: 0 0 0 7px rgba(10,122,61,0); } 100% { box-shadow: 0 0 0 0 rgba(10,122,61,0); } }
 
-        /* Locked-role example */
-        .pp-example { display: flex; gap: 12px; align-items: flex-start; margin: 0 0 20px; padding: 14px 16px; border: 1px dashed var(--hair); border-radius: 14px; background: var(--surface); max-width: 560px; }
-        .pp-example-icon { width: 30px; height: 30px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; flex: none; }
-        .pp-example-meta { font-size: 12px; color: var(--ink-2); margin-bottom: 2px; }
-        .pp-example-title { font-size: 14.5px; font-weight: 600; margin-bottom: 2px; }
-        .pp-example-blur { font-size: 12.5px; color: var(--ink-2); }
-
-        /* Trust strip */
-        .pp-stats { display: flex; flex-wrap: wrap; gap: 24px; padding: 14px 0; margin: 0 0 28px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); max-width: 640px; }
-        .pp-stat-val { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 600; }
-        .pp-stat-label { font-size: 11.5px; color: var(--ink-2); }
+        /* Trust strip — one muted line, not a tile grid */
+        .pp-trust { font-size: 11.5px; color: var(--ink-2); padding: 7px 0; margin: 0 0 14px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); max-width: 640px; }
 
         /* Cards */
         .pp-cards { display: grid; grid-template-columns: 1.08fr 1fr; gap: 18px;
-          align-items: stretch; margin: 12px auto 0; max-width: 760px; }
-        .pp-card { position: relative; background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; padding: 26px 22px 20px; display: flex; flex-direction: column; }
+          align-items: stretch; margin: 2px auto 0; max-width: 800px; }
+        .pp-card { position: relative; background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; padding: 22px 20px 16px; display: flex; flex-direction: column; }
         .pp-paid { background: var(--accent-soft); border: 2px solid var(--cta); box-shadow: 0 14px 34px -14px rgba(47,107,242,0.4); }
         .pp-tag { position: absolute; top: -12px; left: 20px; background: var(--cta); color: #fff; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
         .pp-tag-quiet { background: var(--ink); }
         .pp h2 { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
-        .pp-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 16px; }
+        .pp-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 12px; }
         .pp-price b { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 44px; letter-spacing: -0.02em; line-height: 1; }
         .pp-price-sub { font-size: 14px; color: var(--ink-2); line-height: 1.3; }
         .pp-strike { font-size: 15px; color: var(--ink-2); text-decoration: line-through; }
-        .pp-card ul { list-style: none; padding: 0; margin: 0 0 18px; display: grid; gap: 9px; flex: 1; align-content: start; }
+        .pp-card ul { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 7px; flex: 1; align-content: start; }
         .pp-card li { font-size: 15px; line-height: 1.4; padding-left: 24px; position: relative; }
         .pp-card li b { font-weight: 600; }
         .pp-card li::before { content: ''; position: absolute; left: 2px; top: 5px; width: 6px; height: 11px; border: solid var(--accent); border-width: 0 2px 2px 0; transform: rotate(45deg) scale(.85); }
@@ -346,14 +316,14 @@ export default function OfferPage() {
         .pp-btn-ghost:hover { border-color: var(--ink-2); }
         .pp-btn:disabled { opacity: .7; cursor: default; }
         .pp-btn:focus-visible, .pp a:focus-visible, .pp summary:focus-visible { outline: 2px solid var(--cta); outline-offset: 2px; }
-        .pp-cancel { font-size: 13px; color: var(--ink); font-weight: 500; text-align: center; margin: 10px 0 0; }
-        .pp-fine { font-size: 13px; color: var(--ink-2); text-align: center; margin: 6px 0 0; }
+        .pp-cancel { font-size: 12.5px; color: var(--ink); font-weight: 500; text-align: center; margin: 8px 0 0; }
+        .pp-fine { font-size: 12.5px; color: var(--ink-2); text-align: center; margin: 4px 0 0; }
         .pp-fine a { color: var(--ink-2); }
         .pp-err { font-size: 13px; color: #C23B22; text-align: center; margin: 8px 0 0; }
 
 
         /* FAQ */
-        .pp-faq { margin-top: 40px; max-width: 640px; }
+        .pp-faq { margin-top: 28px; max-width: 640px; }
         .pp-faq h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
         .pp details { border-top: 1px solid var(--hair); padding: 14px 0; }
         .pp details:last-child { border-bottom: 1px solid var(--hair); }
