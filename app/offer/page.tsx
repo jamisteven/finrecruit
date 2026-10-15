@@ -112,14 +112,24 @@ export default function OfferPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!d) return
-        const lj = Array.isArray(d.lockedJobs) && d.lockedJobs.length > 0 ? d.lockedJobs[0] : null
+        // Pick the example from lockedJobs that best represents what Premium actually unlocks: the
+        // most recent role with a recognized sector. An uncategorized ("Other") sector is usually a
+        // sign of a thin or miscategorized listing — not what should lead the pitch on this page. If
+        // nothing in lockedJobs has a recognized sector, show no specific example rather than a weak
+        // one; the UI already falls back to generic copy ("A new role, locked") when example is null.
+        const candidates: LockedExample[] = Array.isArray(d.lockedJobs)
+          ? d.lockedJobs.map((j: { title: string; sector?: string | null; posted_at?: string | null }) => ({
+              title: j.title, sector: j.sector ?? null, postedAt: j.posted_at ?? null,
+            }))
+          : []
+        const lj = candidates.find((j) => j.sector && SECTOR_LABELS[j.sector]) ?? null
         const next: Live = {
           // roles posted inside the free delay window = the ones free visitors can't see, plus the few shown as samples
           shown: d.previewCount ?? 0,
           fresh: (d.withheld ?? 0) + (d.previewCount ?? 0),
           hasPass: !!d.hasPass,
           addedToday: d.addedToday ?? 0,
-          example: lj ? { title: lj.title, sector: lj.sector ?? null, postedAt: lj.posted_at ?? null } : null,
+          example: lj,
         }
         setLive(next)
         track('offer_view', { fresh: next.fresh, has_pass: next.hasPass, src: srcRef.current })
