@@ -253,6 +253,64 @@ const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
 )
 
+// ── Hero "binned" strip ──
+// The three things job seekers hate most, each struck through and tossed in the bin,
+// one after another, then an all-clear. Lives in its own component so the ticking
+// phase state re-renders only this strip, never the whole page.
+const BINNED = [
+  { t: 'Ghost job',           d: 'never actually hiring' },
+  { t: 'Posted 6 months ago', d: 'still marked “open”' },
+  { t: 'ATS black hole',      d: 'applied, never heard back' },
+]
+// Phase timeline (ms until the next phase). Phase 2i+1 strikes row i, 2i+2 bins it;
+// phase 7 is the all-clear, then back to 0 where the rows fade in again.
+const BIN_STEPS = [1100, 650, 750, 650, 750, 650, 900, 2600]
+const BinIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <g className="bin-lid"><path d="M4 7h16M10 7V5h4v2" /></g>
+    <path d="M6 7l1 13h10l1-13M10 11v6M14 11v6" />
+  </svg>
+)
+function BinnedStrip() {
+  const [phase, setPhase] = useState(0)
+  const [still, setStill] = useState(false)   // prefers-reduced-motion: show the end state, no ticking
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (mq.matches) { setStill(true); return }
+    let t: ReturnType<typeof setTimeout>
+    let p = 0
+    const tick = () => { p = (p + 1) % BIN_STEPS.length; setPhase(p); t = setTimeout(tick, BIN_STEPS[p]) }
+    t = setTimeout(tick, BIN_STEPS[0])
+    return () => clearTimeout(t)
+  }, [])
+  const binned = still ? BINNED.length : Math.min(BINNED.length, Math.floor(phase / 2))
+  const clear = !still && phase === 7
+  const lidOpen = !still && phase >= 2 && phase <= 6 && phase % 2 === 0
+  return (
+    <div className={`binned${clear ? ' clear' : ''}`} role="img" aria-label="Ghost jobs, six-month-old listings and ATS black holes are removed before they reach you.">
+      <div className="bn-head">
+        <span className="bn-label">Never makes it into your feed</span>
+        <span className="bn-count" aria-hidden="true">{binned}/{BINNED.length} binned</span>
+      </div>
+      <div className="bn-body">
+        <ul className="bn-list" aria-hidden="true">
+          {BINNED.map((row, i) => {
+            const cls = still ? ' struck' : phase >= 2 * i + 2 ? ' struck gone' : phase === 2 * i + 1 ? ' struck' : phase === 0 ? ' fresh' : ''
+            return (
+              <li key={row.t} className={`bn-row${cls}`} style={{ ['--i' as string]: i }}>
+                <span className="bn-x">✕</span>
+                <b>{row.t}</b><span className="bn-d">{row.d}</span>
+              </li>
+            )
+          })}
+          <li className="bn-ok" aria-hidden="true"><CheckIcon />Only real, fresh roles get through</li>
+        </ul>
+        <div className={`bn-bin${lidOpen ? ' open' : ''}`}><BinIcon /></div>
+      </div>
+    </div>
+  )
+}
+
 export default function HomePage() {
   const [dark, setDark] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -1158,6 +1216,7 @@ export default function HomePage() {
         <div className="hero-copy">
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
           <p className="sub">Roles recruiters and hiring managers share with their networks before posting them publicly - tracked by AI and delivered in real time.</p>
+          <BinnedStrip />
           {!hasPass && renderOffer('offer-d')}
         </div>
 
@@ -1735,6 +1794,57 @@ export default function HomePage() {
           .ulj .offer-wrap { display: block; }
         }
         @media (max-width: 760px) { .ulj .offer-wrap { padding: 0 16px 24px; } }
+
+        /* ── Hero "binned" strip: the three pain points struck out and tossed, then all-clear ── */
+        .ulj .binned { max-width: 640px; margin: -6px 0 2px; padding: 12px 14px 12px; border: 1px dashed var(--hairline-2); border-radius: 12px; background: color-mix(in srgb, var(--surface) 60%, transparent); }
+        .ulj .bn-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+        .ulj .bn-label { font: 500 10.5px 'Spline Sans Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+        .ulj .bn-count { font: 600 11px 'Inter', sans-serif; color: var(--ink-3); font-variant-numeric: tabular-nums; transition: color .2s; }
+        .ulj .binned.clear .bn-count { color: var(--live); }
+        .ulj .bn-body { display: flex; align-items: center; gap: 14px; }
+        .ulj .bn-list { list-style: none; padding: 0; margin: 0; flex: 1; min-width: 0; position: relative; display: grid; gap: 5px; }
+        .ulj .bn-row {
+          position: relative; display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 10px;
+          border-radius: 8px; background: var(--surface); border: 1px solid var(--hairline);
+          font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden;
+          transform-origin: right center; opacity: 1;
+          transition: transform .55s cubic-bezier(.55,-.35,.75,.3), opacity .45s ease-in .1s, color .3s;
+        }
+        .ulj .bn-row b { font-weight: 600; color: var(--ink); }
+        .ulj .bn-row .bn-d { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
+        .ulj .bn-row .bn-x { font-size: 11px; color: #C8472F; opacity: 0; transform: scale(.5); transition: opacity .2s, transform .25s cubic-bezier(.3,1.6,.6,1); }
+        /* the strike: a line drawn left-to-right across the whole row */
+        .ulj .bn-row::after {
+          content: ''; position: absolute; left: 10px; right: 10px; top: 50%; height: 2px; border-radius: 2px;
+          background: #C8472F; transform: scaleX(0); transform-origin: left center; transition: transform .4s cubic-bezier(.4,0,.2,1);
+        }
+        .ulj .bn-row.struck::after { transform: scaleX(1); }
+        .ulj .bn-row.struck .bn-x { opacity: 1; transform: scale(1); }
+        .ulj .bn-row.struck b, .ulj .bn-row.struck .bn-d { color: var(--ink-3); }
+        /* the toss: shrink toward the bin (right, vertically centred on the middle row) and vanish */
+        .ulj .bn-row.gone { transform: translate(calc(100% + 24px), calc((1 - var(--i)) * 33px)) scale(.15) rotate(12deg); opacity: 0; pointer-events: none; }
+        /* all-clear line floats over the emptied list */
+        .ulj .bn-ok { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; font: 600 13.5px 'Inter', sans-serif; color: var(--live); opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; pointer-events: none; }
+        .ulj .binned.clear .bn-ok { opacity: 1; transform: none; }
+        /* rows fade back in for the next loop instead of reverse-flying out of the bin */
+        .ulj .bn-row.fresh { transition: none; animation: bn-in .45s ease-out both; animation-delay: calc(var(--i) * 90ms); }
+        @keyframes bn-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+        .ulj .bn-bin { flex: none; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--hairline-2); color: var(--ink-2); transition: transform .2s, color .3s, border-color .3s; }
+        .ulj .bn-bin svg { width: 26px; height: 26px; overflow: visible; }
+        .ulj .bn-bin .bin-lid { transform-origin: 4px 7px; transition: transform .25s cubic-bezier(.3,1.4,.6,1); }
+        .ulj .bn-bin.open .bin-lid { transform: rotate(-28deg) translateY(-1px); }
+        .ulj .bn-bin.open { transform: scale(1.06); }
+        .ulj .binned.clear .bn-bin { color: var(--live); border-color: color-mix(in srgb, var(--live) 45%, transparent); }
+        @media (max-width: 760px) {
+          .ulj .binned { padding: 10px 12px; }
+          .ulj .bn-row { font-size: 12.5px; min-height: 26px; }
+          .ulj .bn-row.gone { transform: translate(calc(100% + 24px), calc((1 - var(--i)) * 31px)) scale(.15) rotate(12deg); }
+          .ulj .bn-bin { width: 40px; height: 40px; }
+          .ulj .bn-bin svg { width: 22px; height: 22px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ulj .bn-row, .ulj .bn-row::after, .ulj .bn-row .bn-x, .ulj .bn-ok, .ulj .bn-bin, .ulj .bn-bin .bin-lid { transition: none; }
+        }
         /* Hero art: a recruiter post becoming a listing */
         .ulj .art { position: relative; width: 100%; max-width: 520px; margin-left: auto; }
         .ulj .art-m-wrap { display: none; }

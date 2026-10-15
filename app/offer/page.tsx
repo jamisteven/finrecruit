@@ -96,6 +96,12 @@ export default function OfferPage() {
           Free shows roles after {FREE_DELAY_HOURS} hours, once the applications have piled up. Premium shows every recruiter post the moment it goes live.
         </p>
 
+        <ul className="pp-promises">
+          <li>No ghost jobs</li>
+          <li>Nothing older than 30 days</li>
+          <li>No ATS black holes</li>
+        </ul>
+
         {hasPass && <p className="pp-have">You already have Premium. <a href="/">See today&apos;s new roles →</a> Buying again adds more time.</p>}
 
         {fresh > 0 && (
@@ -183,6 +189,13 @@ export default function OfferPage() {
         /* Hero (kept short so the cards sit above the fold) */
         .pp h1 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(28px, 4.4vw, 40px); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 10px; max-width: 760px; }
         .pp h1 em { font-style: normal; color: var(--accent); }
+        .pp-promises { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 18px;
+          padding: 0; margin: 0 0 18px; }
+        .pp-promises li { display: inline-flex; align-items: center; gap: 7px;
+          font-size: 13.5px; font-weight: 500; color: var(--ink); }
+        .pp-promises li::before { content: ''; width: 6px; height: 6px; border-radius: 50%;
+          background: var(--live, #1D9E75); flex: none; }
+        @media (max-width: 560px) { .pp-promises { gap: 6px 14px; } .pp-promises li { font-size: 12.5px; } }
         .pp-sub { font-size: 16px; line-height: 1.5; color: var(--ink-2); max-width: 640px; margin: 0 0 14px; }
         .pp-have { margin: 0 0 14px; font-size: 14px; color: var(--ink-2); }
         .pp-have a { color: var(--cta); font-weight: 600; }

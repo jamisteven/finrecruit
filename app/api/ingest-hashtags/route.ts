@@ -23,9 +23,9 @@ const HASHTAG_QUERIES = [
   '#wirstellenein',
   // Swiss location searches
   'hiring zurich',
+  'hiring basel',
   'hiring switzerland',
   'hiring bern',
-  'hiring basel',
   'hiring geneva',
   // US cities
   'hiring new york',
@@ -80,7 +80,6 @@ const HASHTAG_QUERIES = [
   'hiring help desk',
   'hiring fixed income new york',
   'hiring corporate finance new york',
-  'hiring finance switzerland',
   'hiring customer experience washington dc',
   'hiring grc remote',
 ]
