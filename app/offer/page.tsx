@@ -11,16 +11,16 @@ const PRICE = { intro: 9, monthly: 15, quarter: 39 }
 const TRUST_ITEMS = ['No ghost jobs', 'Nothing older than 30 days', 'No ATS black holes', 'Cancel anytime, no lock-in']
 
 const HOW_IT_WORKS = [
-  { step: '1', title: 'Tell us your targets', body: 'Sector, role, location — takes under a minute.' },
+  { step: '1', title: 'Tell us your targets', body: 'Sector, role, location. Takes under a minute.' },
   { step: '2', title: 'We watch for it', body: 'Real recruiter posts get matched the moment they go live.' },
   { step: '3', title: 'You apply first', body: "Before it's public, while your application still gets read." },
 ]
 
-// HYPOTHETICAL — for layout preview only. Attributed to a bracketed placeholder, not an invented
+// HYPOTHETICAL, for layout preview only. Attributed to a bracketed placeholder, not an invented
 // named person, so it can't be mistaken for a real quote and doesn't end up shipping as one by
 // accident. Swap in a real quote + real name before this goes live, or set this back to null.
 const TESTIMONIAL: { quote: string; name: string; context: string } | null = {
-  quote: 'I signed up on a Monday and had two interviews by the end of the following week, roles nowhere to be found on other job platforms.',
+  quote: 'I signed up on a Monday and had two interviews lined up by the following week, for roles nowhere to be found on the usual job platforms.',
   name: '[Chris M.]',
   context: '[Product Manager]',
 }
@@ -32,7 +32,7 @@ const WHY_ITEMS: { icon: 'bolt' | 'person' | 'target' | 'clock'; title: string; 
   { icon: 'clock', title: 'No long-term commitment', body: 'Cancel in 2 clicks, or skip the subscription entirely with the 90-day pass.' },
 ]
 
-// Same illustrative example used on the homepage's "Example" card — clearly tagged "Example" below,
+// Same illustrative example used on the homepage's "Example" card, clearly tagged "Example" below,
 // never presented as a real live listing. No fabricated testimonial accompanies it (see note near
 // the testimonial section further down).
 const EXAMPLE_LISTING = {
@@ -168,7 +168,7 @@ export default function OfferPage() {
 
   return (
     <div className="pp">
-      {/* Nav is deliberately just the logo — no page links. Every exit from this page except the
+      {/* Nav is deliberately just the logo, no page links. Every exit from this page except the
           CTA is removed by design; the "back to all roles" link lives in the footer instead, where
           leaving is still possible but isn't competing with the offer for attention up top. */}
       <header className="pp-top">
@@ -176,11 +176,11 @@ export default function OfferPage() {
       </header>
 
       <main className="pp-main">
-        {/* ───────── Hero: copy left, pricing right — so the offer is visible without scrolling ───────── */}
+        {/* ───────── Hero: copy left, pricing right, so the offer is visible without scrolling ───────── */}
         <section className="pp-hero">
           <div className="pp-hero-copy">
             <span className="pp-eyebrow"><BoltIcon /> Premium access</span>
-            <h1>The jobs LinkedIn doesn&apos;t show you <em>&mdash; until it&apos;s too late.</em></h1>
+            <h1>The jobs LinkedIn doesn&apos;t show you <em>until it&apos;s too late.</em></h1>
             <p className="pp-sub">{`Free sees a role ${FREE_DELAY_HOURS} hours after it's posted, once hundreds of people have already applied. Premium sees every recruiter post the moment it goes live.`}</p>
 
             <ul className="pp-trustgrid">
@@ -197,35 +197,35 @@ export default function OfferPage() {
                   <span className="pp-tip-icon"><ClockIcon /></span>
                   {fresh > 0 ? (
                     <span>
-                      <b>{freshTxt} new roles</b> posted in the last {FREE_DELAY_HOURS}h &mdash;{' '}
+                      <b>{freshTxt} new roles</b> posted in the last {FREE_DELAY_HOURS}h.{' '}
                       {hidden > 0 ? `${hidden.toLocaleString()} locked on Free.` : "Free can't see them yet."}
                     </span>
                   ) : (
-                    <span><b>New roles drop every weekday.</b> Premium sees them the second they land &mdash; Free waits {FREE_DELAY_HOURS} hours.</span>
+                    <span><b>New roles drop every weekday.</b> Premium sees them the second they land, while Free waits {FREE_DELAY_HOURS} hours.</span>
                   )}
                 </div>
 
                 {/* Fills the space beside the (taller) pricing column instead of leaving it blank.
-                    Real explanatory content, not padding for padding's sake — this is the "how it
+                    Real explanatory content, not padding for padding's sake: this is the "how it
                     works" recap that got cut from the top of the page for being one too many boxes
                     there; it has a natural home here instead. */}
                 <ol className="pp-hero-how">
                   {HOW_IT_WORKS.map((s) => (
                     <li key={s.step}>
                       <span className="pp-hero-how-step">{s.step}</span>
-                      <span><b>{s.title}</b> &mdash; {s.body}</span>
+                      <span><b>{s.title}:</b> {s.body}</span>
                     </li>
                   ))}
                 </ol>
 
-                {/* TESTIMONIAL is null until there's a real one — this is deliberately the slot for it
+                {/* TESTIMONIAL is null until there's a real one; this is deliberately the slot for it
                     (same reasoning as the note further down near "Why it's worth it": no invented name
                     or quote, even as a placeholder). Once TESTIMONIAL is set, it renders right here,
                     beside the price, which is exactly where proof should sit. */}
                 {TESTIMONIAL && (
                   <blockquote className="pp-hero-quote">
                     <p>&ldquo;{TESTIMONIAL.quote}&rdquo;</p>
-                    <cite>{TESTIMONIAL.name} &mdash; {TESTIMONIAL.context}</cite>
+                    <cite>{TESTIMONIAL.name}, {TESTIMONIAL.context}</cite>
                   </blockquote>
                 )}
               </>
@@ -330,7 +330,7 @@ export default function OfferPage() {
         </section>
 
         {/*
-          A testimonial belongs right here — this is exactly where "see what you'll get" and "why it's
+          A testimonial belongs right here. This is exactly where "see what you'll get" and "why it's
           worth it" hand off to "other people vouch for it" in a well-built offer page. It's deliberately
           left out rather than filled with a placeholder quote and an invented name/photo: that would be
           a fabricated review presented as genuine, which we don't do even as a placeholder on a page
@@ -339,28 +339,28 @@ export default function OfferPage() {
 
           <section className="pp-testimonial">
             <p className="pp-quote">"…"</p>
-            <p className="pp-quote-by"><b>Real Name</b> — role, context</p>
+            <p className="pp-quote-by"><b>Real Name</b>, role, context</p>
           </section>
         */}
 
         {/* ───────── Trust bar: real numbers only, no fabricated stats, no recreated card-brand logos ───────── */}
         <section className="pp-trustbar">
           <div className="pp-stats-row">
-            <div className="pp-stat"><b>{freshTxt || '—'}</b><span>new roles &middot; last {FREE_DELAY_HOURS}h</span></div>
-            <div className="pp-stat"><b>{live ? (live.addedToday || 0).toLocaleString() : '—'}</b><span>posted today</span></div>
-            <div className="pp-stat"><b>{live ? hidden.toLocaleString() : '—'}</b><span>currently locked on Free</span></div>
+            <div className="pp-stat"><b>{freshTxt || '…'}</b><span>new roles &middot; last {FREE_DELAY_HOURS}h</span></div>
+            <div className="pp-stat"><b>{live ? (live.addedToday || 0).toLocaleString() : '…'}</b><span>posted today</span></div>
+            <div className="pp-stat"><b>{live ? hidden.toLocaleString() : '…'}</b><span>currently locked on Free</span></div>
           </div>
-          <p className="pp-secure pp-secure-bar"><ShieldIcon /> Payments processed securely by Stripe &mdash; we never see your card details.</p>
+          <p className="pp-secure pp-secure-bar"><ShieldIcon /> Payments processed securely by Stripe. We never see your card details.</p>
         </section>
 
-        {/* ───────── FAQ — cancellation & renewal first, they're the biggest objection ───────── */}
+        {/* ───────── FAQ: cancellation & renewal first, they're the biggest objection ───────── */}
         <section className="pp-faq">
           <h3>Common questions</h3>
           <details><summary>How do I cancel?</summary><p>Open the menu in the top right, choose Manage billing, and cancel. You keep Premium until the end of the period you&apos;ve paid for and won&apos;t be charged again.</p></details>
           <details><summary>What happens after the first month?</summary><p>The ${PRICE.intro} covers your first month. After that it renews at ${PRICE.monthly} a month until you cancel.</p></details>
           <details><summary>Does the 3-month option renew?</summary><p>No. It&apos;s one payment for 90 days and then it simply ends. You can buy again or switch to monthly whenever you like.</p></details>
           <details><summary>Why does seeing a role early matter?</summary><p>The first applications land in an empty inbox and get read properly. Two days later there can be hundreds. Premium puts you in that first group. Everything older stays free.</p></details>
-          <details><summary>How do the custom searches work?</summary><p>After you join we ask which roles you&apos;re after and where. Those become real searches we run against new recruiter posts every few hours — not just a filter on the feed. Edit them any time from the menu.</p></details>
+          <details><summary>How do the custom searches work?</summary><p>After you join we ask which roles you&apos;re after and where. Those become real searches we run against new recruiter posts every few hours, not just a filter on the feed. Edit them any time from the menu.</p></details>
           <details><summary>Where do the roles come from?</summary><p>Public LinkedIn posts from recruiters and hiring managers, collected and organised by AI.</p></details>
         </section>
       </main>
