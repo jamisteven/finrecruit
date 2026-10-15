@@ -197,7 +197,7 @@ export default function OfferPage() {
             <div className="pp-hero-hook">
               <span className="pp-eyebrow"><BoltIcon /> Premium access</span>
               <h1>The jobs LinkedIn doesn&apos;t show you <em>until it&apos;s too late.</em></h1>
-              <p className="pp-sub">{`Free sees a role ${FREE_DELAY_HOURS} hours after it's posted, once hundreds of people have already applied. Premium sees every recruiter post the moment it goes live.`}</p>
+              <p className="pp-sub">By the time a role goes public, hundreds of people have already applied. Premium puts you there the moment a recruiter posts it, not weeks later.</p>
               {hasPass && <p className="pp-have">You already have Premium. <a href="/">See today&apos;s new roles →</a> Buying again adds more time.</p>}
             </div>
 
@@ -540,12 +540,15 @@ export default function OfferPage() {
              hook/trust/tip (1), then price (2), then how-it-works/testimonial (3). That puts the
              "Free" context in the tip BEFORE the price, not after it like the old order:-1 did,
              while still surfacing price well before the deeper explanatory content. */
-          .pp-hero { display: flex; flex-direction: column; margin-bottom: 44px; }
+          .pp-hero { display: flex; flex-direction: column; gap: 0; margin-bottom: 36px; }
           .pp-hero-copy { display: contents; }
           .pp-hero-hook, .pp-trustgrid, .pp-tip { order: 1; }
           .pp-hero-price { order: 2; margin-bottom: 24px; }
           .pp-hero-how, .pp-hero-quote { order: 3; }
           .pp-compare-grid { grid-template-columns: 1fr; gap: 24px; }
+          .pp-compare { margin-bottom: 36px; }
+          .pp-why { margin-bottom: 36px; }
+          .pp-trustbar { margin-bottom: 28px; padding: 18px 0; }
         }
         @media (max-width: 640px) {
           .pp-job-grid { grid-template-columns: 1fr; }
