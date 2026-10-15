@@ -253,88 +253,20 @@ const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
 )
 
-// ── Hero "binned" strip ──
-// The three things job seekers hate most, each struck through and tossed in the bin,
-// one after another, then an all-clear. Lives in its own component so the ticking
-// phase state re-renders only this strip, never the whole page.
-const BINNED = [
-  { t: 'Ghost job',           d: 'never actually hiring' },
-  { t: 'Posted 6 months ago', d: 'still marked “open”' },
-  { t: 'ATS black hole',      d: 'applied, never heard back' },
-]
-// Phase timeline (ms until the next phase). Each row i takes three beats:
-// 3i+1 rejected (✕ + strike), 3i+2 crumpled into a paper ball, 3i+3 thrown into the bin.
-// Phase 10 is the all-clear, then back to 0 where the rows fade in again.
-const BIN_STEPS = [1100, 500, 700, 800, 500, 700, 800, 500, 700, 800, 2600]
-const BIN_CLEAR = BINNED.length * 3 + 1
-const BinIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <g className="bin-lid"><path d="M4 7h16M10 7V5h4v2" /></g>
-    <path d="M6 7l1 13h10l1-13M10 11v6M14 11v6" />
-  </svg>
+// ── Hero promises: three lines, each ticked off one after another on page load (pure CSS) ──
+const PROMISES = ['No ghost jobs', 'No listings older than 30 days', 'No ATS black holes']
+const HeroPromises = () => (
+  <ul className="promises" aria-label="What you will not find here">
+    {PROMISES.map((p, i) => (
+      <li key={p} style={{ ['--i' as string]: i }}>
+        <span className="pm-check" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+        </span>
+        <span className="pm-text">{p}</span>
+      </li>
+    ))}
+  </ul>
 )
-// A crumpled paper ball: wobbly outline with crease lines
-const PaperBall = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path className="pb-body" d="M12 2.5c2.6-.6 4.8.4 6.4 2.2 1.8 1.5 2.9 3.4 2.6 5.8-.2 2.4.6 4.6-1.2 6.5-1.5 2.2-3.5 3.6-6 4.2-2.6.4-5-.1-7-1.8-2-1.4-3.6-3.2-3.8-5.7-.3-2.5.9-4.4 2-6.5C6.2 5 8.5 3.1 12 2.5Z" />
-    <path className="pb-crease" d="M8 7.5l4.2 3.3 3.6-2.6M12.2 10.8l-1.4 5.2 4.6-1.3M6.2 13.4l4.6 2.6M15.4 8.2l2.9 4.1-2.2 3.3" />
-  </svg>
-)
-function BinnedStrip() {
-  const [phase, setPhase] = useState(0)
-  const [still, setStill] = useState(false)   // prefers-reduced-motion: show the end state, no ticking
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    if (mq.matches) { setStill(true); return }
-    let t: ReturnType<typeof setTimeout>
-    let p = 0
-    const tick = () => { p = (p + 1) % BIN_STEPS.length; setPhase(p); t = setTimeout(tick, BIN_STEPS[p]) }
-    t = setTimeout(tick, BIN_STEPS[0])
-    return () => clearTimeout(t)
-  }, [])
-  const binned = still ? BINNED.length : Math.min(BINNED.length, Math.floor(phase / 3))
-  const clear = !still && phase === BIN_CLEAR
-  const throwing = !still && phase >= 3 && phase < BIN_CLEAR && phase % 3 === 0   // a ball is mid-air
-  return (
-    <div className={`binned${clear ? ' clear' : ''}`} role="img" aria-label="Ghost jobs, six-month-old listings and ATS black holes are crumpled up and binned before they reach you.">
-      <div className="bn-head">
-        <span className="bn-label">Never makes it into your feed</span>
-        <span className="bn-count" aria-hidden="true">{binned}/{BINNED.length} binned</span>
-      </div>
-      <div className="bn-body">
-        <ul className="bn-list" aria-hidden="true">
-          {BINNED.map((row, i) => {
-            const rowPhase = phase - 3 * i   // 1 rejected, 2 crumpling, ≥3 gone
-            const cls = still ? ' struck'
-              : rowPhase >= 3 ? ' struck gone'
-              : rowPhase === 2 ? ' struck crumple'
-              : rowPhase === 1 ? ' struck'
-              : phase === 0 ? ' fresh' : ''
-            return (
-              <li key={row.t} className={`bn-row${cls}`} style={{ ['--i' as string]: i }}>
-                <span className="bn-x">✕</span>
-                <b>{row.t}</b><span className="bn-d">{row.d}</span>
-              </li>
-            )
-          })}
-          {/* the paper balls live beside the rows (not inside), so they outlive the crumpled row */}
-          {!still && BINNED.map((row, i) => {
-            const rowPhase = phase - 3 * i
-            if (rowPhase !== 2 && rowPhase !== 3) return null
-            return (
-              <li key={`ball-${row.t}`} className={`bn-ball${rowPhase === 3 ? ' fly' : ''}`} style={{ ['--i' as string]: i }}>
-                <span className="bn-ball-in"><PaperBall /></span>
-              </li>
-            )
-          })}
-          <li className="bn-ok" aria-hidden="true"><CheckIcon />Only real, fresh roles get through</li>
-        </ul>
-        {/* keyed on the catch count so the "thud" animation replays on every landing */}
-        <div key={binned} className={`bn-bin${throwing ? ' open' : ''}${binned > 0 && !still ? ' thud' : ''}`}><BinIcon /></div>
-      </div>
-    </div>
-  )
-}
 
 export default function HomePage() {
   const [dark, setDark] = useState(false)
@@ -1241,7 +1173,7 @@ export default function HomePage() {
         <div className="hero-copy">
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
           <p className="sub">Roles recruiters and hiring managers share with their networks before posting them publicly - tracked by AI and delivered in real time.</p>
-          <BinnedStrip />
+          <HeroPromises />
           {!hasPass && renderOffer('offer-d')}
         </div>
 
@@ -1820,103 +1752,27 @@ export default function HomePage() {
         }
         @media (max-width: 760px) { .ulj .offer-wrap { padding: 0 16px 24px; } }
 
-        /* ── Hero "binned" strip: the three pain points struck out and tossed, then all-clear ── */
-        .ulj .binned { max-width: 640px; margin: -6px 0 2px; padding: 12px 14px 12px; border: 1px dashed var(--hairline-2); border-radius: 12px; background: color-mix(in srgb, var(--surface) 60%, transparent); }
-        .ulj .bn-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
-        .ulj .bn-label { font: 500 10.5px 'Spline Sans Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
-        .ulj .bn-count { font: 600 11px 'Inter', sans-serif; color: var(--ink-3); font-variant-numeric: tabular-nums; transition: color .2s; }
-        .ulj .binned.clear .bn-count { color: var(--live); }
-        .ulj .bn-body { display: flex; align-items: center; gap: 14px; }
-        .ulj .bn-list { --rh: 28px; --gap: 5px; list-style: none; padding: 0; margin: 0; flex: 1; min-width: 0; position: relative; display: grid; gap: var(--gap); }
-        .ulj .bn-row {
-          position: relative; display: flex; align-items: center; gap: 8px; min-height: var(--rh); padding: 0 10px;
-          border-radius: 8px; background: var(--surface); border: 1px solid var(--hairline);
-          font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden;
-          transform-origin: center; opacity: 1; transition: color .3s;
+        /* ── Hero promises: three lines, each ticked off in turn after the page lands ── */
+        .ulj .promises { list-style: none; padding: 0; margin: -6px 0 2px; display: grid; gap: 9px; }
+        .ulj .promises li { --t: calc(500ms + var(--i) * 600ms); display: flex; align-items: center; gap: 11px; font-size: 15.5px; font-weight: 500; color: var(--ink-3); animation: pm-text .35s ease-out var(--t) both; }
+        @keyframes pm-text { to { color: var(--ink); } }
+        .ulj .pm-check {
+          flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+          color: #fff; border: 1.5px solid var(--hairline-2); background: transparent;
+          animation: pm-fill .4s cubic-bezier(.3,1.5,.5,1) var(--t) both;
         }
-        .ulj .bn-row b { font-weight: 600; color: var(--ink); }
-        .ulj .bn-row .bn-d { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
-        .ulj .bn-row .bn-x { font-size: 11px; color: #C8472F; opacity: 0; transform: scale(.5); transition: opacity .2s, transform .25s cubic-bezier(.3,1.6,.6,1); }
-        /* the strike: a line drawn left-to-right across the whole row */
-        .ulj .bn-row::after {
-          content: ''; position: absolute; left: 10px; right: 10px; top: 50%; height: 2px; border-radius: 2px;
-          background: #C8472F; transform: scaleX(0); transform-origin: left center; transition: transform .4s cubic-bezier(.4,0,.2,1);
+        @keyframes pm-fill {
+          0%   { transform: scale(1); background: transparent; border-color: var(--hairline-2); }
+          50%  { transform: scale(1.18); background: var(--live); border-color: var(--live); }
+          100% { transform: scale(1); background: var(--live); border-color: var(--live); }
         }
-        .ulj .bn-row.struck::after { transform: scaleX(1); }
-        .ulj .bn-row.struck .bn-x { opacity: 1; transform: scale(1); }
-        .ulj .bn-row.struck b, .ulj .bn-row.struck .bn-d { color: var(--ink-3); }
-        /* the crumple: the row is squeezed, creased and twisted down to nothing while a paper ball takes its place */
-        .ulj .bn-row.crumple { animation: bn-crumple .7s cubic-bezier(.55,0,.45,1) both; }
-        @keyframes bn-crumple {
-          0%   { transform: none; opacity: 1; border-radius: 8px; }
-          25%  { transform: scale(.92, 1.08) skewX(-7deg) rotate(-1.5deg); }
-          45%  { transform: scale(.62, .9) skewX(9deg) rotate(2.5deg); border-radius: 14px; }
-          65%  { transform: scale(.38, .62) skewX(-12deg) rotate(-4deg); opacity: .9; }
-          85%  { transform: scale(.16, .34) skewX(6deg) rotate(6deg); opacity: .4; }
-          100% { transform: scale(.06, .2) rotate(-3deg); opacity: 0; border-radius: 50%; }
-        }
-        .ulj .bn-row.gone { transform: scale(.06, .2); opacity: 0; visibility: hidden; pointer-events: none; }
-        /* the paper ball: sits at the crumpled row's centre, then lobs in an arc into the bin */
-        .ulj .bn-ball {
-          --ball: 24px; position: absolute; z-index: 2; width: var(--ball); height: var(--ball);
-          left: 50%; top: calc(var(--i) * (var(--rh) + var(--gap)) + var(--rh) / 2); translate: -50% -50%;
-          color: var(--ink-2); pointer-events: none;
-          animation: bn-ball-in .7s cubic-bezier(.3,1.4,.6,1) both;
-        }
-        .ulj .bn-ball svg { width: 100%; height: 100%; overflow: visible; }
-        .ulj .bn-ball .pb-body { fill: var(--surface-2); stroke: var(--ink-3); stroke-width: 1.3; stroke-linejoin: round; }
-        .ulj .bn-ball .pb-crease { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
-        @keyframes bn-ball-in {
-          0%   { opacity: 0; scale: .2; rotate: -40deg; }
-          45%  { opacity: 0; scale: .35; }
-          75%  { opacity: 1; scale: 1.15; rotate: 8deg; }
-          100% { opacity: 1; scale: 1; rotate: 0deg; }
-        }
-        /* flight: the outer element travels in a straight line to the bin's mouth, the inner one adds the arc + spin */
-        .ulj .bn-ball.fly {
-          animation: none;
-          left: calc(100% + 14px + 23px);                       /* list gap + half the bin */
-          top: calc((var(--rh) + var(--gap)) + var(--rh) / 2);  /* the bin is centred on the middle row */
-          transition: left .72s cubic-bezier(.35,0,.65,1), top .72s cubic-bezier(.35,0,.65,1);
-        }
-        .ulj .bn-ball-in { display: block; width: 100%; height: 100%; }
-        .ulj .bn-ball.fly .bn-ball-in { animation: bn-arc .72s cubic-bezier(.35,0,.65,1) both; }
-        @keyframes bn-arc {
-          0%   { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
-          40%  { transform: translateY(-30px) rotate(220deg) scale(1.05); }
-          80%  { transform: translateY(2px) rotate(400deg) scale(.85); opacity: 1; }
-          100% { transform: translateY(10px) rotate(430deg) scale(.4); opacity: 0; }
-        }
-        /* all-clear line floats over the emptied list */
-        .ulj .bn-ok { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; font: 600 13.5px 'Inter', sans-serif; color: var(--live); opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; pointer-events: none; }
-        .ulj .binned.clear .bn-ok { opacity: 1; transform: none; }
-        /* rows fade back in for the next loop instead of reverse-flying out of the bin */
-        .ulj .bn-row.fresh { transition: none; animation: bn-in .45s ease-out both; animation-delay: calc(var(--i) * 90ms); }
-        @keyframes bn-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
-        .ulj .bn-bin { flex: none; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--hairline-2); color: var(--ink-2); transition: transform .2s, color .3s, border-color .3s; }
-        .ulj .bn-bin svg { width: 26px; height: 26px; overflow: visible; }
-        .ulj .bn-bin .bin-lid { transform-origin: 4px 7px; transition: transform .25s cubic-bezier(.3,1.4,.6,1); }
-        .ulj .bn-bin.open .bin-lid { transform: rotate(-32deg) translateY(-1px); }
-        /* the thud: plays when a ball lands (the bin is re-keyed per catch), delayed to match the flight time */
-        .ulj .bn-bin.thud { animation: bn-thud .5s cubic-bezier(.3,1.5,.5,1) .55s both; }
-        @keyframes bn-thud {
-          0%   { transform: none; }
-          30%  { transform: translateY(3px) scale(1.08, .9) rotate(-3deg); }
-          60%  { transform: translateY(-1px) scale(.97, 1.04) rotate(2deg); }
-          100% { transform: none; }
-        }
-        .ulj .bn-bin.open:not(.thud) { transform: scale(1.04); }
-        .ulj .binned.clear .bn-bin { color: var(--live); border-color: color-mix(in srgb, var(--live) 45%, transparent); }
-        @media (max-width: 760px) {
-          .ulj .binned { padding: 10px 12px; }
-          .ulj .bn-list { --rh: 26px; }
-          .ulj .bn-row { font-size: 12.5px; }
-          .ulj .bn-ball.fly { left: calc(100% + 14px + 20px); }
-          .ulj .bn-bin { width: 40px; height: 40px; }
-          .ulj .bn-bin svg { width: 22px; height: 22px; }
-        }
+        /* the tick draws itself in, left to right, just after the circle fills */
+        .ulj .pm-check svg { width: 13px; height: 13px; }
+        .ulj .pm-check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: pm-draw .3s cubic-bezier(.4,0,.2,1) calc(var(--t) + 180ms) forwards; }
+        @keyframes pm-draw { to { stroke-dashoffset: 0; } }
+        @media (max-width: 760px) { .ulj .promises li { font-size: 14.5px; } .ulj .promises { gap: 8px; } }
         @media (prefers-reduced-motion: reduce) {
-          .ulj .bn-row, .ulj .bn-row::after, .ulj .bn-row .bn-x, .ulj .bn-ok, .ulj .bn-bin, .ulj .bn-bin .bin-lid { transition: none; animation: none; }
+          .ulj .promises li, .ulj .pm-check, .ulj .pm-check path { animation-duration: 0s; animation-delay: 0s; }
         }
         /* Hero art: a recruiter post becoming a listing */
         .ulj .art { position: relative; width: 100%; max-width: 520px; margin-left: auto; }
