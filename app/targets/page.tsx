@@ -9,7 +9,7 @@ function Targets() {
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
 
-  const [roles, setRoles] = useState<string[]>(['', ''])
+  const [roles, setRoles] = useState<string[]>(['', '', ''])
   const [showThird, setShowThird] = useState(false)
   const [locations, setLocations] = useState<string[]>([])
   const [locInput, setLocInput] = useState('')
@@ -68,9 +68,14 @@ function Targets() {
         if (t.length) {
           const ks = [...new Set(t.map((x) => x.keyword))].slice(0, 3)
           const ls = [...new Set(t.map((x) => x.location).filter(Boolean))] as string[]
-          setRoles(ks.length >= 2 ? ks : [...ks, ''])
-          if (ks.length > 2) setShowThird(true)
-          setLocations(ls.filter((l) => l !== 'remote').slice(0, 3))
+
+          // Always offer three boxes, and never clobber anything already typed:
+          // this fetch can land after someone has started filling the form, and
+          // it was overwriting their entries with whatever was in the database.
+          const fromDb = [ks[0] ?? '', ks[1] ?? '', ks[2] ?? '']
+          setRoles((cur) => (cur.some((r) => r.trim()) ? cur : fromDb))
+          setShowThird(true)
+          setLocations((cur) => (cur.length ? cur : ls.filter((l) => l !== 'remote').slice(0, 3)))
           setRemoteOk(ls.includes('remote'))
         }
       })
@@ -247,11 +252,7 @@ function Targets() {
             )}
           </div>
         ))}
-        {!showThird && roles.length < 3 && (
-          <button type="button" className="link-btn" onClick={() => { setShowThird(true); setRoles((cur) => [...cur, '']) }}>
-            + Add a third role
-          </button>
-        )}
+
       </div>
 
       {related.length > 0 && (

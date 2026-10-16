@@ -11,7 +11,7 @@ function Onboarding() {
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
 
-  const [roles, setRoles] = useState<string[]>(['', ''])
+  const [roles, setRoles] = useState<string[]>(['', '', ''])
   const [showThird, setShowThird] = useState(false)
   const [locations, setLocations] = useState<string[]>([])
   const [locInput, setLocInput] = useState('')
@@ -243,11 +243,7 @@ function Onboarding() {
             )}
           </div>
         ))}
-        {!showThird && roles.length < 3 && (
-          <button type="button" className="link-btn" onClick={() => { setShowThird(true); setRoles((cur) => [...cur, '']) }}>
-            + Add a third role
-          </button>
-        )}
+
       </div>
 
       {related.length > 0 && (
