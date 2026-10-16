@@ -52,30 +52,6 @@ export async function POST(req: NextRequest) {
     const hadBefore = new Set(
       (priorTargets ?? []).map((t) => `${t.keyword}|${t.location ?? ''}`))
 
-    // A save replaces what they had. Anything they've dropped releases its
-    // claim on the shared query, and a query nobody still wants goes quiet
-    // rather than burning Apify credit forever.
-    const keepKeys = new Set(pairs.map((p) => `${p.keyword}|${p.location ?? ''}`))
-    const dropped = (priorTargets ?? []).filter(
-      (t) => !keepKeys.has(`${t.keyword}|${t.location ?? ''}`))
-
-    for (const t of dropped) {
-      const queryText = t.location
-        ? `hiring ${distilForQuery(String(t.keyword))} ${t.location}`
-        : `hiring ${distilForQuery(String(t.keyword))}`
-      const { data: pq } = await db.from('priority_queries')
-        .select('id, user_count').eq('query', queryText).maybeSingle()
-      if (!pq) continue
-      const next = Math.max(0, (pq.user_count as number) - 1)
-      await db.from('priority_queries')
-        .update({ user_count: next, active: next > 0 })
-        .eq('id', pq.id)
-    }
-
-    if (dropped.length > 0) {
-      await db.from('user_targets').delete().eq('user_id', user.id)
-    }
-
     await db.from('user_targets').upsert(
       pairs.map((p) => ({ user_id: user.id, keyword: p.keyword, location: p.location })),
       { onConflict: 'user_id,keyword,location', ignoreDuplicates: true }

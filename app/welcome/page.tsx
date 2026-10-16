@@ -11,52 +11,12 @@ function Onboarding() {
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
 
-  const [roles, setRoles] = useState<string[]>(['', '', ''])
+  const [roles, setRoles] = useState<string[]>(['', ''])
   const [showThird, setShowThird] = useState(false)
   const [locations, setLocations] = useState<string[]>([])
   const [locInput, setLocInput] = useState('')
   const [remoteOk, setRemoteOk] = useState(true)
   const [sug, setSug] = useState<Suggest>({ locations: [], titles: [] })
-
-  // Suggestions for the role boxes. The list is a convenience, never a gate:
-  // what someone types is always the first option, because the corpus is a
-  // snapshot and "nothing today" says little about whether it's worth wanting.
-  const [sugFor, setSugFor] = useState<number | null>(null)
-  const [sugList, setSugList] = useState<{ phrase: string; count: number }[]>([])
-  const [sugParts, setSugParts] = useState<string[]>([])
-
-  useEffect(() => {
-    const i = sugFor
-    if (i === null) return
-    const q = roles[i]?.trim() ?? ''
-    if (q.length < 2) { setSugList([]); setSugParts([]); return }
-    const t = setTimeout(() => {
-      fetch(`/api/suggest-roles?q=${encodeURIComponent(q)}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { setSugList(d?.suggestions ?? []); setSugParts(d?.parts ?? []) })
-        .catch(() => {})
-    }, 180)
-    return () => clearTimeout(t)
-  }, [sugFor, roles])
-
-  // Put a phrase in one box; spread any extras from a compound into free ones.
-  const pickRole = (i: number, phrase: string, rest: string[] = []) => {
-    // Functional update: picking role 1 then typing role 2 was reading a stale
-    // copy of the array, so whichever happened second wiped the other.
-    setRoles((cur) => {
-      const next = [...cur]
-      next[i] = phrase
-      let slot = 0
-      for (const extra of rest) {
-        while (slot < next.length && (next[slot].trim() || slot === i)) slot++
-        if (slot >= next.length) break
-        next[slot] = extra
-      }
-      return next
-    })
-    setSugFor(null)
-    setError('')
-  }
 
   useEffect(() => {
     fetch('/api/suggest').then((r) => r.json()).then(setSug).catch(() => {})
@@ -108,10 +68,10 @@ function Onboarding() {
   const addRole = (v: string) => {
     const i = roles.findIndex((r) => !r.trim())
     if (i === -1) {
-      if (!showThird) { setShowThird(true); setRoles((cur) => [...cur, v]) }
+      if (!showThird) { setShowThird(true); setRoles([...roles, v]) }
       return
     }
-    setRoles((cur) => cur.map((r, idx) => (idx === i ? v : r)))
+    setRoles(roles.map((r, idx) => (idx === i ? v : r)))
   }
 
   const addLocation = (v: string) => {
@@ -123,16 +83,7 @@ function Onboarding() {
   const finish = async () => {
     if (filledRoles.length === 0) { setError('Add at least one role'); return }
     setStage('saving'); setError('')
-    // A compound left unpicked would become one query matching nothing, so
-    // split it here rather than sending "aml/kyc/reference data risk".
-    const expanded: string[] = []
-    for (const r of filledRoles) {
-      const parts = r.split(/\s*(?:[/,&]|\bor\b)\s*/i).map((s) => s.trim()).filter((s) => s.length > 1)
-      for (const p of (parts.length > 1 ? parts : [r])) {
-        if (expanded.length < 3 && !expanded.includes(p)) expanded.push(p)
-      }
-    }
-    const pairs = expanded.flatMap((k) =>
+    const pairs = filledRoles.flatMap((k) =>
       locations.length ? locations.map((l) => ({ keyword: k, location: l }))
                        : [{ keyword: k, location: remoteOk ? 'remote' : '' }]
     ).slice(0, 3)
@@ -190,60 +141,22 @@ function Onboarding() {
 
       <div className="fields">
         {roles.map((r, i) => (
-          <div key={i} className="role-field">
+          <div key={i}>
             <label className="lbl">Role {i + 1}{i > 0 && <span className="opt"> (optional)</span>}</label>
             <input
               className="field"
               value={r}
-              autoComplete="off"
+              list="sug-titles"
               placeholder={i === 0 ? 'Fixed income analyst' : 'e.g. Quantitative developer'}
-              onChange={(e) => {
-                const v = e.target.value
-                setRoles((cur) => cur.map((x, idx) => (idx === i ? v : x)))
-                setError('')
-              }}
-              onFocus={() => setSugFor(i)}
-              onBlur={() => setTimeout(() => setSugFor((cur) => (cur === i ? null : cur)), 150)}
+              onChange={(e) => { setRoles(roles.map((x, idx) => (idx === i ? e.target.value : x))); setError('') }}
             />
-            {sugFor === i && r.trim().length > 1 && (
-              <div className="role-sug">
-                {sugParts.length > 1 ? (
-                  <>
-                    <p className="sug-note">That looks like {sugParts.length} separate roles — we&apos;ll watch for each on its own.</p>
-                    <button type="button" className="sug-row strong"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => pickRole(i, sugParts[0], sugParts.slice(1))}>
-                      Use all {sugParts.length}: <b>{sugParts.join(', ')}</b>
-                    </button>
-                    {sugParts.map((p) => (
-                      <button type="button" className="sug-row" key={p}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => pickRole(i, p)}>
-                        Just <b>{p}</b>
-                      </button>
-                    ))}
-                  </>
-                ) : (
-                  <>
-                    <button type="button" className="sug-row strong"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => pickRole(i, r.trim())}>
-                      Watch for <b>{r.trim()}</b>
-                    </button>
-                    {sugList.map((s) => (
-                      <button type="button" className="sug-row" key={s.phrase}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => pickRole(i, s.phrase)}>
-                        <b>{s.phrase}</b><span>{s.count} live</span>
-                      </button>
-                    ))}
-                  </>
-                )}
-              </div>
-            )}
           </div>
         ))}
-
+        {!showThird && roles.length < 3 && (
+          <button type="button" className="link-btn" onClick={() => { setShowThird(true); setRoles([...roles, '']) }}>
+            + Add a third role
+          </button>
+        )}
       </div>
 
       {related.length > 0 && (
@@ -418,18 +331,6 @@ function Frame({ step, roles = [], locations = [], children }: {
         .fields { display: flex; flex-direction: column; gap: 18px; }
         .lbl { display: block; font-size: 13px; font-weight: 600; color: #514C43; margin-bottom: 6px; }
         .opt { font-weight: 400; color: #8A8378; }
-        .role-field { position: relative; }
-        .role-sug { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px);
-          background: #fff; border: 1px solid #D9D2C5; border-radius: 10px; padding: 5px;
-          box-shadow: 0 8px 24px -8px rgba(28,27,25,.25); max-height: 260px; overflow-y: auto; }
-        .sug-note { margin: 4px 8px 6px; font-size: 12px; color: #8A8378; line-height: 1.45; }
-        .sug-row { display: flex; width: 100%; align-items: baseline; justify-content: space-between;
-          gap: 10px; text-align: left; background: none; border: 0; padding: 9px 10px;
-          border-radius: 7px; font: inherit; font-size: 14px; color: #1C1B19; cursor: pointer; }
-        .sug-row:hover { background: #F6F2EA; }
-        .sug-row.strong { border-bottom: 1px solid #EFEAE0; border-radius: 7px 7px 0 0; }
-        .sug-row span { font-size: 12px; color: #8A8378; flex: none; }
-        .sug-row b { font-weight: 600; }
         .field { width: 100%; box-sizing: border-box; height: 52px; padding: 0 16px;
           border: 1px solid #D9D2C5; border-radius: 10px; background: #fff;
           font: inherit; font-size: 16px; color: #1C1B19; outline: none; }
