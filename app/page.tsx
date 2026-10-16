@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase-browser'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { JobPost, FilterState, Sector, WorkType } from '@/types'
+import { keywordMatches, locationMatches } from '@/lib/matchTarget'
 import { captureAttribution } from '@/lib/attribution'
 
 const DEFAULT_FILTERS: FilterState = {
@@ -622,15 +623,9 @@ export default function HomePage() {
   // exact = the keyword in the title and the location matches; rough = keyword anywhere
   const matchesTargets = useCallback((j: JobPost, strict: boolean) => {
     if (myTargets.length === 0) return false
-    const title = (j.title ?? '').toLowerCase()
-    const blob = `${title} ${(j.summary ?? '').toLowerCase()}`
-    const loc = (j.location ?? '').toLowerCase()
     return myTargets.some((t) => {
-      const k = t.keyword.toLowerCase()
-      const hitKeyword = strict ? title.includes(k) : blob.includes(k)
-      if (!hitKeyword) return false
-      if (!strict || !t.location) return true
-      return loc.includes(t.location.toLowerCase())
+      if (!keywordMatches(t.keyword, j.title ?? '', strict ? null : j.summary)) return false
+      return strict ? locationMatches(t.location, j.location ?? null) : true
     })
   }, [myTargets])
 

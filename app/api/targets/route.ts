@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
 import { normaliseKeyword } from '@/lib/normaliseKeyword'
+import { wideningLadder } from '@/lib/widenLocation'
 
 export const runtime = 'nodejs'
 
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
     // Cap how many queries one user can queue — the thinnest-covered pairs win
     const MAX_PER_USER = 3
     const added: string[] = []
+    const widened: string[] = []
     const covered: string[] = []
 
     for (const p of pairs) {
@@ -85,13 +87,34 @@ export async function POST(req: NextRequest) {
           .insert({ query: queryText, keyword: p.keyword, location: p.location })
       }
       added.push(label)
+
+      // The city they asked for is thin, so also watch the surrounding region.
+      // Someone wanting ".net engineer" in San Jose gets California too, rather
+      // than an empty tab while the roles sit in New York.
+      if (p.location && (count ?? 0) < 5) {
+        const wider = wideningLadder(p.location)[1]
+        if (wider?.location && wider.location.toLowerCase() !== p.location.toLowerCase()) {
+          const wideText = `hiring ${p.keyword} ${wider.location}`
+          const { data: existingWide } = await db.from('priority_queries')
+            .select('id, user_count').eq('query', wideText).maybeSingle()
+          if (existingWide) {
+            await db.from('priority_queries')
+              .update({ user_count: (existingWide.user_count as number) + 1, active: true })
+              .eq('id', existingWide.id)
+          } else {
+            await db.from('priority_queries')
+              .insert({ query: wideText, keyword: p.keyword, location: wider.location })
+          }
+          widened.push(`${p.keyword} / ${wider.location}`)
+        }
+      }
     }
 
     // Kick the new queries off now rather than waiting for the rotation, so a
     // user who just paid sees results within minutes. Fire and forget.
-    if (added.length > 0) {
+    if (added.length + widened.length > 0) {
       const origin = new URL(req.url).origin
-      const queries = added.map((label) => {
+      const queries = [...added, ...widened].map((label) => {
         const [k, l] = label.split(' / ')
         return l ? `hiring ${k} ${l}` : `hiring ${k}`
       })
