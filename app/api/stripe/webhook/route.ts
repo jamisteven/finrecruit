@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createServerClient } from '@/lib/supabase'
+import { distilForQuery } from '@/lib/matchTarget'
 
 export const runtime = 'nodejs'
 
@@ -150,7 +151,7 @@ export async function POST(req: NextRequest) {
           .select('keyword, location').eq('user_id', prof.id)
 
         for (const t of theirs ?? []) {
-          const k = String(t.keyword).trim()
+          const k = distilForQuery(String(t.keyword).trim())
           const queryText = t.location ? `hiring ${k} ${t.location}` : `hiring ${k}`
           const { data: pq } = await db.from('priority_queries')
             .select('id, user_count').eq('query', queryText).maybeSingle()

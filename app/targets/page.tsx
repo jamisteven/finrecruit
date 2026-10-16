@@ -78,10 +78,11 @@ function Targets() {
   const finish = async () => {
     if (filledRoles.length === 0) { setError('Add at least one role'); return }
     setStage('saving'); setError('')
-    const pairs = filledRoles.flatMap((k) =>
-      locations.length ? locations.map((l) => ({ keyword: k, location: l }))
-                       : [{ keyword: k, location: remoteOk ? 'remote' : '' }]
-    ).slice(0, 3)
+    // One target per role x location. No slice here: a 3-role / 3-location
+    // save used to be cut to the first three pairs, which were all role 1.
+    // The server caps how many *queries* get queued, not how many targets.
+    const locs = locations.length ? locations : [remoteOk ? 'remote' : '']
+    const pairs = filledRoles.flatMap((k) => locs.map((l) => ({ keyword: k, location: l })))
     try {
       const res = await fetch('/api/targets', {
         method: 'POST',

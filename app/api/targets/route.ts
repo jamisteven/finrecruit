@@ -26,15 +26,24 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    // Three explicit keyword+location pairs, not a matrix
+    // Up to 3 roles x 3 locations, sent role-major by the form. Every pair is
+    // stored as a target; only the number of Apify queries is capped below.
     type Pair = { keyword: string; location: string | null }
+    const MAX_TARGETS = 9
+    const seen = new Set<string>()
     const pairs: Pair[] = (body.pairs ?? [])
-      .slice(0, 3)
+      .slice(0, MAX_TARGETS)
       .map((p: { keyword?: string; location?: string }) => ({
         keyword: normaliseKeyword(String(p.keyword ?? '')),
         location: String(p.location ?? '').trim().toLowerCase() || null,
       }))
-      .filter((p: { keyword: string | null; location: string | null }): p is Pair => !!p.keyword)
+      .filter((p: { keyword: string | null; location: string | null }): p is Pair => {
+        if (!p.keyword) return false
+        const key = `${p.keyword}|${p.location ?? ''}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
 
     if (pairs.length === 0) {
       return NextResponse.json(
@@ -52,18 +61,52 @@ export async function POST(req: NextRequest) {
     const hadBefore = new Set(
       (priorTargets ?? []).map((t) => `${t.keyword}|${t.location ?? ''}`))
 
-    await db.from('user_targets').upsert(
-      pairs.map((p) => ({ user_id: user.id, keyword: p.keyword, location: p.location })),
-      { onConflict: 'user_id,keyword,location', ignoreDuplicates: true }
-    )
+    // A save replaces what they had. Anything they've dropped releases its
+    // claim on the shared query, and a query nobody still wants goes quiet
+    // rather than burning Apify credit forever.
+    const keepKeys = new Set(pairs.map((p) => `${p.keyword}|${p.location ?? ''}`))
+    const dropped = (priorTargets ?? []).filter(
+      (t) => !keepKeys.has(`${t.keyword}|${t.location ?? ''}`))
 
-    // Cap how many queries one user can queue — the thinnest-covered pairs win
+    for (const t of dropped) {
+      const qk = distilForQuery(String(t.keyword))
+      const queryText = t.location ? `hiring ${qk} ${t.location}` : `hiring ${qk}`
+      const { data: pq } = await db.from('priority_queries')
+        .select('id, user_count').eq('query', queryText).maybeSingle()
+      if (!pq) continue
+      const next = Math.max(0, (pq.user_count as number) - 1)
+      await db.from('priority_queries')
+        .update({ user_count: next, active: next > 0 })
+        .eq('id', pq.id)
+    }
+
+    // Plain delete + insert instead of upsert: a NULL location never matches
+    // the unique index, so ignoreDuplicates couldn't dedupe those rows anyway.
+    const { error: delErr } = await db.from('user_targets').delete().eq('user_id', user.id)
+    if (delErr) throw delErr
+    const { error: insErr } = await db.from('user_targets').insert(
+      pairs.map((p) => ({ user_id: user.id, keyword: p.keyword, location: p.location }))
+    )
+    if (insErr) throw insErr
+
+    // Cap how many queries one user can queue. Walk the pairs so every role
+    // gets its first location before any role gets a second, so a 3-role save
+    // never spends all its queries on role 1.
     const MAX_PER_USER = 3
+    const byRole = new Map<string, Pair[]>()
+    for (const p of pairs) byRole.set(p.keyword, [...(byRole.get(p.keyword) ?? []), p])
+    const ordered: Pair[] = []
+    for (let i = 0; ordered.length < pairs.length; i++) {
+      for (const list of byRole.values()) if (list[i]) ordered.push(list[i])
+    }
+
     const added: string[] = []
     const widened: string[] = []
     const covered: string[] = []
+    let queued = 0
 
-    for (const p of pairs) {
+    for (const p of ordered) {
+      if (queued >= MAX_PER_USER) { covered.push(p.location ? `${p.keyword} / ${p.location}` : p.keyword); continue }
       // How much of this do we already hold?
       let q = db.from('jobs')
         .select('*', { count: 'exact', head: true })
@@ -101,8 +144,7 @@ export async function POST(req: NextRequest) {
         await db.from('priority_queries')
           .insert({ query: queryText, keyword: p.keyword, location: p.location })
       }
-      if (!existing) added.push(label)
-      else if (isNewForUser) added.push(label)
+      if (!existing || isNewForUser) { added.push(label); queued++ }
       else covered.push(label)
 
       // The city they asked for is thin, so also watch the surrounding region.
@@ -185,9 +227,8 @@ export async function DELETE() {
       .select('keyword, location').eq('user_id', user.id)
 
     for (const t of mine ?? []) {
-      const queryText = t.location
-        ? `hiring ${t.keyword} ${t.location}`
-        : `hiring ${t.keyword}`
+      const qk = distilForQuery(String(t.keyword))
+      const queryText = t.location ? `hiring ${qk} ${t.location}` : `hiring ${qk}`
       const { data: pq } = await db.from('priority_queries')
         .select('id, user_count').eq('query', queryText).maybeSingle()
       if (!pq) continue
