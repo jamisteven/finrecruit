@@ -1159,7 +1159,7 @@ export default function HomePage() {
                       <div className="acct-email">{userEmail}</div>
                       {hasPass && <div className="acct-badge">Premium active</div>}
                       {hasPass && <button onClick={() => { setMenuOpen(false); openPortal() }} disabled={portalBusy}>Manage billing</button>}
-                      <a href="/targets">My queries</a>
+                      <a href="/targets">My targets</a>
                       <a href="/offer">Pricing</a>
                       <button onClick={signOut}>Sign out</button>
                     </>
@@ -1383,7 +1383,7 @@ export default function HomePage() {
                   onClick={() => { setMyFeedOn(false); track('feed_tab', { tab: 'all' }) }}>All roles</button>
                 <button role="tab" aria-selected={myFeedOn} className={myFeedOn ? 'on' : ''}
                   onClick={() => { setMyFeedOn(true); track('feed_tab', { tab: 'mine' }) }}>
-                  My roles {myExact.length > 0 && <span>{myExact.length}</span>}
+                  My matches {myExact.length > 0 && <span>{myExact.length}</span>}
                 </button>
               </div>
             )}

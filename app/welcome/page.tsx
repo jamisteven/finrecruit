@@ -374,6 +374,12 @@ function Frame({ step, roles = [], locations = [], children }: {
         .foot { display: flex; align-items: center; justify-content: space-between; gap: 16px;
           flex-wrap: wrap; padding-top: 8px; }
         .fine { font-size: 13px; color: #8A8378; }
+        .tab-hint { display: inline-flex; gap: 2px; background: #EFEAE0;
+          border-radius: 9px; padding: 3px; margin: 2px 0 4px; }
+        .tab-hint span { padding: 7px 13px; border-radius: 7px; font-size: 12.5px; color: #8A8378; }
+        .tab-hint span.on { background: #fff; color: #1C1B19; font-weight: 600;
+          box-shadow: 0 1px 2px rgba(28,27,25,.1); }
+        .tab-hint i { font-style: normal; opacity: .55; margin-left: 3px; }
         .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
           height: 52px; padding: 0 28px; border-radius: 10px; border: 0; background: #2F55D4;
           color: #fff; font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; text-decoration: none; }
