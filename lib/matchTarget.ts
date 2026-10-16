@@ -38,6 +38,29 @@ function familyOf(word: string): string[] | null {
   return ROLE_FAMILIES.find((f) => f.includes(word)) ?? null
 }
 
+// Compound and abbreviated forms people write instead of the full phrase.
+// Keyed on the distinctive token; the values are alternatives to look for.
+const TOKEN_ALIASES: Record<string, string[]> = {
+  systems: ['system', 'sysadmin', 'sys'],
+  system: ['systems', 'sysadmin', 'sys'],
+  '.net': ['dotnet', 'net', 'c#'],
+  kubernetes: ['k8s'],
+  javascript: ['js'],
+  typescript: ['ts'],
+  postgresql: ['postgres'],
+  marketing: ['growth'],
+  accounts: ['account'],
+  account: ['accounts'],
+}
+
+/** Loose token test: exact, singular/plural, or a known alias. */
+function tokenPresent(t: string, haySet: Set<string>, hayText: string): boolean {
+  if (haySet.has(t) || hayText.includes(t)) return true
+  const singular = t.endsWith('s') ? t.slice(0, -1) : `${t}s`
+  if (haySet.has(singular) || hayText.includes(singular)) return true
+  return (TOKEN_ALIASES[t] ?? []).some((a) => haySet.has(a) || hayText.includes(a))
+}
+
 /**
  * Does `title` (plus optional `summary`) satisfy the member's `keyword`?
  *
@@ -59,8 +82,7 @@ export function keywordMatches(keyword: string, title: string, summary?: string 
   const distinctive = kt.filter((t) => !familyOf(t) && !FILLER.has(t))
 
   // every distinctive token has to show up somewhere
-  const distinctiveOk = distinctive.every((t) =>
-    haySet.has(t) || hayText.includes(t))
+  const distinctiveOk = distinctive.every((t) => tokenPresent(t, haySet, hayText))
 
   if (!distinctiveOk) return false
 
@@ -73,7 +95,7 @@ export function keywordMatches(keyword: string, title: string, summary?: string 
   // the role word matches if any sibling in its family appears
   return roleWords.some((rw) => {
     const fam = familyOf(rw)!
-    return fam.some((sib) => haySet.has(sib) || hayText.includes(sib))
+    return fam.some((sib) => tokenPresent(sib, haySet, hayText))
   })
 }
 
