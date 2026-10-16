@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
 import { normaliseKeyword } from '@/lib/normaliseKeyword'
 import { wideningLadder } from '@/lib/widenLocation'
+import { distilForQuery } from '@/lib/matchTarget'
 
 export const runtime = 'nodejs'
 
@@ -71,9 +72,10 @@ export async function POST(req: NextRequest) {
 
       if ((count ?? 0) >= COVERAGE_THRESHOLD) { covered.push(label); continue }
 
+      const qKeyword = distilForQuery(p.keyword)
       const queryText = p.location
-        ? `hiring ${p.keyword} ${p.location}`
-        : `hiring ${p.keyword}`
+        ? `hiring ${qKeyword} ${p.location}`
+        : `hiring ${qKeyword}`
 
       const { data: existing } = await db.from('priority_queries')
         .select('id, user_count').eq('query', queryText).maybeSingle()
@@ -94,7 +96,7 @@ export async function POST(req: NextRequest) {
       if (p.location && (count ?? 0) < 5) {
         const wider = wideningLadder(p.location)[1]
         if (wider?.location && wider.location.toLowerCase() !== p.location.toLowerCase()) {
-          const wideText = `hiring ${p.keyword} ${wider.location}`
+          const wideText = `hiring ${qKeyword} ${wider.location}`
           const { data: existingWide } = await db.from('priority_queries')
             .select('id, user_count').eq('query', wideText).maybeSingle()
           if (existingWide) {

@@ -83,3 +83,27 @@ export function locationMatches(target: string | null, location: string | null):
   if (!location) return false
   return location.toLowerCase().includes(target.toLowerCase())
 }
+
+
+/**
+ * The phrase to send Apify for a keyword.
+ *
+ * LinkedIn weights common words heavily, so "hiring .net software engineer
+ * california" returns generic California software roles while "hiring .net
+ * california" returns real .NET ones. We keep the distinctive tokens and the
+ * role word, and drop the filler. Members never see this — their own wording
+ * is what we store and show back to them.
+ */
+export function distilForQuery(keyword: string): string {
+  const kt = tokens(keyword)
+  if (kt.length === 0) return keyword
+
+  const distinctive = kt.filter((t) => !familyOf(t) && !FILLER.has(t))
+  const role = kt.find((t) => familyOf(t))
+
+  // Nothing distinctive ("software engineer") — keep it as typed, or we'd be
+  // searching for a bare role word.
+  if (distinctive.length === 0) return keyword
+
+  return [...distinctive, role].filter(Boolean).join(' ')
+}
