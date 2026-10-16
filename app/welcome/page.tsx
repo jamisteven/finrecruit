@@ -131,7 +131,7 @@ function Onboarding() {
     const pairs = expanded.flatMap((k) =>
       locations.length ? locations.map((l) => ({ keyword: k, location: l }))
                        : [{ keyword: k, location: remoteOk ? 'remote' : '' }]
-    ).slice(0, 3)
+    ).slice(0, 12)
     try {
       const res = await fetch('/api/targets', {
         method: 'POST',
