@@ -886,6 +886,24 @@ export default function HomePage() {
     setTimeout(() => setCheckoutError(false), 6000)
   }
 
+  // Does anyone care about the person behind the role, or just the role?
+  const trackAuthorClick = (job: JobPost) => {
+    try {
+      fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({
+          job_id: job.id,
+          visitor_id: visitorId.current,
+          sector: job.sector,
+          location: job.location,
+          kind: 'author',
+        }),
+      }).catch(() => {})
+    } catch { /* never block the click */ }
+  }
+
   const trackJobClick = (job: JobPost, index: number) => {
     const ageDays = job.posted_at
       ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000)
@@ -1458,7 +1476,7 @@ export default function HomePage() {
                       </span>
                         <span className="author">
                           {job.author_linkedin_url && job.author_linkedin_url !== '#'
-                            ? <a href={job.author_linkedin_url} target="_blank" rel="noopener noreferrer"><b>{job.author_name}</b></a>
+                            ? <a href={job.author_linkedin_url} target="_blank" rel="noopener noreferrer" onClick={() => trackAuthorClick(job)}><b>{job.author_name}</b></a>
                             : <b>{job.author_name}</b>}
                           {job.author_headline && <> · {job.author_headline}</>}
                         </span>

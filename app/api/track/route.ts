@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     const db = createServerClient()
     const { error } = await db.from('job_clicks').insert({
       job_id: body.job_id ?? null,
+      kind: body.kind === 'author' ? 'author' : 'job',
       user_id: userId,
       visitor_id: body.visitor_id ?? null,
       sector: body.sector ?? null,
