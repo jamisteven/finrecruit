@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       .eq('active', true)
       .or(`last_run_at.is.null,last_run_at.lt.${new Date(Date.now() - 12 * 3600_000).toISOString()}`)
       .order('last_run_at', { ascending: true, nullsFirst: true })
-      .limit(3)
+      .limit(6)
     batch = (data ?? []).map((r) => String(r.query))
   }
 

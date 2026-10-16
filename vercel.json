@@ -39,6 +39,18 @@
     {
       "path": "/api/ingest-hashtags?offset=4",
       "schedule": "0 15 * * 6,0"
+    },
+    {
+      "path": "/api/run-priority",
+      "schedule": "25 6 * * 1-5"
+    },
+    {
+      "path": "/api/run-priority",
+      "schedule": "25 16 * * 1-5"
+    },
+    {
+      "path": "/api/run-priority",
+      "schedule": "25 9 * * 6,0"
     }
   ]
 }
