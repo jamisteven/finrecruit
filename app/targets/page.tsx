@@ -114,7 +114,7 @@ function Targets() {
       <h1>Updated.</h1>
       <p className="lede">
         We&apos;re searching now. Give us about five minutes, then open <b>My matches</b>
-        at the top of the feed — that&apos;s where roles matching your searches appear,
+        {' '}at the top of the feed — that&apos;s where roles matching your searches appear,
         kept apart from everything else. We sweep again eight times a day.
       </p>
 
