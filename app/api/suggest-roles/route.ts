@@ -45,6 +45,7 @@ async function loadPhrases(): Promise<Phrase[]> {
   for (const r of data ?? []) {
     const clean = normalise(String(r.title ?? ''))
     if (clean.length < 4 || clean.length > 48) continue
+    if (clean.includes('/')) continue
     const key = clean.toLowerCase()
     const cur = counts.get(key)
     if (cur) cur.n++
@@ -85,7 +86,9 @@ export async function GET(req: NextRequest) {
 
     // Anything containing the typed text, nearest match first
     const hits = phrases
-      .filter((p) => p.phrase.includes(q))
+      // match at word starts, so "am" offers AML rather than ambulatory,
+      // mainframe and programme
+      .filter((p) => new RegExp('(^|[^a-z0-9])' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(p.phrase))
       .sort((a, b) => {
         const aStarts = a.phrase.startsWith(q) ? 0 : 1
         const bStarts = b.phrase.startsWith(q) ? 0 : 1
