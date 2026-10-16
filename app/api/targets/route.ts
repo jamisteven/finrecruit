@@ -45,6 +45,13 @@ export async function POST(req: NextRequest) {
 
     const db = createServerClient()
 
+    // What they had before this save — used below so a re-save doesn't bump the
+    // shared counter or fire another Apify run.
+    const { data: priorTargets } = await db.from('user_targets')
+      .select('keyword, location').eq('user_id', user.id)
+    const hadBefore = new Set(
+      (priorTargets ?? []).map((t) => `${t.keyword}|${t.location ?? ''}`))
+
     await db.from('user_targets').upsert(
       pairs.map((p) => ({ user_id: user.id, keyword: p.keyword, location: p.location })),
       { onConflict: 'user_id,keyword,location', ignoreDuplicates: true }
@@ -80,15 +87,23 @@ export async function POST(req: NextRequest) {
       const { data: existing } = await db.from('priority_queries')
         .select('id, user_count').eq('query', queryText).maybeSingle()
 
+      // Someone re-saving the same target shouldn't bump the shared counter
+      // (it drives retirement) or trigger another Apify run.
+      const isNewForUser = !hadBefore.has(`${p.keyword}|${p.location ?? ''}`)
+
       if (existing) {
-        await db.from('priority_queries')
-          .update({ user_count: (existing.user_count as number) + 1, active: true })
-          .eq('id', existing.id)
+        if (isNewForUser) {
+          await db.from('priority_queries')
+            .update({ user_count: (existing.user_count as number) + 1, active: true })
+            .eq('id', existing.id)
+        }
       } else {
         await db.from('priority_queries')
           .insert({ query: queryText, keyword: p.keyword, location: p.location })
       }
-      added.push(label)
+      if (!existing) added.push(label)
+      else if (isNewForUser) added.push(label)
+      else covered.push(label)
 
       // The city they asked for is thin, so also watch the surrounding region.
       // Someone wanting ".net engineer" in San Jose gets California too, rather
