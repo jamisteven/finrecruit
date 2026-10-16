@@ -138,7 +138,33 @@ export async function POST(req: NextRequest) {
     // ── Cancelled / ended: access simply runs out at the end of the paid period ─
     if (event.type === 'customer.subscription.deleted') {
       const sub = event.data.object as Stripe.Subscription
+
+      // Find them before we clear the link, so their searches can be released.
+      const { data: prof } = await db.from('profiles')
+        .select('id').eq('stripe_subscription_id', sub.id).maybeSingle()
+
       await db.from('profiles').update({ stripe_subscription_id: null }).eq('stripe_subscription_id', sub.id)
+
+      if (prof?.id) {
+        const { data: theirs } = await db.from('user_targets')
+          .select('keyword, location').eq('user_id', prof.id)
+
+        for (const t of theirs ?? []) {
+          const k = String(t.keyword).trim()
+          const queryText = t.location ? `hiring ${k} ${t.location}` : `hiring ${k}`
+          const { data: pq } = await db.from('priority_queries')
+            .select('id, user_count').eq('query', queryText).maybeSingle()
+          if (!pq) continue
+          const next = Math.max(0, (pq.user_count as number) - 1)
+          await db.from('priority_queries')
+            .update({ user_count: next, active: next > 0 })
+            .eq('id', pq.id)
+        }
+
+        await db.from('user_targets').delete().eq('user_id', prof.id)
+        console.log('[stripe] released searches for', prof.id)
+      }
+
       return NextResponse.json({ received: true })
     }
   } catch (e) {
