@@ -655,8 +655,13 @@ export default function HomePage() {
         const matchCity = (sel: string) => jobLocs.includes(sel.toLowerCase())
         // Region and city selections are alternatives, not requirements —
         // "United States" + "Remote" should widen the set, not empty it.
+        // A region and a city inside it narrows (Switzerland + Zurich = Zurich).
+        // Unrelated selections widen (United States + Remote = either).
+        // Regions whose cities are also selected drop out of the match.
+        const narrowed = selRegions.filter((r) =>
+          !selCities.some((city) => (REGIONS[r] ?? []).some((k) => matchKw(city.toLowerCase(), k))))
         const anyLoc =
-          selRegions.some((r) => jobInRegion(job, r)) ||
+          narrowed.some((r) => jobInRegion(job, r)) ||
           selCities.some(matchCity)
         if ((selRegions.length > 0 || selCities.length > 0) && !anyLoc) return false
       }
