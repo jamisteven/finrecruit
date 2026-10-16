@@ -739,8 +739,9 @@ export default function HomePage() {
   // Until the older roles are downloaded, add the server's count of them so the totals cover the whole month
   const olderPending = archiveCounts && !archiveDone ? archiveCounts : null
   // The feed count: add the not-yet-downloaded older roles when nothing narrows beyond the sector
+  // The matches tab is already a complete list, so nothing pending is added there
   const headlineCount = displayJobs.length + (
-    olderPending && !filters.search.trim() && filters.locations.length === 0 && filters.workTypes.length === 0
+    olderPending && !myFeedOn && !filters.search.trim() && filters.locations.length === 0 && filters.workTypes.length === 0
       ? (filters.sector === 'all' ? Object.values(olderPending).reduce((a, b) => a + b, 0) : (olderPending[filters.sector] ?? 0))
       : 0)
   const sectorCounts = useMemo(() => {

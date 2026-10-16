@@ -53,12 +53,22 @@ const TOKEN_ALIASES: Record<string, string[]> = {
   account: ['accounts'],
 }
 
+// Substring matching is what lets "quant" find "quantitative", but on short
+// tokens it is a liability: "aml" sits inside "teamlead" and "streamline",
+// "kyc" inside nothing useful. Below this length a token has to be a whole word.
+const SUBSTRING_MIN = 5
+
+function hasToken(t: string, haySet: Set<string>, hayText: string): boolean {
+  if (haySet.has(t)) return true
+  return t.length >= SUBSTRING_MIN && hayText.includes(t)
+}
+
 /** Loose token test: exact, singular/plural, or a known alias. */
 function tokenPresent(t: string, haySet: Set<string>, hayText: string): boolean {
-  if (haySet.has(t) || hayText.includes(t)) return true
+  if (hasToken(t, haySet, hayText)) return true
   const singular = t.endsWith('s') ? t.slice(0, -1) : `${t}s`
-  if (haySet.has(singular) || hayText.includes(singular)) return true
-  return (TOKEN_ALIASES[t] ?? []).some((a) => haySet.has(a) || hayText.includes(a))
+  if (hasToken(singular, haySet, hayText)) return true
+  return (TOKEN_ALIASES[t] ?? []).some((a) => hasToken(a, haySet, hayText))
 }
 
 /**

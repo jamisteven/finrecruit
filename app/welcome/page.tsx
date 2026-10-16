@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
+import RoleInput from '@/components/RoleInput'
 import { useSearchParams } from 'next/navigation'
 
 type Suggest = { locations: string[]; titles: string[] }
@@ -144,12 +145,10 @@ function Onboarding() {
         {roles.map((r, i) => (
           <div key={i}>
             <label className="lbl">Role {i + 1}{i > 0 && <span className="opt"> (optional)</span>}</label>
-            <input
-              className="field"
+            <RoleInput
               value={r}
-              list="sug-titles"
               placeholder={i === 0 ? 'Fixed income analyst' : 'e.g. Quantitative developer'}
-              onChange={(e) => { setRoles(roles.map((x, idx) => (idx === i ? e.target.value : x))); setError('') }}
+              onChange={(v) => { setRoles((prev) => prev.map((x, idx) => (idx === i ? v : x))); setError('') }}
             />
           </div>
         ))}
@@ -187,7 +186,6 @@ function Onboarding() {
         }}>Continue to location →</button>
       </div>
 
-      <datalist id="sug-titles">{sug.titles.map((t) => <option key={t} value={t} />)}</datalist>
     </Frame>
   )
 
