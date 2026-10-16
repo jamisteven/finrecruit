@@ -215,7 +215,21 @@ export async function POST(req: NextRequest) {
 
             const sector = guessSector(post.text, post.authorHeadline || '')
             const classified = await classifyPost(post.text, post.authorHeadline, sector)
-            if (!classified.isJob) { queryRejected++; return }
+            if (!classified.isJob) {
+              queryRejected++
+              // keep what we turn away so the discards can be audited
+              db.from('classified_posts').insert({
+                post_url: post.postUrl,
+                raw_text: post.text.slice(0, 600),
+                author_headline: post.authorHeadline,
+                label: 'bad',
+                reason: classified.reason ?? null,
+                pipeline: 'hashtag',
+                query,
+                hint_sector: sector,
+              }).then(() => {}, () => {})
+              return
+            }
 
             // Trust the classifier's sector over the regex hint. Real jobs outside our
             // verticals are kept as 'other' rather than dropped (already paid to classify).

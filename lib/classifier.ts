@@ -1,5 +1,7 @@
 export type ClassifiedJob = {
   isJob: boolean
+  // why a post was turned down — stored so we can audit what we discard
+  reason?: string
   title: string
   company: string | null
   location: string | null
@@ -33,7 +35,7 @@ export async function classifyPost(
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set')
 
   const FALLBACK: ClassifiedJob = {
-    isJob: false, title: '', company: null, location: null,
+    isJob: false, reason: 'classifier failed', title: '', company: null, location: null,
     seniority: 'Unknown', salary: null, apply_method: null, summary: '', tags: [],
     sector: 'other', quality: 'low',
   }
@@ -79,9 +81,9 @@ ${rawText.slice(0, 2500)}
 ---
 
 Reply ONLY with JSON, no markdown, no backticks:
-{"isJob":true,"title":"job title","company":"company or null","location":"primary city only (e.g. London, New York, Mumbai, Remote) — do NOT list multiple cities. Always name the real city, including Indian ones. Infer from the post, company or context where possible; null only if genuinely unknowable","seniority":"one of: Intern/Junior/Mid/Senior/VP/Director/MD/Partner/C-Suite/Unknown","salary":"range or null","apply_method":"DM/email/link/etc or null","summary":"1-2 sentences about the role","tags":["tag1","tag2"],"sector":"one of: finance/tech/legal/marketing/realestate/other","quality":"one of: high/medium/low"}
+{"isJob":true,"title":"job title","company":"company or null","location":"primary city only (e.g. London, New York, Mumbai, Remote) — do NOT list multiple cities. Always name the real city, including Indian ones. Infer from the post, company or context where possible; null only if genuinely unknowable","seniority":"one of: Intern/Junior/Mid/Senior/VP/Director/MD/Partner/C-Suite/Unknown","salary":"range or null","apply_method":"DM/email/link/etc or null","summary":"1-2 sentences about the role","tags":["tag1","tag2"],"sector":"one of: finance/tech/legal/marketing/realestate/sales/hr/other","quality":"one of: high/medium/low"}
 
-Or if not a job: {"isJob":false,"title":"","company":null,"location":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[],"sector":"other","quality":"low"}`
+Or if not a job: {"isJob":false,"reason":"a short phrase saying why — e.g. 'candidate seeking work', 'career advice', 'roundup of several roles', 'company promo', 'already filled'","title":"","company":null,"location":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[],"sector":"other","quality":"low"}`
 
   try {
     const controller = new AbortController()
@@ -119,7 +121,7 @@ Or if not a job: {"isJob":false,"title":"","company":null,"location":null,"senio
       // Normalize; fall back to the query's sector if the model omitted it
       sector: typeof parsed.sector === 'string' && parsed.sector ? parsed.sector.toLowerCase().trim() : sector,
     }
-    console.log(`[classifier] [query:${sector}] isJob=${out.isJob} quality=${out.quality} sector=${out.sector} title="${out.title}"`)
+    console.log(`[classifier] [query:${sector}] isJob=${out.isJob}${out.isJob ? '' : ` (${out.reason ?? 'no reason'})`} quality=${out.quality} sector=${out.sector} title="${out.title}"`)
     return out
 
   } catch (e) {

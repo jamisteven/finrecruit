@@ -135,7 +135,21 @@ export async function POST(req: NextRequest) {
         const hintSector = recruiter?.sector || guessSector(post.authorHeadline || '')
 
         const classified = await classifyPost(post.text, post.authorHeadline, hintSector)
-        if (!classified.isJob) { queryRejected++; continue }
+        if (!classified.isJob) {
+          queryRejected++
+          // keep what we turn away so the discards can be audited
+          db.from('classified_posts').insert({
+            post_url: post.postUrl,
+            raw_text: post.text.slice(0, 600),
+            author_headline: post.authorHeadline,
+            label: 'bad',
+            reason: classified.reason ?? null,
+            pipeline: 'recruiter',
+            query: cleanAuthorUrl ?? null,
+            hint_sector: hintSector,
+          }).then(() => {}, () => {})
+          continue
+        }
 
         // Skip India-based roles
         const INDIA_LOCATIONS = ['bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'karachi', 'lahore', 'pakistan', 'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat', 'surat', 'nashik', 'visakhapatnam',
