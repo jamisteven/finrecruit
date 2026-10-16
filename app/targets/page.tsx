@@ -39,15 +39,19 @@ function Targets() {
 
   // Put a phrase in one box; spread any extras from a compound into free ones.
   const pickRole = (i: number, phrase: string, rest: string[] = []) => {
-    const next = [...roles]
-    next[i] = phrase
-    let slot = 0
-    for (const extra of rest) {
-      while (slot < next.length && (next[slot].trim() || slot === i)) slot++
-      if (slot >= next.length) break
-      next[slot] = extra
-    }
-    setRoles(next)
+    // Functional update: picking role 1 then typing role 2 was reading a stale
+    // copy of the array, so whichever happened second wiped the other.
+    setRoles((cur) => {
+      const next = [...cur]
+      next[i] = phrase
+      let slot = 0
+      for (const extra of rest) {
+        while (slot < next.length && (next[slot].trim() || slot === i)) slot++
+        if (slot >= next.length) break
+        next[slot] = extra
+      }
+      return next
+    })
     setSugFor(null)
     setError('')
   }
@@ -99,10 +103,10 @@ function Targets() {
   const addRole = (v: string) => {
     const i = roles.findIndex((r) => !r.trim())
     if (i === -1) {
-      if (!showThird) { setShowThird(true); setRoles([...roles, v]) }
+      if (!showThird) { setShowThird(true); setRoles((cur) => [...cur, v]) }
       return
     }
-    setRoles(roles.map((r, idx) => (idx === i ? v : r)))
+    setRoles((cur) => cur.map((r, idx) => (idx === i ? v : r)))
   }
 
   const addLocation = (v: string) => {
@@ -123,10 +127,13 @@ function Targets() {
         if (expanded.length < 3 && !expanded.includes(p)) expanded.push(p)
       }
     }
+    // Every role against every location. Three roles in three cities is nine
+    // targets, which is a reasonable thing to want — the route decides how many
+    // of them are worth their own Apify query.
     const pairs = expanded.flatMap((k) =>
       locations.length ? locations.map((l) => ({ keyword: k, location: l }))
                        : [{ keyword: k, location: remoteOk ? 'remote' : '' }]
-    ).slice(0, 3)
+    ).slice(0, 12)
     try {
       const res = await fetch('/api/targets', {
         method: 'POST',
@@ -194,7 +201,11 @@ function Targets() {
               value={r}
               autoComplete="off"
               placeholder={i === 0 ? 'Fixed income analyst' : 'e.g. Quantitative developer'}
-              onChange={(e) => { setRoles(roles.map((x, idx) => (idx === i ? e.target.value : x))); setError('') }}
+              onChange={(e) => {
+                const v = e.target.value
+                setRoles((cur) => cur.map((x, idx) => (idx === i ? v : x)))
+                setError('')
+              }}
               onFocus={() => setSugFor(i)}
               onBlur={() => setTimeout(() => setSugFor((cur) => (cur === i ? null : cur)), 150)}
             />
@@ -237,7 +248,7 @@ function Targets() {
           </div>
         ))}
         {!showThird && roles.length < 3 && (
-          <button type="button" className="link-btn" onClick={() => { setShowThird(true); setRoles([...roles, '']) }}>
+          <button type="button" className="link-btn" onClick={() => { setShowThird(true); setRoles((cur) => [...cur, '']) }}>
             + Add a third role
           </button>
         )}
