@@ -620,18 +620,24 @@ export default function HomePage() {
       .catch(() => {})
   }, [])
 
-  // exact = the keyword in the title and the location matches; rough = keyword anywhere
+  // exact = the keyword in the title and the location matches.
+  // rough = the same keyword in the title, anywhere in the world. Searching
+  // summaries too matched half the corpus, because words like "program" and
+  // "manager" turn up in almost every description.
   const matchesTargets = useCallback((j: JobPost, strict: boolean) => {
     if (myTargets.length === 0) return false
     return myTargets.some((t) => {
-      if (!keywordMatches(t.keyword, j.title ?? '', strict ? null : j.summary)) return false
+      if (!keywordMatches(t.keyword, j.title ?? '', null)) return false
       return strict ? locationMatches(t.location, j.location ?? null) : true
     })
   }, [myTargets])
 
   const myExact = useMemo(() => allJobs.filter((j) => matchesTargets(j, true)), [allJobs, matchesTargets])
   const myRough = useMemo(
-    () => allJobs.filter((j) => !matchesTargets(j, true) && matchesTargets(j, false)),
+    () => allJobs
+      .filter((j) => !matchesTargets(j, true) && matchesTargets(j, false))
+      .sort((a, b) => toTime(b.posted_at) - toTime(a.posted_at))
+      .slice(0, 60),
     [allJobs, matchesTargets])
 
   const displayJobs = useMemo(() => {
@@ -1515,6 +1521,18 @@ export default function HomePage() {
             {splitFeed && <div className="sec-head"><span>Earlier roles</span><i />{!hasPass && <em className="sec-note">Older than {FREE_DELAY_HOURS} hours</em>}</div>}
             <div className="cards">
               {!splitFeed && lockedShown.map(renderLocked)}
+              {myFeedOn && myExact.length > 0 && myRough.length > 0 && (
+                <p className="match-note">
+                  <b>{myExact.length} match your searches exactly.</b> Below those,
+                  {' '}{myRough.length} more with the same job titles in other places.
+                </p>
+              )}
+              {myFeedOn && myExact.length === 0 && myRough.length > 0 && (
+                <p className="match-note">
+                  Nothing in your locations yet — here are {myRough.length} roles with the
+                  same job titles elsewhere.
+                </p>
+              )}
               {earlierJobs.slice(0, visibleCount).map((job, jobIndex) => {
                 const wt = inferWorkType(job)
                 return (
@@ -2018,6 +2036,9 @@ export default function HomePage() {
           font: 400 13px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; }
         .ulj .sug-relax:hover { background: var(--surface-2); }
         .ulj .sug-relax b { color: var(--ink); font-weight: 600; }
+        .ulj .match-note { margin: 0 0 14px; padding: 11px 14px; border-radius: 10px;
+          background: var(--surface-2); font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+        .ulj .match-note b { color: var(--ink); font-weight: 600; }
         .ulj .feed-tabs { display: inline-flex; gap: 2px; background: var(--surface-2);
           border-radius: 9px; padding: 2px; margin-left: auto; align-self: center; }
         /* the tabs claim the gap; the dropdown sits straight after them */
