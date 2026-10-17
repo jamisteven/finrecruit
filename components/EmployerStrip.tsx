@@ -41,7 +41,6 @@ export default function EmployerStrip({ companies, onPick }: { companies: StripC
   return (
     <section className="es" aria-label="Employers whose recruiters posted roles recently">
       <div className="es-inner">
-        <p className="es-label" title="Recruiters posted roles at these companies in the last 30 days">Roles posted at</p>
         <div className="es-viewport">
         <div className="es-track" style={{ animationDuration: `${seconds}s` }}>
           {[0, 1].map((copy) => (
@@ -56,10 +55,8 @@ export default function EmployerStrip({ companies, onPick }: { companies: StripC
         /* Aligned to the page column (max-width + side padding match .hero/.layout), one
            compact row: a short label on the left, the marquee filling the rest. */
         .es { max-width: 1200px; margin: 0 auto; padding: 0 28px; box-sizing: border-box; }
-        .es-inner { height: 48px; box-sizing: border-box; display: flex; align-items: center; gap: 18px;
+        .es-inner { height: 48px; box-sizing: border-box; display: flex; align-items: center;
           border-top: 1px solid var(--hairline, #E4DED1); border-bottom: 1px solid var(--hairline, #E4DED1); }
-        .es-label { margin: 0; flex: none; font: 500 10.5px 'Spline Sans Mono', ui-monospace, monospace;
-          letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3, #8A8378); white-space: nowrap; }
         .es-viewport { position: relative; flex: 1; min-width: 0; height: 30px; overflow: hidden;
           -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
                   mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
@@ -81,8 +78,7 @@ export default function EmployerStrip({ companies, onPick }: { companies: StripC
         }
         @media (max-width: 760px) {
           .es { padding: 0 16px; }
-          .es-inner { height: 44px; gap: 12px; }
-          .es-label { display: none; }
+          .es-inner { height: 44px; }
           .es-row { gap: 26px; padding-right: 26px; }
           .es-mark { font-size: 13px; }
         }
