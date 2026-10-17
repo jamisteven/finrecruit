@@ -40,8 +40,9 @@ export default function EmployerStrip({ companies, onPick }: { companies: StripC
   const seconds = Math.max(30, base.length * 3.2)
   return (
     <section className="es" aria-label="Employers whose recruiters posted roles recently">
-      <p className="es-label">Recruiters posted roles at these companies in the last 30 days</p>
-      <div className="es-viewport">
+      <div className="es-inner">
+        <p className="es-label" title="Recruiters posted roles at these companies in the last 30 days">Roles posted at</p>
+        <div className="es-viewport">
         <div className="es-track" style={{ animationDuration: `${seconds}s` }}>
           {[0, 1].map((copy) => (
             <div className="es-row" key={copy} aria-hidden={copy === 1}>
@@ -49,36 +50,41 @@ export default function EmployerStrip({ companies, onPick }: { companies: StripC
             </div>
           ))}
         </div>
+        </div>
       </div>
       <style>{`
-        .es { height: 96px; box-sizing: border-box; border-top: 1px solid var(--hairline, #E4DED1); border-bottom: 1px solid var(--hairline, #E4DED1);
-          background: var(--surface-2, #FAF8F3); display: flex; flex-direction: column; justify-content: center; gap: 12px; overflow: hidden; }
-        .es-label { margin: 0 auto; width: 100%; max-width: 1200px; box-sizing: border-box; padding: 0 28px;
-          font: 500 11px 'Spline Sans Mono', ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3, #8A8378); }
-        .es-viewport { position: relative; height: 36px; overflow: hidden;
-          -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
-                  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent); }
+        /* Aligned to the page column (max-width + side padding match .hero/.layout), one
+           compact row: a short label on the left, the marquee filling the rest. */
+        .es { max-width: 1200px; margin: 0 auto; padding: 0 28px; box-sizing: border-box; }
+        .es-inner { height: 48px; box-sizing: border-box; display: flex; align-items: center; gap: 18px;
+          border-top: 1px solid var(--hairline, #E4DED1); border-bottom: 1px solid var(--hairline, #E4DED1); }
+        .es-label { margin: 0; flex: none; font: 500 10.5px 'Spline Sans Mono', ui-monospace, monospace;
+          letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3, #8A8378); white-space: nowrap; }
+        .es-viewport { position: relative; flex: 1; min-width: 0; height: 30px; overflow: hidden;
+          -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+                  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
         .es-track { display: flex; width: max-content; animation: es-scroll linear infinite; will-change: transform; }
         .es:hover .es-track, .es:focus-within .es-track { animation-play-state: paused; }
-        .es-row { display: flex; align-items: center; gap: 44px; padding-right: 44px; }
+        .es-row { display: flex; align-items: center; gap: 34px; padding-right: 34px; }
         @keyframes es-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-        .es-mark { display: inline-flex; align-items: center; gap: 9px; height: 36px; padding: 0 4px; border: 0; background: none; cursor: pointer;
-          font: 700 16px 'Inter', system-ui, sans-serif; letter-spacing: -.02em; color: var(--ink-2, #5C574D); white-space: nowrap;
-          opacity: .72; filter: grayscale(1); transition: opacity .2s, filter .2s; }
+        .es-mark { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 2px; border: 0; background: none; cursor: pointer;
+          font: 600 13.5px 'Inter', system-ui, sans-serif; letter-spacing: -.01em; color: var(--ink-2, #5C574D); white-space: nowrap;
+          opacity: .7; filter: grayscale(1); transition: opacity .2s, filter .2s; }
         .es-mark:hover, .es-mark:focus-visible { opacity: 1; filter: none; color: var(--ink, #191713); outline: none; }
-        .es-mark img { width: 28px; height: 28px; border-radius: 7px; object-fit: contain; background: #fff; }
-        .es-dot { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: #DED8CC; color: #5C574D; font: 700 13px 'Inter', sans-serif; }
+        .es-mark img { width: 20px; height: 20px; border-radius: 5px; object-fit: contain; background: #fff; }
+        .es-dot { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; background: #DED8CC; color: #5C574D; font: 700 11px 'Inter', sans-serif; }
         @media (prefers-reduced-motion: reduce) {
           .es-track { animation: none; width: auto; }
           .es-viewport { overflow-x: auto; -webkit-mask-image: none; mask-image: none; scrollbar-width: none; }
           .es-row[aria-hidden="true"] { display: none; }
-          .es-row { padding: 0 28px; }
+          .es-row { padding-right: 0; }
         }
-        @media (max-width: 720px) {
-          .es { height: 88px; gap: 10px; }
-          .es-label { padding: 0 16px; font-size: 10.5px; }
-          .es-row { gap: 30px; padding-right: 30px; }
-          .es-mark { font-size: 15px; }
+        @media (max-width: 760px) {
+          .es { padding: 0 16px; }
+          .es-inner { height: 44px; gap: 12px; }
+          .es-label { display: none; }
+          .es-row { gap: 26px; padding-right: 26px; }
+          .es-mark { font-size: 13px; }
         }
       `}</style>
     </section>
