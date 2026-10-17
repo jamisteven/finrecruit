@@ -79,7 +79,9 @@ export default function EmployerStrip({ companies, onPick }: { companies: StripC
           .es-row { padding-right: 0; }
         }
         @media (max-width: 760px) {
-          .ulj .es, .es { padding: 0 16px; }
+          /* The plan cards above end with 24px of padding, the feed below starts with 4px:
+             pull up 6 and push down 14 so the strip sits 18px from each. */
+          .ulj .es, .es { padding: 0 16px; margin: -6px auto 14px; }
           .es-inner { height: 44px; }
           .es-row { gap: 26px; padding-right: 26px; }
           .es-mark { font-size: 13px; }
