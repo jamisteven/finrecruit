@@ -26,10 +26,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    // Up to 3 roles x 3 locations, sent role-major by the form. Every pair is
-    // stored as a target; only the number of Apify queries is capped below.
+    // Up to 3 roles x (3 cities + remote), sent role-major by the form. Every
+    // pair is stored as a target.
     type Pair = { keyword: string; location: string | null }
-    const MAX_TARGETS = 9
+    const MAX_TARGETS = 12
     const seen = new Set<string>()
     const pairs: Pair[] = (body.pairs ?? [])
       .slice(0, MAX_TARGETS)
@@ -79,10 +79,11 @@ export async function POST(req: NextRequest) {
     )
     if (insErr) throw insErr
 
-    // Cap how many queries one user can queue. Walk the pairs so every role
-    // gets its first location before any role gets a second, so a 3-role save
-    // never spends all its queries on role 1.
-    const MAX_PER_USER = 3
+    // Every thin pair earns a query: a cap of 3 used to leave a member's second
+    // city with no search at all (and an empty feed), which cost more than the
+    // Apify runs it saved. The round-robin below still spreads partial coverage
+    // across roles should the cap ever bind again.
+    const MAX_PER_USER = MAX_TARGETS
     const byRole = new Map<string, Pair[]>()
     for (const p of pairs) byRole.set(p.keyword, [...(byRole.get(p.keyword) ?? []), p])
     const ordered: Pair[] = []
@@ -154,7 +155,7 @@ export async function POST(req: NextRequest) {
       }).catch(() => {})
     }
 
-    console.log(`[targets] ${user.id}: ${added.length} queued, ${covered.length} covered`)
+    console.log(`[targets] ${user.id}: ${added.length} queued, ${covered.length} covered, ${widened.length} widened; targets=${pairs.length}`)
     return NextResponse.json({ ok: true, added, covered })
   } catch (e) {
     console.error('[targets]', (e as Error).message)

@@ -100,7 +100,10 @@ function Targets() {
     // One target per role x location. No slice here: a 3-role / 3-location
     // save used to be cut to the first three pairs, which were all role 1.
     // The server caps how many *queries* get queued, not how many targets.
-    const locs = locations.length ? locations : [remoteOk ? 'remote' : '']
+    // Cities they named, plus "remote" when the toggle is on. The toggle used to be read only
+    // when no city was chosen, so anyone who picked a city got no remote searches at all.
+    const locs = [...locations, ...(remoteOk ? ['remote'] : [])]
+    if (locs.length === 0) locs.push('')
     const pairs = filledRoles.flatMap((k) => locs.map((l) => ({ keyword: k, location: l })))
     try {
       const res = await fetch('/api/targets', {
