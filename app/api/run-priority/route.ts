@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
     } finally {
       await db.from('priority_queries')
         .update({ last_run_at: new Date().toISOString() })
-        .eq('query', query)
+        .ilike('query', query.replace(/[\\%_]/g, (c) => `\\${c}`))   // case-insensitive: "Remote" and "remote" are one search
       await db.from('ingest_runs').insert({
         pipeline: 'priority',
         query,

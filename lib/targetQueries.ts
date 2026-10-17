@@ -17,6 +17,18 @@ type Db = SupabaseClient<any, any, any>
 
 export type Target = { keyword: string; location: string | null }
 
+// Query rows are matched case-insensitively: the widening ladder writes
+// "Remote" and "United Kingdom", the onboarding toggle writes "remote", and the
+// two used to become separate rows that Apify ran twice. ilike with the
+// wildcards escaped is an exact match that ignores case.
+const exact = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`)
+
+async function findQuery(db: Db, queryText: string) {
+  const { data } = await db.from('priority_queries')
+    .select('id, user_count').ilike('query', exact(queryText)).limit(1).maybeSingle()
+  return data
+}
+
 /** The region a thin city widens to, if any. */
 export function widerLocation(location: string | null): string | null {
   if (!location) return null
@@ -46,8 +58,7 @@ export function queriesForTarget(t: Target): string[] {
  * Returns whether the row existed before.
  */
 export async function claimQuery(db: Db, queryText: string, keyword: string, location: string | null, isNewForUser: boolean): Promise<boolean> {
-  const { data: existing } = await db.from('priority_queries')
-    .select('id, user_count').eq('query', queryText).maybeSingle()
+  const existing = await findQuery(db, queryText)
   if (existing) {
     if (isNewForUser) {
       await db.from('priority_queries')
@@ -68,8 +79,7 @@ export async function releaseTargets(db: Db, targets: Target[]): Promise<void> {
       // Two cities in one region share a widened query; one member, one claim
       if (seen.has(queryText)) continue
       seen.add(queryText)
-      const { data: pq } = await db.from('priority_queries')
-        .select('id, user_count').eq('query', queryText).maybeSingle()
+      const pq = await findQuery(db, queryText)
       if (!pq) continue
       const next = Math.max(0, (pq.user_count as number) - 1)
       await db.from('priority_queries')
