@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
 import { dedupeReposts, type RepostRow } from '@/lib/dedupeReposts'
+import { matchEmployer } from '@/lib/employers'
 
 // Free visitors see a role only once it is this old. Keep in sync with FREE_DELAY_HOURS in app/page.tsx.
 const FREE_DELAY_HOURS = 48
@@ -325,8 +326,27 @@ export async function GET(req: NextRequest) {
     return sortBy === 'oldest' ? (x < y ? -1 : x > y ? 1 : 0) : (x < y ? 1 : x > y ? -1 : 0)
   })
 
+  // Recognisable employers in the feed right now, for the home-page strip: a
+  // live count over the same rows the visitor is served, never a hand-kept list.
+  const MIN_ROLES_FOR_STRIP = 2
+  const employerCounts = new Map<string, { name: string; domain: string; count: number }>()
+  if (!archive) {
+    for (const r of all) {
+      const e = matchEmployer(r.company as string | null)
+      if (!e) continue
+      const cur = employerCounts.get(e.domain) ?? { name: e.name, domain: e.domain, count: 0 }
+      cur.count++
+      employerCounts.set(e.domain, cur)
+    }
+  }
+  const topCompanies = [...employerCounts.values()]
+    .filter((e) => e.count >= MIN_ROLES_FOR_STRIP)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 24)
+
   const jobs = pool.slice(offset, offset + limit)
   const res = NextResponse.json({
+    topCompanies,
     jobs,
     total: pool.length,
     hasPass,

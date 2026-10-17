@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { JobPost, FilterState, Sector, WorkType } from '@/types'
 import { keywordMatches, locationMatches } from '@/lib/matchTarget'
+import EmployerStrip, { type StripCompany } from '@/components/EmployerStrip'
 import { captureAttribution } from '@/lib/attribution'
 
 const DEFAULT_FILTERS: FilterState = {
@@ -425,6 +426,7 @@ export default function HomePage() {
       setPreviewCount(data.previewCount ?? 0)
       setPreviewIds(data.previewIds ?? [])
       setLockedJobs(data.lockedJobs ?? [])
+      if (Array.isArray(data.topCompanies)) setTopCompanies(data.topCompanies)
       setLastUpdated(new Date())
       setLoading(false)
 
@@ -613,6 +615,8 @@ export default function HomePage() {
   // Roles the member asked us to watch for, set during onboarding
   const [myTargets, setMyTargets] = useState<{ keyword: string; location: string | null }[]>([])
   const [myFeedOn, setMyFeedOn] = useState(false)
+  // Recognisable employers in the feed right now, for the strip under the hero
+  const [topCompanies, setTopCompanies] = useState<StripCompany[]>([])
   useEffect(() => {
     fetch('/api/targets')
       .then((r) => (r.ok ? r.json() : null))
@@ -1232,6 +1236,16 @@ export default function HomePage() {
       {!hasPass && <div className="offer-wrap">{renderOffer('offer-m')}</div>}
 
       </>)}
+
+      {/* ── Employers in the feed: a slow marquee of recognisable names, each a search ── */}
+      <EmployerStrip
+        companies={topCompanies}
+        onPick={(name) => {
+          setFilters({ ...filters, search: name })
+          track('employer_strip_click', { company: name })
+          document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }}
+      />
 
       {/* ── Signed-in strip: replaces the pitch once someone has an account ── */}
       {userEmail && firstLoad && (
