@@ -54,7 +54,9 @@ export default function EmployerStrip({ companies, onPick }: { companies: StripC
       <style>{`
         /* Aligned to the page column (max-width + side padding match .hero/.layout), one
            compact row: a short label on the left, the marquee filling the rest. */
-        .es { max-width: 1200px; margin: 0 auto; padding: 0 28px; box-sizing: border-box; }
+        /* .ulj .es rather than .es: the page resets margins with ".ulj *", which would
+           otherwise zero the auto margins that centre this like .hero and .layout. */
+        .ulj .es, .es { max-width: 1200px; margin: 0 auto; padding: 0 28px; box-sizing: border-box; }
         .es-inner { height: 48px; box-sizing: border-box; display: flex; align-items: center;
           border-top: 1px solid var(--hairline, #E4DED1); border-bottom: 1px solid var(--hairline, #E4DED1); }
         .es-viewport { position: relative; flex: 1; min-width: 0; height: 30px; overflow: hidden;
@@ -77,7 +79,7 @@ export default function EmployerStrip({ companies, onPick }: { companies: StripC
           .es-row { padding-right: 0; }
         }
         @media (max-width: 760px) {
-          .es { padding: 0 16px; }
+          .ulj .es, .es { padding: 0 16px; }
           .es-inner { height: 44px; }
           .es-row { gap: 26px; padding-right: 26px; }
           .es-mark { font-size: 13px; }
