@@ -1546,6 +1546,11 @@ export default function HomePage() {
                           Verified post
                         </span>
                       )}
+                      {!!job.repost_count && (
+                        <span className="reposts" title="The same role was posted by several recruiters; this is the newest post">
+                          Posted {job.repost_count + 1}×
+                        </span>
+                      )}
                       {job.posted_at && <span className={`ago${isFresh(job.posted_at) ? ' fresh' : ''}`}>{timeAgo(job.posted_at)}</span>}
                     </div>
 
@@ -2090,6 +2095,7 @@ export default function HomePage() {
         .ulj .sec-tag .dot { width: 8px; height: 8px; border-radius: 3px; background: var(--sec); }
         .ulj .verified { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-3); }
         .ulj .verified svg { color: var(--live); }
+        .ulj .reposts { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
         .ulj .ago { margin-left: auto; font: 500 11.5px 'Spline Sans Mono', monospace; color: var(--ink-3); }
         .ulj .ago.fresh { color: var(--live); }
         .ulj .card h3 { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
+import { dedupeReposts, type RepostRow } from '@/lib/dedupeReposts'
 
 // Free visitors see a role only once it is this old. Keep in sync with FREE_DELAY_HOURS in app/page.tsx.
 const FREE_DELAY_HOURS = 48
@@ -226,15 +227,21 @@ export async function GET(req: NextRequest) {
 
   // merge the two caches, dropping duplicates in the overlap
   const seen = new Set<string>()
-  const all: Row[] = []
-  for (const r of recentRows) { seen.add(r.id); all.push(r) }
-  for (const r of oldRows) if (!seen.has(r.id)) all.push(r)
+  const merged: Row[] = []
+  for (const r of recentRows) { seen.add(r.id); merged.push(r) }
+  for (const r of oldRows) if (!seen.has(r.id)) merged.push(r)
+
+  // then fold reposts of the same mandate into their newest post, so every
+  // count below (fresh, today, totals, matches) talks about jobs, not posts
+  const all: Row[] = dedupeReposts(merged as (Row & RepostRow)[])
+  const recentIds = new Set(recentRows.map((r) => r.id))
+  const recentKept = all.filter((r) => recentIds.has(r.id))
 
   // fresh = posted inside the free delay, newest first
-  const fresh = recentRows
+  const fresh = recentKept
     .filter((r) => { const t = ts(r.posted_at); return !isNaN(t) && t >= cutoff })
     .sort((a, b) => ts(b.posted_at) - ts(a.posted_at))
-  const addedToday = recentRows.filter((r) => ts(r.posted_at) >= now - 24 * 3600_000).length
+  const addedToday = recentKept.filter((r) => ts(r.posted_at) >= now - 24 * 3600_000).length
 
   // Free tier: everything older than FREE_DELAY_HOURS, plus FREE_SAMPLE_COUNT fresh roles in full.
   // The next FREE_TITLE_ONLY_COUNT fresh roles go out as a title only (no id, company, link or summary).

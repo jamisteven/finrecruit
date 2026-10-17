@@ -14,6 +14,7 @@ export type JobPost = {
   tags: string[]
   sector: string
   post_url: string
+  repost_count?: number   // other posts of this same role folded into this one
   author_name: string | null
   author_headline: string | null
   author_avatar?: string | null

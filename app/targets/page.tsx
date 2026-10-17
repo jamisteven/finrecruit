@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import RoleInput from '@/components/RoleInput'
+import { isCompoundRole } from '@/lib/splitRole'
 
 type Suggest = { locations: string[]; titles: string[] }
 
@@ -61,6 +62,22 @@ function Targets() {
       .slice(0, 6)
   }, [locInput, sug.locations, locations])
 
+  // "aml,kyc" in one box becomes aml here and kyc in the next empty box
+  const splitRoleAt = (i: number, parts: string[]) => {
+    const next = [...roles]
+    next[i] = parts[0]
+    for (const part of parts.slice(1)) {
+      const empty = next.findIndex((r, idx) => idx > i && !r.trim())
+      if (empty !== -1) next[empty] = part
+      else if (next.length < 3) next.push(part)
+    }
+    if (next.length > 2) setShowThird(true)
+    setRoles(next); setError('')
+  }
+  const emptyAfter = (i: number) => roles.filter((r, idx) => idx > i && !r.trim()).length + (roles.length < 3 ? 3 - roles.length : 0)
+  const compoundIdx = roles.findIndex((r) => isCompoundRole(r))
+  const compoundError = compoundIdx === -1 ? '' : `Role ${compoundIdx + 1} looks like two separate searches — put each in its own box.`
+
   const addRole = (v: string) => {
     const i = roles.findIndex((r) => !r.trim())
     if (i === -1) {
@@ -78,6 +95,7 @@ function Targets() {
 
   const finish = async () => {
     if (filledRoles.length === 0) { setError('Add at least one role'); return }
+    if (compoundError) { setError(compoundError); setStage('roles'); return }
     setStage('saving'); setError('')
     // One target per role x location. No slice here: a 3-role / 3-location
     // save used to be cut to the first three pairs, which were all role 1.
@@ -150,6 +168,8 @@ function Targets() {
               value={r}
               placeholder={i === 0 ? 'Fixed income analyst' : 'e.g. Quantitative developer'}
               onChange={(v) => { setRoles((prev) => prev.map((x, idx) => (idx === i ? v : x))); setError('') }}
+              onSplit={(parts) => splitRoleAt(i, parts)}
+              slotsLeft={emptyAfter(i)}
             />
           </div>
         ))}
@@ -183,6 +203,7 @@ function Targets() {
         <span className="fine">You can change these any time.</span>
         <button className="btn" onClick={() => {
           if (filledRoles.length === 0) { setError('Add at least one role'); return }
+          if (compoundError) { setError(compoundError); return }
           setStage('location')
         }}>Continue to location →</button>
       </div>

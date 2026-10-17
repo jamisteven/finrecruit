@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { splitRole } from '@/lib/splitRole'
 
 export const runtime = 'nodejs'
 
@@ -62,20 +63,6 @@ async function loadPhrases(): Promise<Phrase[]> {
   return phrases
 }
 
-/** Separators almost always mean "or" — except where they're part of a name. */
-const KEEP_WHOLE = new Set(['c#/.net', 'c#/vb.net', 'ci/cd', 'r&d', 'p&l', 'a/b'])
-
-function splitCandidates(raw: string): string[] {
-  const t = raw.trim()
-  if (!t) return []
-  if (KEEP_WHOLE.has(t.toLowerCase())) return [t]
-  if (!/[/,&]|\bor\b/i.test(t)) return [t]
-  return t
-    .split(/\s*(?:[/,&]|\bor\b)\s*/i)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 1)
-}
-
 export async function GET(req: NextRequest) {
   try {
     const qRaw = (new URL(req.url).searchParams.get('q') ?? '').trim()
@@ -98,7 +85,7 @@ export async function GET(req: NextRequest) {
       .slice(0, 8)
 
     // If they've typed several roles in one box, offer each separately
-    const parts = splitCandidates(qRaw)
+    const parts = splitRole(qRaw)
     const multi = parts.length > 1 ? parts : []
 
     return NextResponse.json({ suggestions: hits, parts: multi })
