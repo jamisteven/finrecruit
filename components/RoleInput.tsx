@@ -194,12 +194,16 @@ const STYLE = `
   .role-sug-own { color: #2F55D4; }
   .role-sug-own:not(:first-child) { margin-top: 4px; border-top: 1px solid #EFEAE0; border-radius: 0 0 8px 8px; }
   .role-pill-box { display: flex; align-items: center; cursor: text; }
+  /* A chosen role is a token, not a call to action: a light wash of the brand
+     blue with dark text, so it reads as settled and leaves the strong fill to
+     the Continue button. */
   .role-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 34px; padding: 0 6px 0 14px;
-    border-radius: 999px; background: #2F55D4; color: #fff; font-size: 15px; font-weight: 500; line-height: 1; }
+    border-radius: 999px; background: #E9EFFC; border: 1px solid #C7D4F5; color: #1E3796;
+    font-size: 15px; font-weight: 500; line-height: 1; }
   .role-pill-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .role-pill-x { flex: none; width: 24px; height: 24px; border: 0; border-radius: 999px; background: rgba(255,255,255,.22);
-    color: #fff; font-size: 16px; line-height: 1; cursor: pointer; padding: 0; }
-  .role-pill-x:hover { background: rgba(255,255,255,.38); }
+  .role-pill-x { flex: none; width: 24px; height: 24px; border: 0; border-radius: 999px; background: transparent;
+    color: #4A5FAE; font-size: 16px; line-height: 1; cursor: pointer; padding: 0; }
+  .role-pill-x:hover { background: #C7D4F5; color: #1E3796; }
   .role-compound { border-color: #B8860B !important; }
   .role-split { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: #FBF4E4; border: 1px solid #EAD9A8;
     font-size: 13px; color: #5A4A1E; line-height: 1.45; }
