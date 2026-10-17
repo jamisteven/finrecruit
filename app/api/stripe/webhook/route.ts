@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createServerClient } from '@/lib/supabase'
-import { distilForQuery } from '@/lib/matchTarget'
+import { releaseTargets } from '@/lib/targetQueries'
 
 export const runtime = 'nodejs'
 
@@ -150,17 +150,7 @@ export async function POST(req: NextRequest) {
         const { data: theirs } = await db.from('user_targets')
           .select('keyword, location').eq('user_id', prof.id)
 
-        for (const t of theirs ?? []) {
-          const k = distilForQuery(String(t.keyword).trim())
-          const queryText = t.location ? `hiring ${k} ${t.location}` : `hiring ${k}`
-          const { data: pq } = await db.from('priority_queries')
-            .select('id, user_count').eq('query', queryText).maybeSingle()
-          if (!pq) continue
-          const next = Math.max(0, (pq.user_count as number) - 1)
-          await db.from('priority_queries')
-            .update({ user_count: next, active: next > 0 })
-            .eq('id', pq.id)
-        }
+        await releaseTargets(db, (theirs ?? []) as { keyword: string; location: string | null }[])
 
         await db.from('user_targets').delete().eq('user_id', prof.id)
         console.log('[stripe] released searches for', prof.id)

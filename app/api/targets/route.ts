@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
 import { normaliseKeyword } from '@/lib/normaliseKeyword'
-import { wideningLadder } from '@/lib/widenLocation'
 import { distilForQuery } from '@/lib/matchTarget'
+import { claimQuery, releaseTargets, widerLocation } from '@/lib/targetQueries'
 
 export const runtime = 'nodejs'
 
@@ -68,17 +68,7 @@ export async function POST(req: NextRequest) {
     const dropped = (priorTargets ?? []).filter(
       (t) => !keepKeys.has(`${t.keyword}|${t.location ?? ''}`))
 
-    for (const t of dropped) {
-      const qk = distilForQuery(String(t.keyword))
-      const queryText = t.location ? `hiring ${qk} ${t.location}` : `hiring ${qk}`
-      const { data: pq } = await db.from('priority_queries')
-        .select('id, user_count').eq('query', queryText).maybeSingle()
-      if (!pq) continue
-      const next = Math.max(0, (pq.user_count as number) - 1)
-      await db.from('priority_queries')
-        .update({ user_count: next, active: next > 0 })
-        .eq('id', pq.id)
-    }
+    await releaseTargets(db, dropped as { keyword: string; location: string | null }[])
 
     // Plain delete + insert instead of upsert: a NULL location never matches
     // the unique index, so ignoreDuplicates couldn't dedupe those rows anyway.
@@ -103,6 +93,8 @@ export async function POST(req: NextRequest) {
     const added: string[] = []
     const widened: string[] = []
     const covered: string[] = []
+    const claimedWide = new Set<string>()
+    const toRun: string[] = []   // the exact query texts to kick off now
     let queued = 0
 
     for (const p of ordered) {
@@ -127,60 +119,38 @@ export async function POST(req: NextRequest) {
         ? `hiring ${qKeyword} ${p.location}`
         : `hiring ${qKeyword}`
 
-      const { data: existing } = await db.from('priority_queries')
-        .select('id, user_count').eq('query', queryText).maybeSingle()
-
       // Someone re-saving the same target shouldn't bump the shared counter
       // (it drives retirement) or trigger another Apify run.
       const isNewForUser = !hadBefore.has(`${p.keyword}|${p.location ?? ''}`)
-
-      if (existing) {
-        if (isNewForUser) {
-          await db.from('priority_queries')
-            .update({ user_count: (existing.user_count as number) + 1, active: true })
-            .eq('id', existing.id)
-        }
-      } else {
-        await db.from('priority_queries')
-          .insert({ query: queryText, keyword: p.keyword, location: p.location })
-      }
-      if (!existing || isNewForUser) { added.push(label); queued++ }
+      const existed = await claimQuery(db, queryText, p.keyword, p.location, isNewForUser)
+      if (!existed || isNewForUser) { added.push(label); toRun.push(queryText); queued++ }
       else covered.push(label)
 
       // The city they asked for is thin, so also watch the surrounding region.
       // Someone wanting ".net engineer" in San Jose gets California too, rather
       // than an empty tab while the roles sit in New York.
       if (p.location && (count ?? 0) < 5) {
-        const wider = wideningLadder(p.location)[1]
-        if (wider?.location && wider.location.toLowerCase() !== p.location.toLowerCase()) {
-          const wideText = `hiring ${qKeyword} ${wider.location}`
-          const { data: existingWide } = await db.from('priority_queries')
-            .select('id, user_count').eq('query', wideText).maybeSingle()
-          if (existingWide) {
-            await db.from('priority_queries')
-              .update({ user_count: (existingWide.user_count as number) + 1, active: true })
-              .eq('id', existingWide.id)
-          } else {
-            await db.from('priority_queries')
-              .insert({ query: wideText, keyword: p.keyword, location: wider.location })
-          }
-          widened.push(`${p.keyword} / ${wider.location}`)
+        const wider = widerLocation(p.location)
+        if (wider) {
+          const wideText = `hiring ${qKeyword} ${wider}`
+          // One claim per member per region, however many of their cities widen to it
+          const wideKey = `${p.keyword}|${wider}`
+          const isNewWide = isNewForUser && !claimedWide.has(wideKey)
+          claimedWide.add(wideKey)
+          const existedWide = await claimQuery(db, wideText, p.keyword, wider, isNewWide)
+          if (!existedWide || isNewWide) { widened.push(`${p.keyword} / ${wider}`); toRun.push(wideText) }
         }
       }
     }
 
     // Kick the new queries off now rather than waiting for the rotation, so a
     // user who just paid sees results within minutes. Fire and forget.
-    if (added.length + widened.length > 0) {
+    if (toRun.length > 0) {
       const origin = new URL(req.url).origin
-      const queries = [...added, ...widened].map((label) => {
-        const [k, l] = label.split(' / ')
-        return l ? `hiring ${k} ${l}` : `hiring ${k}`
-      })
       fetch(`${origin}/api/run-priority`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-ingest-secret': process.env.INGEST_SECRET ?? '' },
-        body: JSON.stringify({ queries }),
+        body: JSON.stringify({ queries: toRun }),
       }).catch(() => {})
     }
 
@@ -226,17 +196,8 @@ export async function DELETE() {
     const { data: mine } = await db.from('user_targets')
       .select('keyword, location').eq('user_id', user.id)
 
-    for (const t of mine ?? []) {
-      const qk = distilForQuery(String(t.keyword))
-      const queryText = t.location ? `hiring ${qk} ${t.location}` : `hiring ${qk}`
-      const { data: pq } = await db.from('priority_queries')
-        .select('id, user_count').eq('query', queryText).maybeSingle()
-      if (!pq) continue
-      const next = (pq.user_count as number) - 1
-      await db.from('priority_queries')
-        .update({ user_count: Math.max(0, next), active: next > 0 })
-        .eq('id', pq.id)
-    }
+    const { releaseTargets } = await import('@/lib/targetQueries')
+    await releaseTargets(db, (mine ?? []) as { keyword: string; location: string | null }[])
 
     await db.from('user_targets').delete().eq('user_id', user.id)
     return Response.json({ ok: true })

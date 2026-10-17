@@ -49,16 +49,12 @@ create table if not exists subscriptions (
   created_at       timestamptz not null default now()
 );
 
--- RLS: public read access on jobs (so the UI works without auth)
+-- RLS: no client-side table access at all. The app reads and writes every
+-- table through API routes with the service-role key (which bypasses RLS);
+-- the browser uses the anon key only to sign in. See 2026-10-17-lockdown.sql
+-- for the full lockdown, which also revokes the anon/authenticated grants.
 alter table jobs enable row level security;
-create policy "Public can read jobs"
-  on jobs for select
-  using (true);
-
--- RLS: only service role can insert/update jobs (ingest API uses service role key)
-create policy "Service role can insert jobs"
-  on jobs for insert
-  with check (true);  -- enforced via service role key, not per-row
+alter table jobs force row level security;
 
 -- =============================================
 -- Sample data to test the UI immediately

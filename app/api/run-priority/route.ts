@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}))
   if (Array.isArray(body.queries) && body.queries.length) {
-    batch = body.queries.slice(0, 3).map(String)
+    batch = body.queries.slice(0, 6).map(String)   // same ceiling as the cron batch below
   } else {
     // Cron path: anything active that hasn't run in the last 12 hours
     const { data } = await db.from('priority_queries')
