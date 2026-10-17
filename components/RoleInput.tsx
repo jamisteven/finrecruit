@@ -54,7 +54,7 @@ export default function RoleInput({ value, onChange, onSplit, placeholder, class
         .then((r) => r.json())
         .then((d) => {
           const hits: Suggestion[] = d?.suggestions ?? []
-          setList(hits); setIdx(-1); setOpen(hits.length > 0)
+          setList(hits); setIdx(-1); setOpen(true)
         })
         .catch(() => {})
     }, 150)
@@ -71,7 +71,8 @@ export default function RoleInput({ value, onChange, onSplit, placeholder, class
   }, [])
 
   const commit = (v: string) => {
-    const t = v.trim()
+    const known = list.find((s) => s.phrase === v.trim().toLowerCase())
+    const t = (known?.display ?? v).trim()
     setTyped(t)
     setPicked(t)
     onChange(t)
@@ -129,15 +130,20 @@ export default function RoleInput({ value, onChange, onSplit, placeholder, class
         onBlur={() => { if (value.trim() && !compound) commit(value) }}
         onKeyDown={(e) => {
           if (e.key === 'Escape') { setOpen(false); return }
-          if (open && !compound && list.length > 0) {
-            if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(i + 1, list.length - 1)); return }
+          if (open && !compound) {
+            const last = list.some((s) => s.phrase === value.trim().toLowerCase()) ? list.length - 1 : list.length
+            if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(i + 1, last)); return }
             if (e.key === 'ArrowUp') { e.preventDefault(); setIdx((i) => Math.max(i - 1, -1)); return }
-            if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); commit(list[idx].display ?? list[idx].phrase); return }
+            if (e.key === 'Enter' && idx >= 0) {
+              e.preventDefault()
+              commit(idx < list.length ? (list[idx].display ?? list[idx].phrase) : value)
+              return
+            }
           }
           if (e.key === 'Enter' && value.trim()) { e.preventDefault(); if (!compound) commit(value) }
         }}
       />
-      {open && !compound && value.trim().length >= 2 && list.length > 0 && (
+      {open && !compound && value.trim().length >= 2 && (
         <ul className="role-sug" role="listbox">
           {list.map((s, i) => (
             <li key={s.phrase} role="option" aria-selected={i === idx} className={i === idx ? 'on' : ''}
@@ -146,6 +152,13 @@ export default function RoleInput({ value, onChange, onSplit, placeholder, class
               <span className="role-sug-n">{s.count} {s.count === 1 ? 'role' : 'roles'}</span>
             </li>
           ))}
+          {!list.some((s) => s.phrase === value.trim().toLowerCase()) && (
+            <li role="option" aria-selected={idx === list.length} className={`role-sug-own${idx === list.length ? ' on' : ''}`}
+                onMouseDown={(e) => { e.preventDefault(); commit(value) }}>
+              <span className="role-sug-t">Use &ldquo;{value.trim()}&rdquo;</span>
+              <span className="role-sug-n">{list.length ? 'as typed' : 'new — we\u2019ll start searching for it'}</span>
+            </li>
+          )}
         </ul>
       )}
       {compound && (
@@ -178,13 +191,15 @@ const STYLE = `
     padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 15px; color: #1C1B19; }
   .role-sug li:hover, .role-sug li.on { background: #F6F2EA; }
   .role-sug-n { flex: none; font-size: 12px; color: #8A8378; font-variant-numeric: tabular-nums; }
+  .role-sug-own { color: #2F55D4; }
+  .role-sug-own:not(:first-child) { margin-top: 4px; border-top: 1px solid #EFEAE0; border-radius: 0 0 8px 8px; }
   .role-pill-box { display: flex; align-items: center; cursor: text; }
   .role-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 34px; padding: 0 6px 0 14px;
-    border-radius: 999px; background: #1C1B19; color: #fff; font-size: 15px; font-weight: 500; line-height: 1; }
+    border-radius: 999px; background: #2F55D4; color: #fff; font-size: 15px; font-weight: 500; line-height: 1; }
   .role-pill-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .role-pill-x { flex: none; width: 24px; height: 24px; border: 0; border-radius: 999px; background: rgba(255,255,255,.14);
+  .role-pill-x { flex: none; width: 24px; height: 24px; border: 0; border-radius: 999px; background: rgba(255,255,255,.22);
     color: #fff; font-size: 16px; line-height: 1; cursor: pointer; padding: 0; }
-  .role-pill-x:hover { background: rgba(255,255,255,.28); }
+  .role-pill-x:hover { background: rgba(255,255,255,.38); }
   .role-compound { border-color: #B8860B !important; }
   .role-split { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: #FBF4E4; border: 1px solid #EAD9A8;
     font-size: 13px; color: #5A4A1E; line-height: 1.45; }
