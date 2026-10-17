@@ -79,9 +79,9 @@ export default function PricingPage() {
       <style>{`
         html, body { background: #F6F3EC; margin: 0; }
         .pricing { max-width: 720px; margin: 0 auto; padding: 48px 22px 70px;
-          font-family: 'Inter', system-ui, sans-serif; color: #191713; min-height: 100vh; }
+          font-family: var(--font-inter), system-ui, sans-serif; color: #191713; min-height: 100vh; }
         .pricing .back { font-size: 13px; color: #6B6862; text-decoration: none; }
-        .pricing h1 { font-family: 'Fraunces', Georgia, serif; font-size: 31px; font-weight: 500;
+        .pricing h1 { font-family: var(--font-fraunces), Georgia, serif; font-size: 31px; font-weight: 500;
           line-height: 1.2; margin: 26px 0 10px; }
         .pricing .lede { font-size: 14.5px; line-height: 1.65; color: #57544E; margin: 0 0 32px; max-width: 54ch; }
         .pricing .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); gap: 14px; }
@@ -90,12 +90,12 @@ export default function PricingPage() {
         .pricing .tier-head { display: flex; justify-content: space-between; align-items: center; }
         .pricing .tier-name { font-size: 14px; }
         .pricing .chip { font-size: 10.5px; background: #EFEAE0; color: #6B6862; padding: 3px 9px; border-radius: 9px; }
-        .pricing .tier-price { font-family: 'Fraunces', Georgia, serif; font-size: 27px; margin: 4px 0 14px; }
+        .pricing .tier-price { font-family: var(--font-fraunces), Georgia, serif; font-size: 27px; margin: 4px 0 14px; }
         .pricing ul { list-style: none; padding: 0; margin: 0 0 18px; }
         .pricing li { font-size: 13px; color: #57544E; padding: 5px 0 5px 17px; position: relative; }
         .pricing li::before { content: '·'; position: absolute; left: 4px; color: #9A958C; }
         .pricing button, .pricing .btn { display: block; width: 100%; text-align: center;
-          background: #191713; color: #F6F3EC; border: none; font: 500 13.5px 'Inter', sans-serif;
+          background: #191713; color: #F6F3EC; border: none; font: 500 13.5px var(--font-inter), sans-serif;
           padding: 11px; border-radius: 9px; cursor: pointer; text-decoration: none; }
         .pricing button:disabled { opacity: 0.6; cursor: default; }
         .pricing .state { font-size: 13px; color: #1D6B4F; text-align: center; padding: 11px; }

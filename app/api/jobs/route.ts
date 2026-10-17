@@ -208,6 +208,43 @@ export async function GET(req: NextRequest) {
     } catch { return out(0) }
   }
 
+  // The offer page's pitch: which fresh roles, matching what this visitor last searched, are they
+  // not seeing? Title, location and age only — the same fields the locked cards already show free
+  // visitors — never company, summary, recruiter or link. The free samples are excluded since the
+  // visitor can already open those.
+  if (searchParams.get('withheld') === '1') {
+    const out = (body: unknown) => {
+      const r = NextResponse.json(body)
+      r.headers.set('Cache-Control', 'private, max-age=60')
+      return r
+    }
+    if (hasPass) return out({ roles: [], matched: 0, total: 0 })
+    try {
+      const rows = await loadRecent()
+      const cut = Date.now() - FREE_DELAY_MS
+      const fresh = rows
+        .filter((r) => { const t = ts(r.posted_at); return !isNaN(t) && t >= cut })
+        .sort((a, b) => ts(b.posted_at) - ts(a.posted_at))
+      const samples = new Set(fresh.slice(0, FREE_SAMPLE_COUNT).map((r) => r.id as string))
+      const pool = fresh.filter((r) => !samples.has(r.id as string))
+      const q = (searchParams.get('q') ?? '').trim()
+      const locs = (searchParams.get('loc') ?? '').split('|').map((l) => l.trim().toLowerCase()).filter(Boolean)
+      const tokens = q ? tokenize(q) : []
+      let matched = pool
+      if (tokens.length) matched = matched.filter((r) => matchesSearch(r, tokens))
+      if (locs.length) matched = matched.filter((r) => locs.some((l) => String(r.location ?? '').toLowerCase().includes(l)))
+      if (sector && sector !== 'all') matched = matched.filter((r) => r.sector === sector)
+      const strip = (r: Row) => ({ title: r.title, location: r.location ?? null, sector: r.sector ?? null, posted_at: r.posted_at ?? null })
+      return out({
+        roles: matched.slice(0, 5).map(strip),
+        matched: matched.length,
+        total: pool.length,
+        // when the search matched nothing fresh, the newest overall still make the point
+        fallback: matched.length === 0 ? pool.slice(0, 3).map(strip) : [],
+      })
+    } catch { return out({ roles: [], matched: 0, total: 0, fallback: [] }) }
+  }
+
   let oldRows: Row[], recentRows: Row[]
   try {
     if (archive) {

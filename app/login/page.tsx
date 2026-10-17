@@ -132,22 +132,21 @@ export default function LoginPage() {
       </main>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
         /* This page is always light, whatever the browser theme */
         html, body { background: #F5F2EB; }
         .lg { --page:#F5F2EB; --surface:#FDFCFA; --ink:#191713; --ink-2:#5C574D; --ink-3:#97907E; --hair:#E4DFD2; --hair-2:#D8D2C2;
           --navy:#14213D; --cta:#2F6BF2; --cta-h:#2458D4; --accent:#24468f; --accent-soft:#E4EAF6; --bad:#B3402A;
           color-scheme: light; min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: 1fr 1fr;
-          background: var(--page); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+          background: var(--page); color: var(--ink); font-family: var(--font-inter), system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
         .lg *, .lg *::before, .lg *::after { box-sizing: border-box; }
 
         /* Brand panel */
         .lg-brand { position: relative; overflow: hidden; background: var(--navy); color: #F3F1EA; padding: 40px 48px; display: flex; flex-direction: column; }
         .lg-brand::after { content: ''; position: absolute; right: -140px; bottom: -140px; width: 420px; height: 420px; border-radius: 50%; background: radial-gradient(circle, rgba(47,107,242,.35), transparent 70%); pointer-events: none; }
-        .lg-wm { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 9px; font-family: 'Fraunces', Georgia, serif; font-weight: 600; font-size: 20px; color: inherit; text-decoration: none; }
+        .lg-wm { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 9px; font-family: var(--font-fraunces), Georgia, serif; font-weight: 600; font-size: 20px; color: inherit; text-decoration: none; }
         .lg-wm em { font-style: normal; font-weight: 400; opacity: .6; }
         .lg-mk { width: 28px; height: 28px; border-radius: 8px; background: #F3F1EA; color: var(--navy); display: grid; place-items: center; font-size: 16px; }
-        .lg-brand h2 { position: relative; z-index: 1; font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(36px, 3.6vw, 48px); line-height: 1.06; letter-spacing: -.02em; margin: auto 0; max-width: 460px; }
+        .lg-brand h2 { position: relative; z-index: 1; font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: clamp(36px, 3.6vw, 48px); line-height: 1.06; letter-spacing: -.02em; margin: auto 0; max-width: 460px; }
         .lg-brand h2 em { font-style: italic; font-weight: 400; color: #9FB8F5; }
 
         /* Form side */
@@ -155,7 +154,7 @@ export default function LoginPage() {
         .lg-back { align-self: flex-end; font-size: 14px; color: var(--ink-2); text-decoration: none; }
         .lg-back:hover { color: var(--ink); }
         .lg-card { margin: auto; width: 100%; max-width: 380px; padding: 24px 0; }
-        .lg h1 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 32px; letter-spacing: -.02em; margin: 0 0 8px; }
+        .lg h1 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 32px; letter-spacing: -.02em; margin: 0 0 8px; }
         .lg-sub { color: var(--ink-2); font-size: 15px; line-height: 1.5; margin: 0 0 24px; }
         .lg-sub-tight { margin-bottom: 12px; }
         .lg label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }

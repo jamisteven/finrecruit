@@ -356,7 +356,7 @@ export default function HomePage() {
       return searchTerms.every(({ tok, phrases }) => tags.has(tok) || phrases.some((ph) => hay.includes(ph)))
     })
   }, [rawJobs, searchIndex, searchTerms])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)   // skeletons from the first paint, not after the first fetch starts
   const [visibleCount, setVisibleCount] = useState(150)
   const [hasPass, setHasPass] = useState(false)
   const [withheld, setWithheld] = useState(0)
@@ -713,10 +713,21 @@ export default function HomePage() {
   }, [displayJobs.length, allJobs, filters.sector, filters.locations, filters.workTypes])
 
   // Log settled filter states — not every keystroke, and not the default view
+  // The count is read through a ref so a feed refresh (the drop-time auto-reload
+  // below) doesn't re-log the same search: a tab left open during a drop used
+  // to record one "search" per sector slot, which made idle tabs look like bots.
+  const resultCountRef = useRef(0)
+  useEffect(() => { resultCountRef.current = displayJobs.length }, [displayJobs.length])
   useEffect(() => {
     const active = filters.search || filters.sector !== 'all'
       || filters.locations.length > 0 || filters.workTypes.length > 0
-    if (!active) return
+    if (!active) { try { localStorage.removeItem('bcj_last_search') } catch {} ; return }
+    // The offer page reads this to show the fresh roles matching what they were just looking at
+    try {
+      localStorage.setItem('bcj_last_search', JSON.stringify({
+        q: filters.search, sector: filters.sector, locations: filters.locations, at: Date.now(),
+      }))
+    } catch { /* storage may be unavailable */ }
     // Logging before the archive lands records counts against a partial array
     if (!archiveDone) return
     const t = setTimeout(() => {
@@ -729,12 +740,12 @@ export default function HomePage() {
           sector: filters.sector,
           locations: filters.locations,
           work_types: filters.workTypes,
-          result_count: displayJobs.length,
+          result_count: resultCountRef.current,
         }),
       }).catch(() => {})
     }, 1200)
     return () => clearTimeout(t)
-  }, [filters.search, filters.sector, filters.locations, filters.workTypes, displayJobs.length, archiveDone])
+  }, [filters.search, filters.sector, filters.locations, filters.workTypes, archiveDone])
 
   // Until the older roles are downloaded, add the server's count of them so the totals cover the whole month
   const olderPending = archiveCounts && !archiveDone ? archiveCounts : null
@@ -1380,8 +1391,13 @@ export default function HomePage() {
               <b>{headlineCount.toLocaleString()}</b> {headlineCount === 1 ? 'role' : 'roles'}
               {filters.sector !== 'all' && ` in ${sectorLabel(filters.sector)}`}
             </span>
+            {/* People tap this badge. For a free visitor the answer to "which ones?" is the offer page. */}
             {!anyFilter && addedToday > 0 && (
-              <span className="new-today"><span className="nd" />{addedToday} new today</span>
+              hasPass
+                ? <span className="new-today"><span className="nd" />{addedToday} new today</span>
+                : <a className="new-today" href="/offer?src=new_today" onClick={() => track('cta_click', { where: 'new_today' })}>
+                    <span className="nd" />{addedToday} new today
+                  </a>
             )}
             {anyFilter && <button className="clear" onClick={resetAll}>Reset filters</button>}
             {myTargets.length > 0 && (
@@ -1405,6 +1421,9 @@ export default function HomePage() {
             <div className="dym">Showing results for <b>{searchTerms.map((t) => t.fixed ?? t.tok).join(' ')}</b></div>
           )}
 
+          {/* The clock only exists after mount; an empty bar of the same height holds its
+              place so the feed doesn't jump down when it appears. */}
+          {!press && <div className="press press-ph" aria-hidden="true" />}
           {press && (
             <div className={`press${press.cls}`}>
               {press.barW !== null && <div className="bar" style={{ width: `${press.barW}%` }} />}
@@ -1634,7 +1653,6 @@ export default function HomePage() {
       <style>{`
         /* Roman only, no italic file — the em italics render as a synthetic slant
            of the roman, which is calmer than Fraunces' real (very calligraphic) italic. */
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&family=Caveat:wght@600&display=swap');
 
         .ulj {
           /* light theme */
@@ -1699,13 +1717,13 @@ export default function HomePage() {
           min-height: 100vh;
           background: var(--page);
           color: var(--ink);
-          font-family: 'Inter', system-ui, sans-serif;
+          font-family: var(--font-inter), system-ui, sans-serif;
           font-size: 14px;
           line-height: 1.5;
           transition: background .25s, color .25s;
           -webkit-font-smoothing: antialiased;
         }
-        .ulj .mono { font-family: 'Spline Sans Mono', ui-monospace, monospace; }
+        .ulj .mono { font-family: var(--font-spline-mono), ui-monospace, monospace; }
         .ulj button { font-family: inherit; }
 
         /* ── Masthead ── */
@@ -1720,7 +1738,7 @@ export default function HomePage() {
           height: 60px; display: flex; align-items: center; gap: 20px;
         }
         .ulj .wordmark {
-          font-family: 'Fraunces', Georgia, serif; font-size: 21px; font-weight: 600;
+          font-family: var(--font-fraunces), Georgia, serif; font-size: 21px; font-weight: 600;
           letter-spacing: -0.02em; white-space: nowrap; text-decoration: none; color: var(--ink);
         }
         .ulj .wordmark em { font-style: italic; font-weight: 400; color: var(--ink-2); }
@@ -1737,7 +1755,7 @@ export default function HomePage() {
           width: 100%; height: 38px; padding: 0 40px 0 36px;
           background: var(--surface); color: var(--ink);
           border: 1px solid var(--hairline-2); border-radius: 10px;
-          font: 500 13.5px 'Inter', sans-serif; outline: none;
+          font: 500 13.5px var(--font-inter), sans-serif; outline: none;
           transition: border-color .15s, box-shadow .15s;
         }
         .ulj .search::placeholder { color: var(--ink-3); }
@@ -1758,7 +1776,7 @@ export default function HomePage() {
         .ulj .refresh-btn {
           height: 36px; padding: 0 16px; display: flex; align-items: center; gap: 8px;
           background: var(--surface); color: var(--ink-2); border: 1px solid var(--hairline-2); border-radius: 10px;
-          font: 600 12.5px 'Inter', sans-serif; cursor: pointer; transition: .15s;
+          font: 600 12.5px var(--font-inter), sans-serif; cursor: pointer; transition: .15s;
         }
         .ulj .refresh-btn:hover { color: var(--ink); border-color: var(--ink-3); }
         .ulj .refresh-btn:disabled { cursor: not-allowed; opacity: .7; }
@@ -1776,7 +1794,7 @@ export default function HomePage() {
         .ulj .hero-copy > .promises { margin-top: auto; }
         @media (max-width: 900px) { .ulj .hero-copy > h1, .ulj .hero-copy > .promises { margin-top: 0; } }
         .ulj .hero h1 {
-          font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(38px, 5.4vw, 64px);
+          font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: clamp(38px, 5.4vw, 64px);
           line-height: 1.04; letter-spacing: -0.025em; margin-bottom: 18px;
         }
         .ulj .hero h1 em { font-style: italic; font-weight: 400; }
@@ -1833,15 +1851,15 @@ export default function HomePage() {
         .ulj .art-h { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
         .ulj .art-h b { display: block; font-size: 14px; line-height: 1.2; }
         .ulj .art-h small { display: block; font-size: 12px; color: var(--ink-2); }
-        .ulj .art .li { width: 30px; height: 30px; border-radius: 6px; background: #0A66C2; color: #fff; display: grid; place-items: center; font: 700 15px 'Inter', sans-serif; flex: none; }
+        .ulj .art .li { width: 30px; height: 30px; border-radius: 6px; background: #0A66C2; color: #fff; display: grid; place-items: center; font: 700 15px var(--font-inter), sans-serif; flex: none; }
         .ulj .art-post p { font-size: 13.5px; color: var(--ink-2); }
-        .ulj .art-note { position: absolute; z-index: 3; top: 2px; right: 0; width: 31%; display: flex; flex-direction: column; font: 600 22px/1.02 'Caveat', 'Segoe Print', 'Bradley Hand', cursive; color: var(--ink); transform: rotate(-4deg); transform-origin: left center; }
+        .ulj .art-note { position: absolute; z-index: 3; top: 2px; right: 0; width: 31%; display: flex; flex-direction: column; font: 600 22px/1.02 var(--font-caveat), 'Segoe Print', 'Bradley Hand', cursive; color: var(--ink); transform: rotate(-4deg); transform-origin: left center; }
         .ulj .art-note svg { width: 54px; height: 36px; margin: 0 0 2px -34px; }
         .ulj .art-role { position: relative; z-index: 1; margin-top: -12px; background: var(--surface); border: 1px solid var(--hairline); border-radius: 16px; padding: 30px 20px 18px; box-shadow: var(--shadow-lift); }
         .ulj .art-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .ulj .art .new { font: 600 12px 'Inter', sans-serif; padding: 3px 10px; border-radius: 999px; background: var(--live-soft); color: var(--live); }
-        .ulj .art-eg { font: 500 11px 'Spline Sans Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
-        .ulj .art-role h3 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.15; letter-spacing: -.01em; margin-bottom: 4px; }
+        .ulj .art .new { font: 600 12px var(--font-inter), sans-serif; padding: 3px 10px; border-radius: 999px; background: var(--live-soft); color: var(--live); }
+        .ulj .art-eg { font: 500 11px var(--font-spline-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+        .ulj .art-role h3 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.15; letter-spacing: -.01em; margin-bottom: 4px; }
         .ulj .art-meta { font-size: 14px; color: var(--ink-2); }
         .ulj .art-facts { list-style: none; padding: 0; margin: 12px 0 10px; display: grid; gap: 2px; font-size: 13.5px; color: var(--ink-2); }
         .ulj .art-quote { font-size: 13.5px; }
@@ -1854,7 +1872,7 @@ export default function HomePage() {
           display: inline-flex; align-items: center; justify-content: center; gap: 8px;
           height: 38px; padding: 0 16px; border-radius: 10px; white-space: nowrap;
           background: var(--cta); color: var(--cta-fg); border: 1px solid var(--cta);
-          font: 600 13.5px 'Inter', sans-serif; text-decoration: none; cursor: pointer;
+          font: 600 13.5px var(--font-inter), sans-serif; text-decoration: none; cursor: pointer;
           box-shadow: 0 4px 14px color-mix(in srgb, var(--cta) 32%, transparent);
           transition: background .12s, border-color .12s;
         }
@@ -1868,7 +1886,7 @@ export default function HomePage() {
           display: inline-flex; align-items: center; justify-content: center; gap: 8px;
           height: 38px; padding: 0 16px; border-radius: 10px; white-space: nowrap;
           background: transparent; color: var(--ink); border: 1.5px solid var(--line-strong);
-          font: 500 13.5px 'Inter', sans-serif; text-decoration: none; cursor: pointer; transition: .12s;
+          font: 500 13.5px var(--font-inter), sans-serif; text-decoration: none; cursor: pointer; transition: .12s;
         }
         .ulj .btn-ghost:hover { background: var(--surface-2); border-color: var(--ink); }
         .ulj .btn-ghost.lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
@@ -1904,18 +1922,18 @@ export default function HomePage() {
           display: flex; align-items: center; gap: 10px;
           padding: 8px 10px; margin: 1px -10px; width: calc(100% + 20px);
           background: none; border: none; border-radius: 8px;
-          font: 500 13.5px 'Inter', sans-serif; color: var(--ink-2);
+          font: 500 13.5px var(--font-inter), sans-serif; color: var(--ink-2);
           cursor: pointer; text-align: left; transition: .12s;
         }
         .ulj .sector-row:hover { background: var(--surface-2); color: var(--ink); }
         .ulj .sector-row.active { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--ink); font-weight: 600; }
         .ulj .sector-row .dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; background: var(--dot, var(--ink-3)); }
-                .ulj .sector-row .cnt { margin-left: auto; font: 500 11.5px 'Spline Sans Mono', monospace; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+                .ulj .sector-row .cnt { margin-left: auto; font: 500 11.5px var(--font-spline-mono), monospace; color: var(--ink-3); font-variant-numeric: tabular-nums; }
         .ulj .sector-row.active .cnt { color: var(--ink); }
         .ulj .check-row {
           display: flex; align-items: center; gap: 10px; padding: 7px 0;
           background: none; border: none; width: 100%; cursor: pointer; text-align: left;
-          font: 500 13.5px 'Inter', sans-serif; color: var(--ink-2); transition: color .12s;
+          font: 500 13.5px var(--font-inter), sans-serif; color: var(--ink-2); transition: color .12s;
         }
         .ulj .check-row:hover { color: var(--ink); }
         .ulj .check-row .box {
@@ -1929,18 +1947,18 @@ export default function HomePage() {
         .ulj .chip {
           padding: 5px 11px; border-radius: 999px; cursor: pointer;
           background: var(--surface); border: 1px solid var(--hairline-2);
-          font: 500 12px 'Inter', sans-serif; color: var(--ink-2); transition: .12s;
+          font: 500 12px var(--font-inter), sans-serif; color: var(--ink-2); transition: .12s;
         }
         .ulj .chip:hover { border-color: var(--ink-3); color: var(--ink); }
         .ulj .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
-        .ulj .chip .n { margin-left: 6px; font: 500 10.5px 'Spline Sans Mono', monospace; color: var(--ink-3); }
+        .ulj .chip .n { margin-left: 6px; font: 500 10.5px var(--font-spline-mono), monospace; color: var(--ink-3); }
         .ulj .chip.on .n { color: var(--ink-2); }
         .ulj .chips.regions { padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px dashed var(--hairline); }
         .ulj .loc-search {
           width: 100%; height: 30px; padding: 0 10px; margin-bottom: 8px;
           background: var(--surface); color: var(--ink);
           border: 1px solid var(--hairline-2); border-radius: 8px;
-          font: 500 12px 'Inter', sans-serif; outline: none;
+          font: 500 12px var(--font-inter), sans-serif; outline: none;
         }
         .ulj .loc-search::placeholder { color: var(--ink-3); }
         .ulj .loc-search:focus { border-color: var(--ink-2); }
@@ -1956,7 +1974,7 @@ export default function HomePage() {
         .ulj .saved-link {
           display: flex; align-items: baseline; gap: 8px; width: 100%;
           padding: 6px 0; background: none; border: none; cursor: pointer; text-align: left;
-          font: 500 12.5px 'Inter', sans-serif; color: var(--ink-2); transition: color .12s;
+          font: 500 12.5px var(--font-inter), sans-serif; color: var(--ink-2); transition: color .12s;
         }
         .ulj .saved-link:hover { color: var(--ink); }
         .ulj .saved-link .star { color: var(--live); font-size: 11px; flex-shrink: 0; }
@@ -1964,17 +1982,19 @@ export default function HomePage() {
         .ulj .card.flash { border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 20%, transparent); }
 
         /* ── Feed ── */
-        .ulj .feed-bar { display: flex; align-items: baseline; gap: 14px; padding: 8px 0 16px; }
-        .ulj .feed-bar .count { font-family: 'Fraunces', Georgia, serif; font-size: 17px; font-weight: 500; }
+        .ulj .feed-bar { display: flex; align-items: baseline; gap: 14px; padding: 8px 0 16px; min-height: 48px; box-sizing: border-box; }
+        .ulj .feed-bar .count { font-family: var(--font-fraunces), Georgia, serif; font-size: 17px; font-weight: 500; }
         .ulj .feed-bar .count b { font-variant-numeric: tabular-nums; }
-        .ulj .new-today { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--live-soft); color: var(--live); font: 600 12px 'Inter', sans-serif; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .ulj a.new-today { text-decoration: none; cursor: pointer; }
+        .ulj a.new-today:hover { filter: brightness(.95); }
+        .ulj .new-today { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--live-soft); color: var(--live); font: 600 12px var(--font-inter), sans-serif; white-space: nowrap; font-variant-numeric: tabular-nums; }
         .ulj .new-today .nd { width: 6px; height: 6px; border-radius: 50%; background: var(--live); animation: ulj-pulse 2.2s infinite; }
         .ulj .feed-bar .clear { font-size: 12px; color: var(--ink-2); background: none; border: none; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 0; }
         .ulj .feed-bar .clear:hover { color: var(--ink); }
         .ulj .sort-wrap { margin-left: auto; }
         .ulj select {
           height: 32px; padding: 0 10px; background: var(--surface); color: var(--ink-2);
-          border: 1px solid var(--hairline-2); border-radius: 8px; font: 500 12.5px 'Inter', sans-serif;
+          border: 1px solid var(--hairline-2); border-radius: 8px; font: 500 12.5px var(--font-inter), sans-serif;
           outline: none; cursor: pointer;
         }
 
@@ -1986,6 +2006,7 @@ export default function HomePage() {
           border-radius: 11px; padding: 11px 16px; margin-bottom: 14px;
           box-shadow: var(--shadow); font-size: 12.5px; color: var(--ink-2);
         }
+        .ulj .press-ph { min-height: 45px; visibility: hidden; }
         .ulj .press .bar {
           position: absolute; left: 0; top: 0; bottom: 0;
           background: var(--surface-2); border-right: 1px solid var(--hairline-2);
@@ -2000,7 +2021,7 @@ export default function HomePage() {
         .ulj .press.far .pdot { animation: none; opacity: .5; }
         .ulj .press .plabel { font-weight: 600; color: var(--ink); white-space: nowrap; }
         .ulj .press .pdetail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .ulj .press .pclock { margin-left: auto; font: 600 13px 'Spline Sans Mono', monospace; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .ulj .press .pclock { margin-left: auto; font: 600 13px var(--font-spline-mono), monospace; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
         .ulj .press .pclock .unit { font-weight: 400; color: var(--ink-3); font-size: 11px; margin: 0 5px 0 1px; }
         .ulj .press.imminent .pclock { color: var(--live); }
         .ulj .press.ingesting .pclock { color: var(--live); font-size: 12px; }
@@ -2028,7 +2049,7 @@ export default function HomePage() {
         .ulj .wordmark { display: inline-flex; align-items: center; gap: 10px; }
         .ulj .wordmark .mark { flex: none; width: 30px; height: 30px; border-radius: 7px;
           background: #185FA5; color: #FFFFFF; display: inline-flex; align-items: center;
-          justify-content: center; font-family: 'Fraunces', Georgia, serif; font-size: 18px;
+          justify-content: center; font-family: var(--font-fraunces), Georgia, serif; font-size: 18px;
           font-weight: 500; line-height: 1; }
         @media (max-width: 560px) {
           .ulj .wordmark .mark { width: 26px; height: 26px; font-size: 16px; border-radius: 6px; }
@@ -2039,7 +2060,7 @@ export default function HomePage() {
         @media (prefers-reduced-motion: reduce) { .ulj .search-spin { animation: none } }
         .ulj .sug-relax { display: flex; width: 100%; text-align: left; gap: 8px; align-items: center;
           padding: 10px 13px; background: none; border: 0; border-top: 1px solid var(--hairline);
-          font: 400 13px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; }
+          font: 400 13px var(--font-inter), sans-serif; color: var(--ink-2); cursor: pointer; }
         .ulj .sug-relax:hover { background: var(--surface-2); }
         .ulj .sug-relax b { color: var(--ink); font-weight: 600; }
         .ulj .match-note { margin: 0 0 14px; padding: 11px 14px; border-radius: 10px;
@@ -2050,14 +2071,14 @@ export default function HomePage() {
         /* the tabs claim the gap; the dropdown sits straight after them */
         .ulj .feed-tabs + .sort-wrap { margin-left: 10px !important; }
         .ulj .feed-tabs button { background: none; border: 0; border-radius: 7px;
-          padding: 6px 12px; font: 500 12.5px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; }
+          padding: 6px 12px; font: 500 12.5px var(--font-inter), sans-serif; color: var(--ink-2); cursor: pointer; }
         .ulj .feed-tabs button.on { background: var(--surface); color: var(--ink);
           box-shadow: 0 1px 2px rgba(25,23,19,.08); }
         .ulj .feed-tabs span { font-variant-numeric: tabular-nums; opacity: .7; margin-left: 3px; }
         .ulj .relax-inline { text-align: center; padding: 26px 0 8px; }
         .ulj .relax-inline > span { display: block; font-size: 13.5px; color: var(--ink-2); margin-bottom: 10px; }
         .ulj .relax { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 14px 0 18px; }
-        .ulj .relax button { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 15px; font: 500 13px 'Inter', sans-serif; color: var(--ink); cursor: pointer; }
+        .ulj .relax button { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 15px; font: 500 13px var(--font-inter), sans-serif; color: var(--ink); cursor: pointer; }
         .ulj .relax button:hover { border-color: var(--ink); }
         .ulj .acct-wrap { position: relative; }
         .ulj .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
@@ -2067,7 +2088,7 @@ export default function HomePage() {
         .ulj.dark .acct-menu { background: #1C1A17; border-color: #35322C;
           box-shadow: 0 8px 28px -6px rgba(0,0,0,0.55); }
         .ulj .acct-menu a, .ulj .acct-menu button { display: block; width: 100%; text-align: left;
-          font: 500 13px 'Inter', sans-serif; color: var(--ink); background: none; border: none;
+          font: 500 13px var(--font-inter), sans-serif; color: var(--ink); background: none; border: none;
           padding: 8px 10px; border-radius: 7px; cursor: pointer; text-decoration: none; }
         .ulj .acct-menu a:hover, .ulj .acct-menu button:hover { background: var(--page); }
         .ulj .acct-email { font-size: 11.5px; color: var(--ink-2); padding: 7px 10px 4px; word-break: break-all; }
@@ -2079,26 +2100,26 @@ export default function HomePage() {
         .ulj .today-wrap { margin-bottom: 26px; }
         .ulj .today-cards { padding-bottom: 0; }
         .ulj .withheld-note { grid-column: 1 / -1; padding: 2px 0 6px; }
-        .ulj .withheld-note b { display: block; font-family: 'Fraunces', Georgia, serif;
+        .ulj .withheld-note b { display: block; font-family: var(--font-fraunces), Georgia, serif;
           font-size: 17px; font-weight: 500; color: var(--ink); }
         .ulj .withheld-note span { font-size: 12.5px; color: var(--ink-2); }
         .ulj .card.mini h3 { font-size: 16px; margin: 2px 0 0; }
         .ulj .convert-old { margin: 34px 0 0; padding: 28px 26px; border-radius: 14px; background: var(--ink); }
-        .ulj .convert h2 { font-family: 'Fraunces', Georgia, serif; font-size: 21px; font-weight: 500; color: var(--page); margin: 0 0 6px; }
+        .ulj .convert h2 { font-family: var(--font-fraunces), Georgia, serif; font-size: 21px; font-weight: 500; color: var(--page); margin: 0 0 6px; }
         .ulj .convert p { font-size: 13.5px; color: var(--ink-3); margin: 0 0 16px; }
         .ulj .convert-cta { display: inline-block; background: var(--page); color: var(--ink); font-size: 13px; padding: 10px 18px; border-radius: 8px; text-decoration: none; }
         .ulj .card.locked-unused { border-left: 3px solid var(--ink-3); background: var(--card); }
         .ulj .locked-body { padding: 22px 4px; text-align: center; }
-        .ulj .locked-count { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 500; color: var(--ink); }
+        .ulj .locked-count { font-family: var(--font-fraunces), Georgia, serif; font-size: 20px; font-weight: 500; color: var(--ink); }
         .ulj .locked-sub { font-size: 13px; color: var(--ink-2); margin: 6px 0 14px; }
         .ulj .sec-tag { display: inline-flex; align-items: center; gap: 7px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); }
         .ulj .sec-tag .dot { width: 8px; height: 8px; border-radius: 3px; background: var(--sec); }
         .ulj .verified { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-3); }
         .ulj .verified svg { color: var(--live); }
         .ulj .reposts { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-        .ulj .ago { margin-left: auto; font: 500 11.5px 'Spline Sans Mono', monospace; color: var(--ink-3); }
+        .ulj .ago { margin-left: auto; font: 500 11.5px var(--font-spline-mono), monospace; color: var(--ink-3); }
         .ulj .ago.fresh { color: var(--live); }
-        .ulj .card h3 { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; }
+        .ulj .card h3 { font-family: var(--font-fraunces), Georgia, serif; font-size: 20px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; }
         /* Titles carry the brand blue — they're the thing people scan, and it
            breaks up an otherwise all-black page. */
         .ulj .card h3 a { color: #1B4F82; text-decoration: none; }
@@ -2108,8 +2129,8 @@ export default function HomePage() {
         .ulj .meta b { color: var(--ink); font-weight: 600; }
         .ulj .meta .sep { margin: 0 7px; color: var(--ink-3); }
         .ulj .summary { margin-top: 10px; font-size: 13.5px; color: var(--ink-2); max-width: 640px; }
-        .ulj .salary { margin-top: 12px; font: 600 14px 'Spline Sans Mono', monospace; color: var(--ink); }
-        .ulj .salary .via { font: 500 11.5px 'Inter', sans-serif; color: var(--ink-3); margin-left: 10px; }
+        .ulj .salary { margin-top: 12px; font: 600 14px var(--font-spline-mono), monospace; color: var(--ink); }
+        .ulj .salary .via { font: 500 11.5px var(--font-inter), sans-serif; color: var(--ink-3); margin-left: 10px; }
         .ulj .card-foot {
           margin: 16px -24px 0; padding: 12px 24px 14px 24px;
           border-top: 1px solid var(--hairline);
@@ -2122,7 +2143,7 @@ export default function HomePage() {
           position: relative; overflow: hidden;
           width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
           background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--hairline-2);
-          display: grid; place-items: center; font: 600 13px 'Inter', sans-serif;
+          display: grid; place-items: center; font: 600 13px var(--font-inter), sans-serif;
         }
         /* Photo sits over the initials; if the signed LinkedIn url has expired
            the img hides itself on error and the initials show through. */
@@ -2137,14 +2158,14 @@ export default function HomePage() {
         .ulj .ghost-btn {
           height: 30px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px;
           background: none; border: 1px solid var(--hairline-2); border-radius: 8px;
-          font: 600 12px 'Inter', sans-serif; color: var(--ink-2); cursor: pointer; transition: .12s;
+          font: 600 12px var(--font-inter), sans-serif; color: var(--ink-2); cursor: pointer; transition: .12s;
         }
         .ulj .ghost-btn:hover { color: var(--ink); border-color: var(--ink-3); }
         .ulj .ghost-btn.saved { color: var(--live); border-color: var(--live); }
         .ulj .apply-btn {
           height: 30px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px;
           background: transparent; color: var(--ink); border: 1.5px solid var(--line-strong); border-radius: 8px;
-          font: 600 12px 'Inter', sans-serif; cursor: pointer; text-decoration: none; transition: .12s;
+          font: 600 12px var(--font-inter), sans-serif; cursor: pointer; text-decoration: none; transition: .12s;
         }
         .ulj .apply-btn:hover { background: var(--surface-2); border-color: var(--ink); }
 
@@ -2157,11 +2178,11 @@ export default function HomePage() {
           background: var(--surface); border: 1px dashed var(--hairline-2); border-radius: 16px;
           padding: 64px 24px; text-align: center;
         }
-        .ulj .empty h3 { font-family: 'Fraunces', Georgia, serif; font-size: 22px; font-weight: 500; }
+        .ulj .empty h3 { font-family: var(--font-fraunces), Georgia, serif; font-size: 22px; font-weight: 500; }
         .ulj .empty p { margin: 8px 0 20px; color: var(--ink-2); font-size: 13.5px; }
         .ulj .empty button {
           padding: 9px 18px; background: transparent; color: var(--ink); border: 1.5px solid var(--line-strong);
-          border-radius: 9px; font: 600 13px 'Inter', sans-serif; cursor: pointer;
+          border-radius: 9px; font: 600 13px var(--font-inter), sans-serif; cursor: pointer;
         }
 
         .ulj .colophon {
@@ -2176,7 +2197,7 @@ export default function HomePage() {
         .ulj .fbadge {
           min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px;
           background: var(--accent); color: #fff;
-          font: 600 10.5px 'Spline Sans Mono', monospace;
+          font: 600 10.5px var(--font-spline-mono), monospace;
           display: inline-grid; place-items: center;
         }
 
@@ -2188,7 +2209,7 @@ export default function HomePage() {
             display: flex; align-items: center; gap: 8px; width: 100%;
             padding: 11px 14px; background: var(--surface);
             border: 1px solid var(--hairline-2); border-radius: 10px;
-            font: 600 13px 'Inter', sans-serif; color: var(--ink); cursor: pointer;
+            font: 600 13px var(--font-inter), sans-serif; color: var(--ink); cursor: pointer;
           }
           .ulj .filters-head .chev { margin-left: auto; transition: transform .15s; }
           .ulj .filters-head .chev.up { transform: rotate(180deg); }
@@ -2261,7 +2282,7 @@ export default function HomePage() {
 
         /* ── Location dropdowns (radio) ── */
         .ulj .drop { margin-top: 8px; }
-        .ulj .drop-btn { display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 12px; background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 9px; cursor: pointer; font: 500 13px 'Inter', sans-serif; color: var(--ink); text-align: left; }
+        .ulj .drop-btn { display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 12px; background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 9px; cursor: pointer; font: 500 13px var(--font-inter), sans-serif; color: var(--ink); text-align: left; }
         .ulj .drop-btn:hover { border-color: var(--ink-3); }
         .ulj .drop-btn.open { border-color: var(--ink-2); }
         .ulj .drop-btn .dl { color: var(--ink-3); font-size: 12px; }
@@ -2271,13 +2292,13 @@ export default function HomePage() {
         .ulj .drop-panel { margin-top: 6px; padding: 6px; background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 10px; }
         .ulj .drop-panel .loc-search { margin: 2px 0 6px; }
         .ulj .drop-list { max-height: 240px; overflow-y: auto; }
-        .ulj .drop-panel > .radio-row, .ulj .drop-list > .radio-row { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; background: none; border: none; border-radius: 7px; cursor: pointer; font: 500 13px 'Inter', sans-serif; color: var(--ink-2); text-align: left; }
+        .ulj .drop-panel > .radio-row, .ulj .drop-list > .radio-row { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; background: none; border: none; border-radius: 7px; cursor: pointer; font: 500 13px var(--font-inter), sans-serif; color: var(--ink-2); text-align: left; }
         .ulj .radio-row:hover { background: var(--page); color: var(--ink); }
         .ulj .radio-row.on { color: var(--ink); }
         .ulj .radio-row .rad { flex: none; width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid var(--hairline-2); background: var(--surface); display: grid; place-items: center; }
         .ulj .radio-row.on .rad { border-color: var(--accent); }
         .ulj .radio-row.on .rad::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-        .ulj .radio-row .n { margin-left: auto; font: 500 10.5px 'Spline Sans Mono', monospace; color: var(--ink-3); }
+        .ulj .radio-row .n { margin-left: auto; font: 500 10.5px var(--font-spline-mono), monospace; color: var(--ink-3); }
         .ulj .drop-list .more-note { margin: 6px 8px 4px; }
 
 
@@ -2289,7 +2310,7 @@ export default function HomePage() {
         .ulj .member-bar.active { background: var(--live-soft); border-color: transparent; }
         .ulj .member-bar.active b { color: var(--live); }
         .ulj .mb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live); animation: ulj-pulse 2.2s infinite; flex: none; }
-        .ulj .mb-link { margin-left: auto; background: none; border: none; cursor: pointer; font: 600 13px 'Inter', sans-serif; color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+        .ulj .mb-link { margin-left: auto; background: none; border: none; cursor: pointer; font: 600 13px var(--font-inter), sans-serif; color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
         .ulj .member-bar.free { background: var(--accent-soft); border-color: transparent; }
         .ulj .member-bar.free .mb-copy { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; flex: 1; min-width: 0; }
         .ulj .member-bar.free .btn-primary { margin-left: auto; height: 34px; }
@@ -2305,14 +2326,14 @@ export default function HomePage() {
 
         /* ── Search suggestions ── */
         .ulj .sug { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 70; background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 12px; padding: 6px; box-shadow: 0 16px 40px -12px rgba(0,0,0,.28); max-height: min(70vh, 460px); overflow-y: auto; }
-        .ulj .sug-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 10px; background: none; border: none; border-radius: 8px; cursor: pointer; text-align: left; font-family: 'Inter', sans-serif; }
+        .ulj .sug-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 10px; background: none; border: none; border-radius: 8px; cursor: pointer; text-align: left; font-family: var(--font-inter), sans-serif; }
         .ulj .sug-row.on, .ulj .sug-row:hover { background: var(--accent-soft); }
         .ulj .sug-row .sd { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--sec); }
         .ulj .sug-row .st { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
         .ulj .sug-row .st b { font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .ulj .sug-row .st span { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .ulj .sug-all { display: block; width: 100%; margin-top: 4px; padding: 9px 10px; border: none; border-top: 1px solid var(--hairline); background: none; text-align: left; cursor: pointer; font: 600 13px 'Inter', sans-serif; color: var(--link); border-radius: 0 0 8px 8px; }
-        .ulj .bar-up { position: absolute; right: 7px; top: 50%; translate: 0 -50%; height: 24px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: 999px; background: var(--cta); color: #fff; font: 600 11.5px 'Inter', sans-serif; text-decoration: none; white-space: nowrap; }
+        .ulj .sug-all { display: block; width: 100%; margin-top: 4px; padding: 9px 10px; border: none; border-top: 1px solid var(--hairline); background: none; text-align: left; cursor: pointer; font: 600 13px var(--font-inter), sans-serif; color: var(--link); border-radius: 0 0 8px 8px; }
+        .ulj .bar-up { position: absolute; right: 7px; top: 50%; translate: 0 -50%; height: 24px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: 999px; background: var(--cta); color: #fff; font: 600 11.5px var(--font-inter), sans-serif; text-decoration: none; white-space: nowrap; }
         .ulj .bar-up span { opacity: .85; font-weight: 500; }
         .ulj .bar-up:hover { background: var(--cta-hover, var(--cta)); }
         .ulj .search-wrap:has(.bar-up) .search { padding-right: 112px; }
@@ -2322,7 +2343,7 @@ export default function HomePage() {
         .ulj .sug-all:hover { text-decoration: underline; text-underline-offset: 3px; }
 
         /* ── Free sample flag, section notes ── */
-        .ulj .sample-flag { font: 500 11px 'Spline Sans Mono', monospace; letter-spacing: .06em; text-transform: uppercase; background: var(--live-soft); color: var(--live); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+        .ulj .sample-flag { font: 500 11px var(--font-spline-mono), monospace; letter-spacing: .06em; text-transform: uppercase; background: var(--live-soft); color: var(--live); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
         .ulj .sec-head .sec-note { font-style: normal; font-size: 11.5px; color: var(--ink-2); background: var(--accent-soft); padding: 3px 10px; border-radius: 999px; }
         .ulj .sec-head span { white-space: nowrap; }
 
@@ -2335,10 +2356,10 @@ export default function HomePage() {
         /* ── Sidebar pass card ── */
         .ulj .pass { background: #14213D; color: #F3F1EA; border-radius: 16px; padding: 20px; }
         .ulj.dark .pass { background: #0E1830; }
-        .ulj .pass .tagline { display: block; font: 500 11px 'Spline Sans Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: #A9B4CC; margin-bottom: 8px; }
-        .ulj .pass h3 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.1; letter-spacing: -.01em; margin-bottom: 6px; }
+        .ulj .pass .tagline { display: block; font: 500 11px var(--font-spline-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: #A9B4CC; margin-bottom: 8px; }
+        .ulj .pass h3 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.1; letter-spacing: -.01em; margin-bottom: 6px; }
         .ulj .pass .price { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; }
-        .ulj .pass .price b { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 46px; line-height: 1; }
+        .ulj .pass .price b { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 46px; line-height: 1; }
         .ulj .pass .price span { font-size: 13px; color: #A9B4CC; }
         .ulj .pass .pass-sub { font-size: 14px; color: #A9B4CC; margin: 0 0 14px; }
         .ulj .pass .btn-primary.block { white-space: normal; text-align: center; padding-left: 12px; padding-right: 12px; }
@@ -2350,7 +2371,7 @@ export default function HomePage() {
         /* ── Inline pass CTA in the feed ── */
         .ulj .inline-cta { display: grid; grid-template-columns: 1fr auto; gap: 16px 24px; align-items: center; background: #14213D; color: #F3F1EA; border-radius: 16px; padding: 22px 24px; margin: 4px 0 30px; }
         .ulj.dark .inline-cta { background: #0E1830; }
-        .ulj .inline-cta h3 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.15; margin-bottom: 4px; }
+        .ulj .inline-cta h3 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.15; margin-bottom: 4px; }
         .ulj .inline-cta p { font-size: 14px; color: #A9B4CC; }
         @media (max-width: 640px) { .ulj .inline-cta { grid-template-columns: 1fr; } }
 
@@ -2359,11 +2380,11 @@ export default function HomePage() {
         @media (max-width: 760px) { .ulj #feed { scroll-margin-top: 118px; } }
         .ulj .howbar-wrap { max-width: 1200px; margin: 0 auto; padding: 0 28px; scroll-margin-top: 80px; }
         .ulj .howbar { display: flex; border-block: 1px solid var(--hairline-2); margin-bottom: 32px; }
-        .ulj .hb-title { flex: 0 0 190px; align-self: center; padding: 14px 20px 14px 0; font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 22px; line-height: 1.15; letter-spacing: -.01em; }
+        .ulj .hb-title { flex: 0 0 190px; align-self: center; padding: 14px 20px 14px 0; font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 22px; line-height: 1.15; letter-spacing: -.01em; }
         .ulj .hb-steps { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; padding: 0; }
         .ulj .hb-steps li { display: grid; grid-template-columns: 26px 1fr; column-gap: 12px; align-items: start; padding: 16px 20px; border-left: 1px solid var(--hairline-2); }
-        .ulj .hb-steps i { font: 500 12px 'Spline Sans Mono', monospace; font-style: normal; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
-        .ulj .hb-steps b { display: block; font: 600 14px/1.3 'Inter', sans-serif; margin-top: 3px; }
+        .ulj .hb-steps i { font: 500 12px var(--font-spline-mono), monospace; font-style: normal; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+        .ulj .hb-steps b { display: block; font: 600 14px/1.3 var(--font-inter), sans-serif; margin-top: 3px; }
         .ulj .hb-steps span { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
         @media (max-width: 900px) {
           .ulj .howbar { flex-direction: column; }

@@ -1,7 +1,20 @@
 import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import Script from 'next/script'
+import { Caveat, DM_Mono, DM_Sans, Fraunces, Inter, Spline_Sans_Mono } from 'next/font/google'
 import './globals.css'
+
+// Self-hosted through next/font: the files ship from our own origin with a metric-matched
+// fallback, so text renders in the right size immediately and the real face swaps in without
+// moving anything. The pages used to @import these from Google inside a <style> tag, which
+// loaded last and shifted the whole layout once each face arrived (CLS 0.37 on the home page).
+const fraunces = Fraunces({ subsets: ['latin'], weight: 'variable', axes: ['opsz'], display: 'swap', variable: '--font-fraunces' })
+const inter = Inter({ subsets: ['latin'], weight: 'variable', display: 'swap', variable: '--font-inter' })
+const splineMono = Spline_Sans_Mono({ subsets: ['latin'], weight: 'variable', display: 'swap', variable: '--font-spline-mono' })
+const caveat = Caveat({ subsets: ['latin'], weight: 'variable', display: 'swap', variable: '--font-caveat' })
+const dmSans = DM_Sans({ subsets: ['latin'], weight: 'variable', display: 'swap', variable: '--font-dm-sans' })
+const dmMono = DM_Mono({ subsets: ['latin'], weight: ['400', '500'], display: 'swap', variable: '--font-dm-mono' })
+const fontVars = [fraunces, inter, splineMono, caveat, dmSans, dmMono].map((f) => f.variable).join(' ')
 
 export const metadata: Metadata = {
   title: 'BackchannelJobs — Jobs Recruiters Post on LinkedIn',
@@ -46,11 +59,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={fontVars}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

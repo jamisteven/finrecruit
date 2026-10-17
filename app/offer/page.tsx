@@ -19,11 +19,7 @@ const HOW_IT_WORKS = [
 // HYPOTHETICAL, for layout preview only. Attributed to a bracketed placeholder, not an invented
 // named person, so it can't be mistaken for a real quote and doesn't end up shipping as one by
 // accident. Swap in a real quote + real name before this goes live, or set this back to null.
-const TESTIMONIAL: { quote: string; name: string; context: string } | null = {
-  quote: 'I signed up on a Monday and had two interviews lined up by the following week, for roles nowhere to be found on the usual job platforms.',
-  name: '[Chris M.]',
-  context: '[Product Manager]',
-}
+const TESTIMONIAL: { quote: string; name: string; context: string } | null = null
 
 const WHY_ITEMS: { icon: 'bolt' | 'person' | 'target' | 'clock'; title: string; body: string }[] = [
   { icon: 'bolt', title: 'Be first, not one of hundreds', body: "You see it before it hits LinkedIn's public feed or a job board, not two days after." },
@@ -52,6 +48,32 @@ const sectorLabel = (s?: string | null) => (s && SECTOR_LABELS[s]) || 'Other'
 
 type Plan = 'monthly' | 'quarter'
 type LockedExample = { title: string; sector: string | null; postedAt: string | null }
+type LockedRole = { title: string; location: string | null; sector: string | null; posted_at: string | null }
+type Withheld = { roles: LockedRole[]; matched: number; total: number; fallback: LockedRole[] }
+type LastSearch = { q?: string; sector?: string; locations?: string[]; at?: number }
+
+// What the visitor was looking at on the feed, if anything, so the pitch can be about their roles
+function readLastSearch(): LastSearch | null {
+  try {
+    const raw = localStorage.getItem('bcj_last_search')
+    if (!raw) return null
+    const v = JSON.parse(raw) as LastSearch
+    // a search from a previous day is probably not what they're here about
+    if (!v.at || Date.now() - v.at > 24 * 3600_000) return null
+    return v
+  } catch { return null }
+}
+
+// "risk manager roles in Chicago", "finance roles in London and Manchester", "new roles"
+function describeSearch(ls: LastSearch | null, sectorLabelFn: (s?: string | null) => string): string {
+  if (!ls) return 'new roles'
+  const q = (ls.q ?? '').trim()
+  const sec = ls.sector && ls.sector !== 'all' ? sectorLabelFn(ls.sector).toLowerCase() : ''
+  const what = q ? `${q} roles` : sec ? `${sec} roles` : 'new roles'
+  const locs = (ls.locations ?? []).filter(Boolean)
+  const where = locs.length === 0 ? '' : locs.length === 1 ? ` in ${locs[0]}` : ` in ${locs.slice(0, -1).join(', ')} and ${locs[locs.length - 1]}`
+  return `${what}${where}`
+}
 type Live = { fresh: number; shown: number; hasPass: boolean; addedToday: number; example: LockedExample | null }
 
 function timeAgo(iso?: string | null): string | null {
@@ -91,6 +113,9 @@ export default function OfferPage() {
   const [showSticky, setShowSticky] = useState(false)
   // Real numbers from the same API the main page uses (limit=1: no role data is downloaded)
   const [live, setLive] = useState<Live | null>(null)
+  // The fresh roles this visitor isn't seeing, matched to their last search on the feed
+  const [withheld, setWithheld] = useState<Withheld | null>(null)
+  const [lastSearch, setLastSearch] = useState<LastSearch | null>(null)
   const cardsRef = useRef<HTMLDivElement>(null)
   // Which homepage CTA sent this visitor here (?src=hero_plan, ?src=member_bar, …), so offer_view
   // and cta_click can finally be segmented by entry point instead of lumped together.
@@ -137,6 +162,22 @@ export default function OfferPage() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    const ls = readLastSearch()
+    const p = new URLSearchParams({ withheld: '1' })
+    if (ls?.q) p.set('q', ls.q)
+    if (ls?.sector && ls.sector !== 'all') p.set('sector', ls.sector)
+    if (ls?.locations?.length) p.set('loc', ls.locations.join('|'))
+    fetch(`/api/jobs?${p}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return
+        setLastSearch(ls)
+        setWithheld({ roles: d.roles ?? [], matched: d.matched ?? 0, total: d.total ?? 0, fallback: d.fallback ?? [] })
+      })
+      .catch(() => {})
+  }, [])
+
   // Mobile sticky CTA: appears once the pricing column has scrolled past
   useEffect(() => {
     const el = cardsRef.current
@@ -174,6 +215,14 @@ export default function OfferPage() {
   const freshTxt = fresh.toLocaleString()
   const hidden = live ? Math.max(0, live.fresh - live.shown) : 0
   const exampleAgo = timeAgo(live?.example?.postedAt ?? null)
+  // Rows for the locked list: the visitor's matches, or the newest fresh roles when nothing matched
+  const lockedRows = withheld ? (withheld.roles.length ? withheld.roles : withheld.fallback) : []
+  const lockedIsMatch = !!withheld && withheld.roles.length > 0 && !!lastSearch && (!!lastSearch.q || (lastSearch.locations?.length ?? 0) > 0 || (lastSearch.sector && lastSearch.sector !== 'all'))
+  const searchDesc = describeSearch(lastSearch, sectorLabel)
+  const lockedCount = lockedIsMatch ? withheld!.matched : (withheld?.total ?? hidden)
+  const lockedMore = Math.max(0, lockedCount - lockedRows.length)
+  // The compare-section example should be a real withheld role too, when we have one
+  const exampleRow = lockedRows[0] ?? null
   const errMsg = <p className="pp-err" role="alert">Checkout didn&apos;t open, and you haven&apos;t been charged. Please try again.</p>
 
   return (
@@ -207,14 +256,47 @@ export default function OfferPage() {
               ))}
             </ul>
 
-            {!hasPass && (
+            {/* The roles they're not seeing. People used to tap the "N locked on Free" sentence
+                looking for exactly this, so now the tap has somewhere to go: every row starts
+                checkout. Title, place and age only, the same as the locked cards in the feed. */}
+            {!hasPass && lockedRows.length > 0 && (
+              <div className="pp-locked" role="group" aria-label="Roles locked on Free">
+                <p className="pp-locked-head">
+                  {lockedIsMatch
+                    ? <><b>{lockedCount.toLocaleString()} {searchDesc}</b> {lockedCount === 1 ? 'was' : 'were'} posted in the last {FREE_DELAY_HOURS}h. Members are reading {lockedCount === 1 ? 'it' : 'them'} now.</>
+                    : <><b>{lockedCount.toLocaleString()} new roles</b> posted in the last {FREE_DELAY_HOURS}h are locked on Free. The latest:</>}
+                </p>
+                <ul className="pp-locked-list">
+                  {lockedRows.map((r, i) => (
+                    <li key={`${r.title}-${i}`}>
+                      <button type="button" className="pp-locked-row" onClick={() => checkout('monthly', 'offer_locked_row')} disabled={busy !== null}>
+                        <span className="pp-locked-ico" aria-hidden="true">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                        </span>
+                        <span className="pp-locked-txt">
+                          <span className="pp-locked-title">{r.title}</span>
+                          <span className="pp-locked-meta">
+                            {r.location ? r.location : sectorLabel(r.sector)}
+                            {timeAgo(r.posted_at) ? ` · ${timeAgo(r.posted_at)}` : ''}
+                            {' · '}<span className="pp-locked-hidden">company hidden</span>
+                          </span>
+                        </span>
+                        <span className="pp-locked-go">Unlock</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" className="pp-locked-all" onClick={() => checkout('monthly', 'offer_locked_all')} disabled={busy !== null}>
+                  {lockedMore > 0 ? `Unlock ${lockedIsMatch ? 'these' : 'all'} ${lockedCount.toLocaleString()} · $${PRICE.intro}` : `Unlock ${lockedRows.length === 1 ? 'it' : 'them'} · $${PRICE.intro}`}
+                  <span>then ${PRICE.monthly}/month · cancel anytime</span>
+                </button>
+              </div>
+            )}
+            {!hasPass && lockedRows.length === 0 && (
               <div className="pp-tip">
                 <span className="pp-tip-icon"><ClockIcon /></span>
                 {fresh > 0 ? (
-                  <span>
-                    <b>{freshTxt} new roles</b> posted in the last {FREE_DELAY_HOURS}h.{' '}
-                    {hidden > 0 ? `${hidden.toLocaleString()} locked on Free.` : "Free can't see them yet."}
-                  </span>
+                  <span><b>{freshTxt} new roles</b> posted in the last {FREE_DELAY_HOURS}h.{' '}{hidden > 0 ? `${hidden.toLocaleString()} locked on Free.` : "Free can't see them yet."}</span>
                 ) : (
                   <span><b>New roles drop every weekday.</b> Premium sees them the second they land, while Free waits {FREE_DELAY_HOURS} hours.</span>
                 )}
@@ -316,8 +398,12 @@ export default function OfferPage() {
                 </div>
                 <div className="pp-job-card pp-job-locked">
                   <span className="pp-job-tag pp-job-tag-free">Locked</span>
-                  <div className="pp-job-title">{live?.example?.title ?? 'A new role, locked'}</div>
-                  <div className="pp-job-meta">{live?.example ? sectorLabel(live.example.sector) : 'Sector hidden'}{exampleAgo ? ` · ${exampleAgo}` : ''}</div>
+                  <div className="pp-job-title">{exampleRow?.title ?? live?.example?.title ?? 'A new role, locked'}</div>
+                  <div className="pp-job-meta">
+                    {exampleRow
+                      ? `${exampleRow.location ?? sectorLabel(exampleRow.sector)}${timeAgo(exampleRow.posted_at) ? ` · ${timeAgo(exampleRow.posted_at)}` : ''}`
+                      : `${live?.example ? sectorLabel(live.example.sector) : 'Sector hidden'}${exampleAgo ? ` · ${exampleAgo}` : ''}`}
+                  </div>
                   <div className="pp-example-skeleton" aria-hidden="true"><span /><span /><span /></div>
                   <button type="button" className="pp-job-cta" onClick={() => checkout('monthly', 'offer_compare')} disabled={busy !== null}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
@@ -401,12 +487,11 @@ export default function OfferPage() {
       )}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
         .pp { --page:#F5F2EB; --surface:#FDFCFA; --ink:#191713; --ink-2:#5C574D; --hair:#D8D2C2; --accent-soft:#E4EAF6; --cta:#2F6BF2; --cta-h:#2458D4; --accent:#24468f; --good:#0A7A3D;
-          min-height: 100vh; background: var(--page); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+          min-height: 100vh; background: var(--page); color: var(--ink); font-family: var(--font-inter), system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
         .pp *, .pp *::before, .pp *::after { box-sizing: border-box; }
         .pp-top { max-width: 1080px; margin: 0 auto; padding: 18px 20px 0; }
-        .pp-brand { font-family: 'Fraunces', Georgia, serif; font-size: 22px; font-weight: 600; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
+        .pp-brand { font-family: var(--font-fraunces), Georgia, serif; font-size: 22px; font-weight: 600; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
         .pp-brand span { color: var(--ink-2); font-weight: 400; }
         .pp-main { max-width: 1080px; margin: 0 auto; padding: 22px 20px 64px; }
         .pp-check { color: var(--good); flex: none; }
@@ -415,7 +500,7 @@ export default function OfferPage() {
         .pp-hero { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 40px; align-items: start; margin-bottom: 56px; }
         .pp-hero-hook { min-width: 0; }
         .pp-eyebrow { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 5px 11px 5px 9px; border-radius: 999px; margin-bottom: 14px; }
-        .pp h1 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(28px, 3.2vw, 40px); line-height: 1.14; letter-spacing: -0.02em; margin: 0 0 14px; }
+        .pp h1 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: clamp(28px, 3.2vw, 40px); line-height: 1.14; letter-spacing: -0.02em; margin: 0 0 14px; }
         .pp h1 em { font-style: normal; color: var(--accent); }
         .pp-sub { font-size: 16px; line-height: 1.55; color: var(--ink-2); margin: 0 0 20px; }
         .pp-have { margin: 0 0 4px; font-size: 14px; color: var(--ink-2); }
@@ -427,6 +512,24 @@ export default function OfferPage() {
         .pp-tip { display: flex; align-items: flex-start; gap: 10px; padding: 13px 16px; border: 1px solid var(--hair); border-radius: 12px; background: var(--surface); font-size: 14px; line-height: 1.5; max-width: 480px; margin-bottom: 22px; }
         .pp-tip-icon { color: var(--accent); flex: none; margin-top: 1px; }
         .pp-tip b { font-weight: 600; }
+        .pp-locked { max-width: 520px; margin-bottom: 22px; padding: 14px 14px 12px; border: 1px solid var(--hair); border-radius: 14px; background: var(--surface); }
+        .pp-locked-head { margin: 0 2px 10px; font-size: 14px; line-height: 1.5; }
+        .pp-locked-head b { font-weight: 650; }
+        .pp-locked-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+        .pp-locked-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 10px 10px 12px;
+          border: 1px solid var(--hair); border-radius: 10px; background: #fff; font: inherit; color: inherit; cursor: pointer; }
+        .pp-locked-row:hover { border-color: var(--accent); }
+        .pp-locked-row:disabled { opacity: .6; cursor: default; }
+        .pp-locked-ico { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; background: var(--hair); color: var(--ink-2); }
+        .pp-locked-txt { display: grid; min-width: 0; gap: 2px; }
+        .pp-locked-title { font-weight: 600; font-size: 14.5px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pp-locked-meta { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pp-locked-hidden { color: var(--ink-2); opacity: .75; font-style: italic; }
+        .pp-locked-go { margin-left: auto; flex: none; font-size: 12.5px; font-weight: 600; color: var(--accent); }
+        .pp-locked-all { display: grid; justify-items: center; gap: 2px; width: 100%; margin-top: 10px; padding: 11px 14px; border: 0; border-radius: 10px;
+          background: var(--accent); color: #fff; font: inherit; font-weight: 650; font-size: 15px; cursor: pointer; }
+        .pp-locked-all span { font-size: 12px; font-weight: 500; opacity: .85; }
+        .pp-locked-all:disabled { opacity: .6; cursor: default; }
 
         .pp-hero-how { list-style: none; padding: 0; margin: 0 0 22px; display: grid; gap: 14px; max-width: 480px; }
         .pp-hero-how li { display: flex; align-items: flex-start; gap: 12px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
@@ -445,7 +548,7 @@ export default function OfferPage() {
         .pp-tag-quiet { background: var(--ink); position: static; }
         .pp h2 { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
         .pp-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 12px; }
-        .pp-price b { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 44px; letter-spacing: -0.02em; line-height: 1; }
+        .pp-price b { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 44px; letter-spacing: -0.02em; line-height: 1; }
         .pp-price-sub { font-size: 13.5px; color: var(--ink-2); line-height: 1.35; }
         .pp-strike { font-size: 15px; color: var(--ink-2); text-decoration: line-through; }
         .pp-card ul { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 7px; flex: 1; align-content: start; }
@@ -475,7 +578,7 @@ export default function OfferPage() {
 
         /* See what you'll get */
         .pp-compare { margin-bottom: 52px; }
-        .pp-compare h2 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+        .pp-compare h2 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
         .pp-compare-sub { color: var(--ink-2); font-size: 14.5px; margin: 0 0 22px; }
         .pp-compare-grid { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 32px; align-items: start; }
         .pp-compare-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
@@ -502,7 +605,7 @@ export default function OfferPage() {
 
         /* Why it's worth it */
         .pp-why { margin-bottom: 52px; }
-        .pp-why h2 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+        .pp-why h2 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
         .pp-why-sub { color: var(--ink-2); font-size: 14.5px; margin: 0 0 22px; }
         .pp-why-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
         .pp-why-item h3 { font-size: 15px; font-weight: 600; margin: 12px 0 6px; }
@@ -512,7 +615,7 @@ export default function OfferPage() {
         /* Trust bar */
         .pp-trustbar { margin-bottom: 40px; padding: 24px 0; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
         .pp-stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; text-align: center; margin-bottom: 14px; }
-        .pp-stat b { display: block; font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 26px; letter-spacing: -0.01em; }
+        .pp-stat b { display: block; font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 26px; letter-spacing: -0.01em; }
         .pp-stat span { font-size: 12px; color: var(--ink-2); }
         .pp-secure-bar { margin: 0; }
 
@@ -542,7 +645,7 @@ export default function OfferPage() {
              while still surfacing price well before the deeper explanatory content. */
           .pp-hero { display: flex; flex-direction: column; gap: 0; margin-bottom: 36px; }
           .pp-hero-copy { display: contents; }
-          .pp-hero-hook, .pp-trustgrid, .pp-tip { order: 1; }
+          .pp-hero-hook, .pp-trustgrid, .pp-tip, .pp-locked { order: 1; }
           .pp-hero-price { order: 2; margin-bottom: 24px; }
           .pp-hero-how, .pp-hero-quote { order: 3; }
           .pp-compare-grid { grid-template-columns: 1fr; gap: 24px; }
