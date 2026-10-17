@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { splitRole } from '@/lib/splitRole'
 
-type Suggestion = { phrase: string; count: number }
+type Suggestion = { phrase: string; display?: string; count: number }
 
 // A role field with live suggestions from /api/suggest-roles — titles we
 // actually carry, matched at word starts, with counts. Once a role is chosen
@@ -132,7 +132,7 @@ export default function RoleInput({ value, onChange, onSplit, placeholder, class
           if (open && !compound && list.length > 0) {
             if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(i + 1, list.length - 1)); return }
             if (e.key === 'ArrowUp') { e.preventDefault(); setIdx((i) => Math.max(i - 1, -1)); return }
-            if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); commit(list[idx].phrase); return }
+            if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); commit(list[idx].display ?? list[idx].phrase); return }
           }
           if (e.key === 'Enter' && value.trim()) { e.preventDefault(); if (!compound) commit(value) }
         }}
@@ -141,8 +141,8 @@ export default function RoleInput({ value, onChange, onSplit, placeholder, class
         <ul className="role-sug" role="listbox">
           {list.map((s, i) => (
             <li key={s.phrase} role="option" aria-selected={i === idx} className={i === idx ? 'on' : ''}
-                onMouseDown={(e) => { e.preventDefault(); commit(s.phrase) }}>
-              <span className="role-sug-t">{s.phrase}</span>
+                onMouseDown={(e) => { e.preventDefault(); commit(s.display ?? s.phrase) }}>
+              <span className="role-sug-t">{s.display ?? s.phrase}</span>
               <span className="role-sug-n">{s.count} {s.count === 1 ? 'role' : 'roles'}</span>
             </li>
           ))}
@@ -177,13 +177,11 @@ const STYLE = `
   .role-sug li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
     padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 15px; color: #1C1B19; }
   .role-sug li:hover, .role-sug li.on { background: #F6F2EA; }
-  .role-sug-t::first-letter { text-transform: uppercase; }
   .role-sug-n { flex: none; font-size: 12px; color: #8A8378; font-variant-numeric: tabular-nums; }
   .role-pill-box { display: flex; align-items: center; cursor: text; }
   .role-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 34px; padding: 0 6px 0 14px;
     border-radius: 999px; background: #1C1B19; color: #fff; font-size: 15px; font-weight: 500; line-height: 1; }
   .role-pill-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .role-pill-t::first-letter { text-transform: uppercase; }
   .role-pill-x { flex: none; width: 24px; height: 24px; border: 0; border-radius: 999px; background: rgba(255,255,255,.14);
     color: #fff; font-size: 16px; line-height: 1; cursor: pointer; padding: 0; }
   .role-pill-x:hover { background: rgba(255,255,255,.28); }
