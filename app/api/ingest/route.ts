@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { inferWorkType } from '@/lib/workType'
 import { runApifyScraperForSector, normalisePost, Sector, SECTOR_QUERIES, PRIORITY_QUERIES, dayIndex } from '@/lib/apify'
 import { classifyPost } from '@/lib/classifier'
+import { alreadySeen, rememberDiscard } from '@/lib/seenPosts'
+import { prefilterPost } from '@/lib/prefilter'
+import { offMarketReason } from '@/lib/market'
+import { logPrefilter } from '@/lib/classifierLog'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
@@ -44,7 +48,7 @@ export async function POST(req: NextRequest) {
   console.log(`[ingest] Starting sector="${sector}" queryOffset=${queryOffset} mode=${mode} maxPosts=${maxPosts}`)
 
   const MAX_POST_AGE_DAYS = 60  // ignore hiring posts older than this — role is long filled
-  const result = { sector, total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0, skipped_off_sector: 0, skipped_stale: 0 }
+  const result = { sector, total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0, skipped_off_sector: 0, skipped_stale: 0, prefiltered: 0 }
   const queryStats: Record<string, { posts: number, inserted: number, duplicates: number, rejected: number }> = {}
 
   try {
@@ -69,11 +73,8 @@ export async function POST(req: NextRequest) {
           continue
         }
 
-        const { data: existing } = await db
-          .from('jobs')
-          .select('id')
-          .eq('post_url', post.postUrl)
-          .single()
+        // Known job OR already-discarded post: either way, no classifier call
+        const existing = await alreadySeen(db, post.postUrl)
 
         if (existing) { 
           result.duplicates_skipped++
@@ -96,22 +97,39 @@ export async function POST(req: NextRequest) {
           continue
         }
 
-        const classified = await classifyPost(post.text, post.authorHeadline, sector)
+        const sourceQuery: string | null = (rawPost as { _query?: string })._query || null
+        const ctx = { db, pipeline: 'ingest' as const, query: sourceQuery,
+          post: { postUrl: post.postUrl, authorName: post.authorName, authorHeadline: post.authorHeadline,
+            authorLinkedinUrl: post.authorLinkedinUrl, postedAt: post.postedAt } }
+        // Rules first: aggregators, repost templates and off-market signals never reach the model
+        const pre = prefilterPost(post)
+        if (pre) {
+          const pq = sourceQuery || 'unknown'
+          if (!queryStats[pq]) queryStats[pq] = { posts: 0, inserted: 0, duplicates: 0, rejected: 0 }
+          queryStats[pq].posts++; queryStats[pq].rejected++; result.prefiltered++
+          rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
+            label: pre.label, reason: pre.reason, pipeline: 'ingest', query: sourceQuery, hint_sector: sector })
+          logPrefilter(ctx, post.text, sector, pre.reason)
+          continue
+        }
+        const classified = await classifyPost(post.text, post.authorHeadline, sector, ctx)
         if (!classified.isJob) {
           const q = (rawPost as any)._query || 'unknown'
           if (!queryStats[q]) queryStats[q] = { posts: 0, inserted: 0, duplicates: 0, rejected: 0 }
           queryStats[q].posts++
           queryStats[q].rejected++
+          // this route never recorded its discards, so every sweep re-classified them
+          rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
+            label: 'bad', reason: classified.reason ?? null, pipeline: 'ingest', query: q, hint_sector: sector })
           continue
         }
 
-        // Skip India-based roles
-        const INDIA_LOCATIONS = ['bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'karachi', 'lahore', 'pakistan', 'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat', 'surat', 'nashik', 'visakhapatnam', 
-          'pune', 'chennai', 'noida', 'gurugram', 'gurgaon', 'delhi', 'kolkata',
-          'ahmedabad', 'jaipur', 'chandigarh', 'indore', 'india']
-        const loc = (classified.location || '').toLowerCase()
-        if (INDIA_LOCATIONS.some(l => loc.includes(l))) {
-          console.log('[ingest] Skipping India-based role:', classified.location)
+        const offMarket = offMarketReason(classified)
+        if (offMarket) {
+          console.log('[ingest] Skipping off-market role:', offMarket)
+          rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
+            label: 'off-market', reason: offMarket, pipeline: 'ingest',
+            query: (rawPost as any)._query || null, hint_sector: sector })
           continue
         }
 

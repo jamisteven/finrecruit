@@ -1,3 +1,5 @@
+import { logClassification, type ClassifyContext } from './classifierLog'
+
 export type ClassifiedJob = {
   isJob: boolean
   // why a post was turned down — stored so we can audit what we discard
@@ -5,6 +7,9 @@ export type ClassifiedJob = {
   title: string
   company: string | null
   location: string | null
+  // ISO-3166 alpha-2 of where the candidate must be; for remote roles, the country
+  // the role is restricted to. null when genuinely worldwide or unknowable.
+  country?: string | null
   seniority: string
   salary: string | null
   apply_method: string | null
@@ -26,16 +31,29 @@ const SECTOR_CONTEXT: Record<string, string> = {
   realestate: 'real estate (property management, leasing, brokerage, real estate investment, facilities)',
 }
 
+// Classify-and-extract on a short post is Haiku-grade work at roughly a third of
+// Sonnet's price. CLASSIFIER_MODEL in Vercel flips it back without a deploy.
+export const CLASSIFIER_MODEL = process.env.CLASSIFIER_MODEL || 'claude-haiku-4-5'
+
 export async function classifyPost(
   rawText: string,
   authorHeadline: string | null,
-  sector = 'finance'
+  sector = 'finance',
+  // When given, the call is written to classifier_log with the full post and the
+  // full verdict — the training set for doing this without an API call.
+  ctx?: ClassifyContext,
 ): Promise<ClassifiedJob> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set')
+  const started = Date.now()
+  let rawResponse: string | null = null
+  const log = (out: ClassifiedJob) => {
+    if (ctx) logClassification(ctx, rawText, sector, CLASSIFIER_MODEL, out, Date.now() - started, rawResponse)
+    return out
+  }
 
   const FALLBACK: ClassifiedJob = {
-    isJob: false, reason: 'classifier failed', title: '', company: null, location: null,
+    isJob: false, reason: 'classifier failed', title: '', company: null, location: null, country: null,
     seniority: 'Unknown', salary: null, apply_method: null, summary: '', tags: [],
     sector: 'other', quality: 'low',
   }
@@ -81,9 +99,9 @@ ${rawText.slice(0, 2500)}
 ---
 
 Reply ONLY with JSON, no markdown, no backticks:
-{"isJob":true,"title":"job title","company":"company or null","location":"primary city only (e.g. London, New York, Mumbai, Remote) — do NOT list multiple cities. Always name the real city, including Indian ones. Infer from the post, company or context where possible; null only if genuinely unknowable","seniority":"one of: Intern/Junior/Mid/Senior/VP/Director/MD/Partner/C-Suite/Unknown","salary":"range or null","apply_method":"DM/email/link/etc or null","summary":"1-2 sentences about the role","tags":["tag1","tag2"],"sector":"one of: finance/tech/legal/marketing/realestate/sales/hr/other","quality":"one of: high/medium/low"}
+{"isJob":true,"title":"job title","company":"company or null","location":"primary city only (e.g. London, New York, Mumbai, Remote) — do NOT list multiple cities. Always name the real city, including Indian ones. Infer from the post, company or context where possible; null only if genuinely unknowable","country":"ISO-3166 alpha-2 code (US, GB, CH, DE, IN …) of where the candidate must be located. For remote roles, the country the role is restricted to (e.g. 'Remote, India-based' → IN; 'Egypt-based candidates only' → EG; IST working hours → IN); null only if genuinely open worldwide","seniority":"one of: Intern/Junior/Mid/Senior/VP/Director/MD/Partner/C-Suite/Unknown","salary":"range or null","apply_method":"DM/email/link/etc or null","summary":"1-2 sentences about the role","tags":["tag1","tag2"],"sector":"one of: finance/tech/legal/marketing/realestate/sales/hr/other","quality":"one of: high/medium/low"}
 
-Or if not a job: {"isJob":false,"reason":"a short phrase saying why — e.g. 'candidate seeking work', 'career advice', 'roundup of several roles', 'company promo', 'already filled'","title":"","company":null,"location":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[],"sector":"other","quality":"low"}`
+Or if not a job: {"isJob":false,"reason":"a short phrase saying why — e.g. 'candidate seeking work', 'career advice', 'roundup of several roles', 'company promo', 'already filled'","title":"","company":null,"location":null,"country":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[],"sector":"other","quality":"low"}`
 
   try {
     const controller = new AbortController()
@@ -97,7 +115,7 @@ Or if not a job: {"isJob":false,"reason":"a short phrase saying why — e.g. 'ca
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: CLASSIFIER_MODEL,
         max_tokens: 512,
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -108,11 +126,12 @@ Or if not a job: {"isJob":false,"reason":"a short phrase saying why — e.g. 'ca
 
     if (!res.ok) {
       console.error(`[classifier] Anthropic API error ${res.status}`)
-      return FALLBACK
+      return log({ ...FALLBACK, reason: `classifier failed: HTTP ${res.status}` })
     }
 
     const data = await res.json()
     const text = data.content?.find((b: { type: string }) => b.type === 'text')?.text || '{}'
+    rawResponse = text
     const clean = text.replace(/```json|```/g, '').trim()
     const parsed = JSON.parse(clean)
     const out: ClassifiedJob = {
@@ -122,14 +141,12 @@ Or if not a job: {"isJob":false,"reason":"a short phrase saying why — e.g. 'ca
       sector: typeof parsed.sector === 'string' && parsed.sector ? parsed.sector.toLowerCase().trim() : sector,
     }
     console.log(`[classifier] [query:${sector}] isJob=${out.isJob}${out.isJob ? '' : ` (${out.reason ?? 'no reason'})`} quality=${out.quality} sector=${out.sector} title="${out.title}"`)
-    return out
+    return log(out)
 
   } catch (e) {
-    if ((e as Error).name === 'AbortError') {
-      console.error('[classifier] Timed out')
-    } else {
-      console.error('[classifier] Error:', e)
-    }
-    return FALLBACK
+    const timedOut = (e as Error).name === 'AbortError'
+    if (timedOut) console.error('[classifier] Timed out')
+    else console.error('[classifier] Error:', e)
+    return log({ ...FALLBACK, reason: timedOut ? 'classifier failed: timeout' : 'classifier failed: error' })
   }
 }

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { inferWorkType } from '@/lib/workType'
 import { normalisePost, ApifyPost } from '@/lib/apify'
 import { classifyPost } from '@/lib/classifier'
+import { alreadySeen, rememberDiscard } from '@/lib/seenPosts'
+import { prefilterPost } from '@/lib/prefilter'
+import { offMarketReason } from '@/lib/market'
+import { logPrefilter } from '@/lib/classifierLog'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
@@ -86,14 +90,6 @@ const HASHTAG_QUERIES = [
 
 const GERMAN_HASHTAGS = ['stellenangebot', 'jobsuche', 'neuejobs', 'karriere', 'jobboerse', 'jobangebot', 'stellen', 'wirstellenein']
 
-const INDIA_LOCATIONS = [
-  'bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'pune', 'karachi', 'lahore', 'pakistan',
-  'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat', 'alabama', 'abernathy', 'new bern',
-  'chennai', 'noida', 'gurugram', 'gurgaon', 'delhi', 'kolkata',
-  'ahmedabad', 'jaipur', 'chandigarh', 'indore', 'india',
-  'surat', 'nashik', 'visakhapatnam',
-]
-
 function guessSector(text: string, headline: string): string {
   const combined = `${text} ${headline}`.toLowerCase()
   if (/lawyer|solicitor|counsel|litigation|barrister|legal|compliance|paralegal/.test(combined)) return 'legal'
@@ -121,7 +117,7 @@ export async function POST(req: NextRequest) {
   if (!apiToken) return NextResponse.json({ error: 'APIFY_API_TOKEN not set' }, { status: 500 })
 
   const db = createServerClient()
-  const result = { total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0 }
+  const result = { total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0, prefiltered: 0 }
 
   // Support manual offset param to target specific queries
   const url = new URL(req.url)
@@ -205,8 +201,8 @@ export async function POST(req: NextRequest) {
             const post = normalisePost(rawPost)
             if (!post.postUrl || !post.text || post.text.length < 20) return
 
-            const { data: existing } = await db.from('jobs').select('id').eq('post_url', post.postUrl).maybeSingle()
-            if (existing) { result.duplicates_skipped++; queryDuplicates++; return }
+            // Known job OR already-discarded post: either way, no classifier call
+            if (await alreadySeen(db, post.postUrl)) { result.duplicates_skipped++; queryDuplicates++; return }
 
             const HIRING_SIGNALS = ['hiring', 'recruit', 'looking for', 'seeking', 'vacancy',
               'opening', 'mandate', 'apply', 'candidate', 'now hiring', 'join our', 'come work',
@@ -214,13 +210,25 @@ export async function POST(req: NextRequest) {
             if (!HIRING_SIGNALS.some((s) => post.text.toLowerCase().includes(s))) return
 
             const sector = guessSector(post.text, post.authorHeadline || '')
-            const classified = await classifyPost(post.text, post.authorHeadline, sector)
+            const ctx = { db, pipeline: 'hashtag' as const, query: query,
+              post: { postUrl: post.postUrl, authorName: post.authorName, authorHeadline: post.authorHeadline,
+                authorLinkedinUrl: post.authorLinkedinUrl, postedAt: post.postedAt } }
+            // Rules first: aggregators, repost templates and off-market signals never reach the model
+            const pre = prefilterPost(post)
+            if (pre) {
+              queryRejected++; result.prefiltered++
+              rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
+                label: pre.label, reason: pre.reason, pipeline: 'hashtag', query: query, hint_sector: sector })
+              logPrefilter(ctx, post.text, sector, pre.reason)
+              return
+            }
+            const classified = await classifyPost(post.text, post.authorHeadline, sector, ctx)
             if (!classified.isJob) {
               queryRejected++
               // keep what we turn away so the discards can be audited
               db.from('classified_posts').insert({
                 post_url: post.postUrl,
-                raw_text: post.text.slice(0, 600),
+                raw_text: post.text,
                 author_headline: post.authorHeadline,
                 label: 'bad',
                 reason: classified.reason ?? null,
@@ -236,8 +244,13 @@ export async function POST(req: NextRequest) {
             const jobSector = ['finance','tech','legal','marketing','realestate']
               .includes(classified.sector) ? classified.sector : 'other'
 
-            const loc = (classified.location || '').toLowerCase()
-            if (INDIA_LOCATIONS.some(l => loc.includes(l))) return
+            const offMarket = offMarketReason(classified)
+            if (offMarket) {
+              // remember it, or the next sweep pays to classify it again
+              rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
+                label: 'off-market', reason: offMarket, pipeline: 'hashtag', query, hint_sector: sector })
+              return
+            }
 
             result.classified_as_jobs++
 

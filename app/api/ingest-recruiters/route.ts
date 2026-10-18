@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { inferWorkType } from '@/lib/workType'
 import { normalisePost, ApifyPost } from '@/lib/apify'
 import { classifyPost } from '@/lib/classifier'
+import { alreadySeen, rememberDiscard } from '@/lib/seenPosts'
+import { prefilterPost } from '@/lib/prefilter'
+import { offMarketReason } from '@/lib/market'
+import { logPrefilter } from '@/lib/classifierLog'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
@@ -54,6 +58,7 @@ export async function POST(req: NextRequest) {
     skipped_stale: 0,
     recruiters_scraped: recruiters.length,
     recruiters_with_new_posts: 0,
+    prefiltered: 0,
   }
   const VALID_SECTORS = ['finance', 'tech', 'legal', 'marketing', 'realestate']
 
@@ -118,10 +123,8 @@ export async function POST(req: NextRequest) {
           continue
         }
 
-        const { data: existing } = await db
-          .from('jobs').select('id').eq('post_url', post.postUrl).single()
-
-        if (existing) { result.duplicates_skipped++; continue }
+        // Known job OR already-discarded post: either way, no classifier call
+        if (await alreadySeen(db, post.postUrl)) { result.duplicates_skipped++; continue }
 
         const HIRING_SIGNALS = [
           'hiring', 'recruit', 'looking for', 'seeking', 'vacancy',
@@ -134,13 +137,25 @@ export async function POST(req: NextRequest) {
         const recruiter = cleanAuthorUrl ? recruiterMap.get(cleanAuthorUrl) : null
         const hintSector = recruiter?.sector || guessSector(post.authorHeadline || '')
 
-        const classified = await classifyPost(post.text, post.authorHeadline, hintSector)
+        const ctx = { db, pipeline: 'recruiter' as const, query: cleanAuthorUrl ?? null,
+          post: { postUrl: post.postUrl, authorName: post.authorName, authorHeadline: post.authorHeadline,
+            authorLinkedinUrl: post.authorLinkedinUrl, postedAt: post.postedAt } }
+        // Rules first: aggregators, repost templates and off-market signals never reach the model
+        const pre = prefilterPost(post)
+        if (pre) {
+          queryRejected++; result.prefiltered++
+          rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
+            label: pre.label, reason: pre.reason, pipeline: 'recruiter', query: cleanAuthorUrl ?? null, hint_sector: hintSector })
+          logPrefilter(ctx, post.text, hintSector, pre.reason)
+          continue
+        }
+        const classified = await classifyPost(post.text, post.authorHeadline, hintSector, ctx)
         if (!classified.isJob) {
           queryRejected++
           // keep what we turn away so the discards can be audited
           db.from('classified_posts').insert({
             post_url: post.postUrl,
-            raw_text: post.text.slice(0, 600),
+            raw_text: post.text,
             author_headline: post.authorHeadline,
             label: 'bad',
             reason: classified.reason ?? null,
@@ -151,12 +166,12 @@ export async function POST(req: NextRequest) {
           continue
         }
 
-        // Skip India-based roles
-        const INDIA_LOCATIONS = ['bengaluru', 'bangalore', 'hyderabad', 'mumbai', 'karachi', 'lahore', 'pakistan', 'colombo', 'sri lanka', 'mohali', 'dhaka', 'bangladesh', 'vadodara', 'gujarat', 'surat', 'nashik', 'visakhapatnam',
-          'pune', 'chennai', 'noida', 'gurugram', 'gurgaon', 'delhi', 'kolkata',
-          'ahmedabad', 'jaipur', 'chandigarh', 'indore', 'india']
-        const loc = (classified.location || '').toLowerCase()
-        if (INDIA_LOCATIONS.some(l => loc.includes(l))) continue
+        const offMarket = offMarketReason(classified)
+        if (offMarket) {
+          rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
+            label: 'off-market', reason: offMarket, pipeline: 'recruiter', query: null, hint_sector: hintSector })
+          continue
+        }
 
         // The recruiter's sector is only a hint — trust the classifier's judgment of the role
         const sector = VALID_SECTORS.includes(classified.sector) ? classified.sector : null
