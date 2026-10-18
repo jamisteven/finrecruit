@@ -5,7 +5,8 @@ import { classifyPost } from '@/lib/classifier'
 import { alreadySeen, rememberDiscard } from '@/lib/seenPosts'
 import { prefilterPost } from '@/lib/prefilter'
 import { offMarketReason } from '@/lib/market'
-import { logPrefilter } from '@/lib/classifierLog'
+import { logPrefilter, logGateDiscard, recordDecision, type ClassifyContext } from '@/lib/classifierLog'
+import { runGate } from '@/lib/gate'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
     recruiters_scraped: recruiters.length,
     recruiters_with_new_posts: 0,
     prefiltered: 0,
+    gated: 0,
   }
   const VALID_SECTORS = ['finance', 'tech', 'legal', 'marketing', 'realestate']
 
@@ -137,7 +139,7 @@ export async function POST(req: NextRequest) {
         const recruiter = cleanAuthorUrl ? recruiterMap.get(cleanAuthorUrl) : null
         const hintSector = recruiter?.sector || guessSector(post.authorHeadline || '')
 
-        const ctx = { db, pipeline: 'recruiter' as const, query: cleanAuthorUrl ?? null,
+        const ctx: ClassifyContext = { db, pipeline: 'recruiter', query: cleanAuthorUrl ?? null,
           post: { postUrl: post.postUrl, authorName: post.authorName, authorHeadline: post.authorHeadline,
             authorLinkedinUrl: post.authorLinkedinUrl, postedAt: post.postedAt } }
         // Rules first: aggregators, repost templates and off-market signals never reach the model
@@ -147,6 +149,16 @@ export async function POST(req: NextRequest) {
           rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
             label: pre.label, reason: pre.reason, pipeline: 'recruiter', query: cleanAuthorUrl ?? null, hint_sector: hintSector })
           logPrefilter(ctx, post.text, hintSector, pre.reason)
+          continue
+        }
+        // The trained gate (lib/gate.ts). Shadow mode only records a score; 'on' discards below LOW.
+        const gate = runGate({ text: post.text, authorHeadline: post.authorHeadline, authorLinkedinUrl: post.authorLinkedinUrl, postUrl: post.postUrl })
+        ctx.gateScore = gate.score
+        if (gate.discard && gate.score !== null) {
+          queryRejected++; result.gated++
+          rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
+            label: 'bad', reason: `gate: ${gate.score.toFixed(3)} below threshold`, pipeline: 'recruiter', query: cleanAuthorUrl ?? null, hint_sector: hintSector })
+          logGateDiscard(ctx, post.text, hintSector, gate.score)
           continue
         }
         const classified = await classifyPost(post.text, post.authorHeadline, hintSector, ctx)
@@ -170,6 +182,7 @@ export async function POST(req: NextRequest) {
         if (offMarket) {
           rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
             label: 'off-market', reason: offMarket, pipeline: 'recruiter', query: null, hint_sector: hintSector })
+          recordDecision(ctx, 'off-market')
           continue
         }
 
@@ -178,6 +191,7 @@ export async function POST(req: NextRequest) {
         if (!sector) {
           console.log(`[ingest-recruiters] Skipping off-sector role: "${classified.title}" (${classified.sector})`)
           result.skipped_off_sector++
+          recordDecision(ctx, 'discarded')
           continue
         }
 
@@ -206,6 +220,7 @@ export async function POST(req: NextRequest) {
           is_verified_job: true,
         })
 
+        recordDecision(ctx, !error ? 'kept' : error.code === '23505' ? 'duplicate' : 'error')
         if (error) { console.error('[ingest-recruiters] DB error:', error); result.errors++ }
         else {
           result.inserted++

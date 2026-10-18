@@ -59,3 +59,15 @@ select post_url, coalesce(pipeline, 'backfill'), query, hint_sector, author_head
   jsonb_build_object('isJob', false, 'reason', reason, 'label', label)
 from classified_posts
 where label = 'bad' and raw_text <> '';
+
+-- Added 2026-10-18 (later the same day): the route's final decision, distinct from the
+-- model's verdict. Values: kept | discarded | off-market | duplicate | error | prefiltered | pending.
+alter table classifier_log add column if not exists decision text;
+update classifier_log set decision = case
+  when model = 'prefilter' then 'prefiltered'
+  when is_job then 'kept' else 'discarded' end
+where decision is null;
+create index if not exists classifier_log_decision_idx on classifier_log (decision, created_at desc);
+
+-- The gate's probability for the post (GATE_MODE=shadow|on), null when the gate was off.
+alter table classifier_log add column if not exists gate_score real;

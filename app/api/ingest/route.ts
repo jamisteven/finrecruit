@@ -5,7 +5,8 @@ import { classifyPost } from '@/lib/classifier'
 import { alreadySeen, rememberDiscard } from '@/lib/seenPosts'
 import { prefilterPost } from '@/lib/prefilter'
 import { offMarketReason } from '@/lib/market'
-import { logPrefilter } from '@/lib/classifierLog'
+import { logPrefilter, logGateDiscard, recordDecision, type ClassifyContext } from '@/lib/classifierLog'
+import { runGate } from '@/lib/gate'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
   console.log(`[ingest] Starting sector="${sector}" queryOffset=${queryOffset} mode=${mode} maxPosts=${maxPosts}`)
 
   const MAX_POST_AGE_DAYS = 60  // ignore hiring posts older than this — role is long filled
-  const result = { sector, total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0, skipped_off_sector: 0, skipped_stale: 0, prefiltered: 0 }
+  const result = { sector, total: 0, classified_as_jobs: 0, duplicates_skipped: 0, inserted: 0, errors: 0, skipped_off_sector: 0, skipped_stale: 0, prefiltered: 0, gated: 0 }
   const queryStats: Record<string, { posts: number, inserted: number, duplicates: number, rejected: number }> = {}
 
   try {
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
         }
 
         const sourceQuery: string | null = (rawPost as { _query?: string })._query || null
-        const ctx = { db, pipeline: 'ingest' as const, query: sourceQuery,
+        const ctx: ClassifyContext = { db, pipeline: 'ingest', query: sourceQuery,
           post: { postUrl: post.postUrl, authorName: post.authorName, authorHeadline: post.authorHeadline,
             authorLinkedinUrl: post.authorLinkedinUrl, postedAt: post.postedAt } }
         // Rules first: aggregators, repost templates and off-market signals never reach the model
@@ -110,6 +111,18 @@ export async function POST(req: NextRequest) {
           rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
             label: pre.label, reason: pre.reason, pipeline: 'ingest', query: sourceQuery, hint_sector: sector })
           logPrefilter(ctx, post.text, sector, pre.reason)
+          continue
+        }
+        // The trained gate (lib/gate.ts). Shadow mode only records a score; 'on' discards below LOW.
+        const gate = runGate({ text: post.text, authorHeadline: post.authorHeadline, authorLinkedinUrl: post.authorLinkedinUrl, postUrl: post.postUrl })
+        ctx.gateScore = gate.score
+        if (gate.discard && gate.score !== null) {
+          const gq = sourceQuery || 'unknown'
+          if (!queryStats[gq]) queryStats[gq] = { posts: 0, inserted: 0, duplicates: 0, rejected: 0 }
+          queryStats[gq].posts++; queryStats[gq].rejected++; result.gated++
+          rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
+            label: 'bad', reason: `gate: ${gate.score.toFixed(3)} below threshold`, pipeline: 'ingest', query: sourceQuery, hint_sector: sector })
+          logGateDiscard(ctx, post.text, sector, gate.score)
           continue
         }
         const classified = await classifyPost(post.text, post.authorHeadline, sector, ctx)
@@ -130,6 +143,7 @@ export async function POST(req: NextRequest) {
           rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
             label: 'off-market', reason: offMarket, pipeline: 'ingest',
             query: (rawPost as any)._query || null, hint_sector: sector })
+          recordDecision(ctx, 'off-market')
           continue
         }
 
@@ -165,6 +179,7 @@ export async function POST(req: NextRequest) {
           is_verified_job: true,
         })
 
+        recordDecision(ctx, !error ? 'kept' : error.code === '23505' ? 'duplicate' : 'error')
         if (error) { console.error('[ingest] DB error:', error); result.errors++ }
         else {
           result.inserted++

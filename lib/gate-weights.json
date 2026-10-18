@@ -1,0 +1,1 @@
+{"featurizer":"v1","n_buckets":1048576,"thresholds":{"low":0,"high":1},"bias":0,"idx":[],"idf":[],"w":[],"note":"placeholder — run scripts/gate/train_gate.py to produce real weights"}
