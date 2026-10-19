@@ -60,7 +60,9 @@ export async function classifyPost(
 
   const sectorContext = SECTOR_CONTEXT[sector] || sector
 
-  const prompt = `You are classifying LinkedIn posts to find job openings in ${sectorContext}.
+  const prompt = `You are classifying LinkedIn posts to find job openings. The search that found this post was aimed at ${sectorContext}, but that is only a hint about where it came from.
+
+IMPORTANT: isJob is about whether this is ONE specific open role that a person could apply for — in ANY sector, ANY industry, ANY country. Never set isJob false because the role is outside ${sector}; record the fit in the "sector" field instead (use "other" if it fits none of ours). Location and country are also recorded, never used to reject.
 
 Cast a WIDE net — include any post where someone is hiring for a specific open role, including.
 Posts may be in English OR German (including Swiss German). For German posts, key hiring phrases include: 'wir suchen', 'gesucht', 'Stelle frei', 'Stellenangebot', 'einstellen', 'wir stellen ein', 'jetzt bewerben', 'zur Verstärkung'. Extract all fields in English regardless of the post language.
@@ -101,7 +103,7 @@ ${rawText.slice(0, 2500)}
 Reply ONLY with JSON, no markdown, no backticks:
 {"isJob":true,"title":"job title","company":"company or null","location":"primary city only (e.g. London, New York, Mumbai, Remote) — do NOT list multiple cities. Always name the real city, including Indian ones. Infer from the post, company or context where possible; null only if genuinely unknowable","country":"ISO-3166 alpha-2 code (US, GB, CH, DE, IN …) of where the candidate must be located. For remote roles, the country the role is restricted to (e.g. 'Remote, India-based' → IN; 'Egypt-based candidates only' → EG; IST working hours → IN); null only if genuinely open worldwide","seniority":"one of: Intern/Junior/Mid/Senior/VP/Director/MD/Partner/C-Suite/Unknown","salary":"range or null","apply_method":"DM/email/link/etc or null","summary":"1-2 sentences about the role","tags":["tag1","tag2"],"sector":"one of: finance/tech/legal/marketing/realestate/sales/hr/other","quality":"one of: high/medium/low"}
 
-Or if not a job: {"isJob":false,"reason":"a short phrase saying why — e.g. 'candidate seeking work', 'career advice', 'roundup of several roles', 'company promo', 'already filled'","title":"","company":null,"location":null,"country":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[],"sector":"other","quality":"low"}`
+Or if not a job: {"isJob":false,"reason":"a short phrase saying why — e.g. 'candidate seeking work', 'career advice', 'roundup of several roles', 'company promo', 'already filled' (NEVER 'wrong sector' or 'wrong location' — those are not reasons)","title":"","company":null,"location":null,"country":null,"seniority":"Unknown","salary":null,"apply_method":null,"summary":"","tags":[],"sector":"other","quality":"low"}`
 
   try {
     const controller = new AbortController()

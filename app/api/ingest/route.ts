@@ -132,7 +132,8 @@ export async function POST(req: NextRequest) {
           queryStats[q].posts++
           queryStats[q].rejected++
           // this route never recorded its discards, so every sweep re-classified them
-          rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
+          // a failed/timed-out call is not a verdict — leave it unrecorded so the next sweep retries
+          if (!classified.reason?.startsWith('classifier failed')) rememberDiscard(db, { post_url: post.postUrl, raw_text: post.text, author_headline: post.authorHeadline,
             label: 'bad', reason: classified.reason ?? null, pipeline: 'ingest', query: q, hint_sector: sector })
           continue
         }

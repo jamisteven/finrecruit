@@ -7,6 +7,7 @@ import { prefilterPost } from '@/lib/prefilter'
 import { offMarketReason } from '@/lib/market'
 import { logPrefilter, logGateDiscard, recordDecision, type ClassifyContext } from '@/lib/classifierLog'
 import { runGate } from '@/lib/gate'
+import { batchSizeFor, findDuds, DUD_COOLDOWN_DAYS } from '@/lib/sweepBudget'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
@@ -43,14 +44,21 @@ export async function POST(req: NextRequest) {
   if (Array.isArray(body.queries) && body.queries.length) {
     batch = body.queries.slice(0, 6).map(String)   // same ceiling as the cron batch below
   } else {
-    // Cron path: anything active that hasn't run in the last 12 hours
+    // Cron path: anything active that hasn't run in the last 12 hours. Queries that
+    // LinkedIn barely has posts for (two runs in a row with <=1 kept) wait
+    // DUD_COOLDOWN_DAYS instead — their widened regional query still runs.
     const { data } = await db.from('priority_queries')
       .select('query, last_run_at')
       .eq('active', true)
       .or(`last_run_at.is.null,last_run_at.lt.${new Date(Date.now() - 12 * 3600_000).toISOString()}`)
       .order('last_run_at', { ascending: true, nullsFirst: true })
-      .limit(6)
-    batch = (data ?? []).map((r) => String(r.query))
+      .limit(18)
+    const candidates = (data ?? []).map((r) => ({ query: String(r.query), last: r.last_run_at ? Date.parse(String(r.last_run_at)) : 0 }))
+    const duds = await findDuds(db, 'priority', candidates.map((c) => c.query))
+    const dudCutoff = Date.now() - DUD_COOLDOWN_DAYS * 86_400_000
+    const skipped = new Set(candidates.filter((c) => duds.has(c.query) && c.last > dudCutoff).map((c) => c.query))
+    if (skipped.size) console.log(`[run-priority] slow lane (dud, ran < ${DUD_COOLDOWN_DAYS}d ago): ${[...skipped].join(', ')}`)
+    batch = candidates.filter((c) => !skipped.has(c.query)).slice(0, 6).map((c) => c.query)
   }
 
   if (!batch.length) return NextResponse.json({ success: true, ran: 0 })
@@ -61,13 +69,15 @@ export async function POST(req: NextRequest) {
   for (const query of batch) {
     let queryInserted = 0, queryDuplicates = 0, queryRejected = 0, queryPosts = 0
     try {
+      const budget = await batchSizeFor(db, 'priority', query)
+      console.log(`[run-priority] "${query}" maxPosts=${budget.maxPosts} (${budget.why})`)
       const startRes = await fetch(
         `https://api.apify.com/v2/acts/harvestapi~linkedin-post-search/runs?token=${apiToken}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            searchQueries: [query], maxPosts: 20, sortBy: 'date',
+            searchQueries: [query], maxPosts: budget.maxPosts, sortBy: 'date',
             postedLimit: 'month', scrapeComments: false, scrapeReactions: false,
           }),
         }
@@ -143,7 +153,8 @@ export async function POST(req: NextRequest) {
             if (!classified.isJob) {
               queryRejected++
               // keep what we turn away so the discards can be audited
-              db.from('classified_posts').insert({
+              // a failed/timed-out call is not a verdict — leave it unrecorded so the next sweep retries
+              if (!classified.reason?.startsWith('classifier failed')) db.from('classified_posts').insert({
                 post_url: post.postUrl,
                 raw_text: post.text,
                 author_headline: post.authorHeadline,

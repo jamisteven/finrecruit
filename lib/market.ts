@@ -12,11 +12,12 @@ const OFF_MARKET_PLACES = [
   'lagos', 'abuja', 'nigeria', 'nairobi', 'kenya', 'accra', 'ghana', 'cairo', 'egypt',
   // South-east Asia
   'manila', 'philippines', 'jakarta', 'indonesia', 'hanoi', 'ho chi minh', 'vietnam',
+  'kuala lumpur', 'malaysia',
 ]
 
 // ISO-3166 alpha-2 codes the classifier may return in `country`.
 const OFF_MARKET_COUNTRIES = new Set([
-  'IN', 'PK', 'BD', 'LK', 'NP', 'NG', 'KE', 'GH', 'EG', 'PH', 'ID', 'VN',
+  'IN', 'PK', 'BD', 'LK', 'NP', 'NG', 'KE', 'GH', 'EG', 'PH', 'ID', 'VN', 'MY',
 ])
 
 /**

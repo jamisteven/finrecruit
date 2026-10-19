@@ -7,6 +7,7 @@ import { prefilterPost } from '@/lib/prefilter'
 import { offMarketReason } from '@/lib/market'
 import { logPrefilter, logGateDiscard, recordDecision, type ClassifyContext } from '@/lib/classifierLog'
 import { runGate } from '@/lib/gate'
+import { batchSizeFor } from '@/lib/sweepBudget'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
@@ -16,8 +17,6 @@ const HASHTAG_QUERIES = [
   // English
   '#hiring',
   '#nowhiring',
-  '#jobopening',
-  '#jobalert',
   '#hiringnow',
   '#jobopportunity',
   '#werehiring',
@@ -51,7 +50,6 @@ const HASHTAG_QUERIES = [
   'hiring san diego',
   'hiring minneapolis',
   'hiring charlotte',
-  'hiring detroit',
   'hiring pittsburgh',
   'hiring salt lake city',
   'hiring richmond',
@@ -61,10 +59,7 @@ const HASHTAG_QUERIES = [
   'hiring london',
   'hiring manchester',
   // APAC
-  'hiring singapore',
-  'hiring hong kong',
   // Middle East
-  'hiring dubai',
   // Canada
   'hiring toronto',
   // Terms paying users searched and found nothing for
@@ -79,7 +74,6 @@ const HASHTAG_QUERIES = [
   'hiring finance new york',
   'hiring finance chicago',
   '#financejobs',
-  'hiring strategy',
   '#remotejobs',
   'hiring product manager',
   'hiring help desk',
@@ -144,6 +138,9 @@ export async function POST(req: NextRequest) {
     let queryPosts = 0
 
     try {
+      // Buy fewer posts from queries whose last visit was mostly repeats (Apify bills per post)
+      const budget = await batchSizeFor(db, 'hashtag', query)
+      console.log(`[ingest-hashtags] "${query}" maxPosts=${budget.maxPosts} (${budget.why})`)
       const startRes = await fetch(
         `https://api.apify.com/v2/acts/harvestapi~linkedin-post-search/runs?token=${apiToken}`,
         {
@@ -151,7 +148,7 @@ export async function POST(req: NextRequest) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             searchQueries: [query],
-            maxPosts: 20,
+            maxPosts: budget.maxPosts,
             // LinkedIn returns nothing for very high-volume tags when sorted by date
             ...(query === '#hiring' ? {} : { sortBy: 'date' }),
             postedLimit: 'month',
@@ -237,7 +234,8 @@ export async function POST(req: NextRequest) {
             if (!classified.isJob) {
               queryRejected++
               // keep what we turn away so the discards can be audited
-              db.from('classified_posts').insert({
+              // a failed/timed-out call is not a verdict — leave it unrecorded so the next sweep retries
+              if (!classified.reason?.startsWith('classifier failed')) db.from('classified_posts').insert({
                 post_url: post.postUrl,
                 raw_text: post.text,
                 author_headline: post.authorHeadline,

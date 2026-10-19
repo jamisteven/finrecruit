@@ -165,7 +165,8 @@ export async function POST(req: NextRequest) {
         if (!classified.isJob) {
           queryRejected++
           // keep what we turn away so the discards can be audited
-          db.from('classified_posts').insert({
+          // a failed/timed-out call is not a verdict — leave it unrecorded so the next sweep retries
+          if (!classified.reason?.startsWith('classifier failed')) db.from('classified_posts').insert({
             post_url: post.postUrl,
             raw_text: post.text,
             author_headline: post.authorHeadline,
@@ -187,13 +188,10 @@ export async function POST(req: NextRequest) {
         }
 
         // The recruiter's sector is only a hint — trust the classifier's judgment of the role
-        const sector = VALID_SECTORS.includes(classified.sector) ? classified.sector : null
-        if (!sector) {
-          console.log(`[ingest-recruiters] Skipping off-sector role: "${classified.title}" (${classified.sector})`)
-          result.skipped_off_sector++
-          recordDecision(ctx, 'discarded')
-          continue
-        }
+        // Same rule as the other three routes: real jobs outside our verticals are kept as
+        // 'other' (the feed filters by sector; we already paid to classify them).
+        const sector = VALID_SECTORS.includes(classified.sector) ? classified.sector : 'other'
+        if (sector === 'other') result.skipped_off_sector++  // counts 'other' roles kept, not dropped
 
         result.classified_as_jobs++
 
