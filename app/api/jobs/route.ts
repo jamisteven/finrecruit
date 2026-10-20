@@ -344,7 +344,14 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 24)
 
-  const jobs = pool.slice(offset, offset + limit)
+  // Free tier: the role is readable in full, the person is not. Anything outside the free samples
+  // goes out without the recruiter's name, photo or profile, and without the post link (the post
+  // URL carries the author's name). The card's recruiter line is the one route to /offer.
+  const pv = new Set(previewIds)
+  const jobs = pool.slice(offset, offset + limit).map((r) =>
+    hasPass || pv.has(r.id)
+      ? r
+      : { ...r, post_url: '', author_name: null, author_linkedin_url: null, author_avatar: null, gated: true })
   const res = NextResponse.json({
     topCompanies,
     jobs,

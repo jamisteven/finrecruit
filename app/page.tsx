@@ -237,6 +237,24 @@ function timeAgo(iso?: string | null): string | null {
 
 const isFresh = (iso?: string | null) => !!iso && Date.now() - new Date(iso).getTime() < 86400000
 
+// When a withheld role reaches the free feed: "today 14:10" / "tomorrow 09:30" / "Thursday 14:10"
+function unlockLabel(postedAt?: string | null): string | null {
+  if (!postedAt) return null
+  const t = new Date(postedAt).getTime()
+  if (isNaN(t)) return null
+  const at = new Date(t + FREE_DELAY_HOURS * 3600_000)
+  const now = new Date()
+  const time = at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  const dayDiff = Math.round((new Date(at).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86400000)
+  const day = dayDiff <= 0 ? 'today' : dayDiff === 1 ? 'tomorrow' : at.toLocaleDateString(undefined, { weekday: 'long' })
+  return `${day} ${time}`
+}
+
+// A stand-in behind the blur on gated cards. Varies in length per role so the blurred line looks
+// like a name rather than a fixed block; never a real person.
+const STAND_IN_NAMES = ['Alex Morgan', 'Sam Okafor', 'Jordan Lee', 'Priya Natarajan', 'Chris Delacroix', 'Morgan Whitfield', 'Taylor Brooks', 'Dana Kowalski']
+const standInName = (id: string) => STAND_IN_NAMES[(id.charCodeAt(0) + id.charCodeAt(id.length - 1)) % STAND_IN_NAMES.length]
+
 const initials = (name: string) =>
   name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
 
@@ -1062,9 +1080,11 @@ export default function HomePage() {
         <p className="salary"><span className="via">via: link or DM</span></p>
       </div>
       <div className="card-foot lock-foot">
-        <div className="card-actions">
-          <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'locked_title' })}><BoltIcon />Unlock</a>
-        </div>
+        <span className="lock-when">
+          {l.posted_at && <>Posted {timeAgo(l.posted_at)}</>}
+          {unlockLabel(l.posted_at) && <> · <b>in your feed {unlockLabel(l.posted_at)}</b></>}
+        </span>
+        <a className="lock-now" href="/offer?src=locked_title" onClick={() => track('cta_click', { where: 'locked_title' })}>See it now &rarr;</a>
       </div>
     </article>
   )
@@ -1525,6 +1545,12 @@ export default function HomePage() {
             )
           ) : (
             <>
+            {!hasPass && withheld > 0 && (
+              <a className="feed-top" href="/offer?src=feed_top" onClick={() => track('cta_click', { where: 'feed_top', n: withheld })}>
+                <span><b>{withheld} {withheld === 1 ? 'role was' : 'roles were'}</b> posted in the last {FREE_DELAY_HOURS} hours and {withheld === 1 ? "isn't" : "aren't"} in this feed yet.</span>
+                <em>See them with Premium &rarr;</em>
+              </a>
+            )}
             {splitFeed && todayJobs.length > 0 && (
               <div className="today-wrap">
                 <div className="sec-head"><span>Today&apos;s roles</span><i /></div>
@@ -1632,7 +1658,9 @@ export default function HomePage() {
                       {job.posted_at && <span className={`ago${isFresh(job.posted_at) ? ' fresh' : ''}`}>{timeAgo(job.posted_at)}</span>}
                     </div>
 
-                    <h3><a href={job.post_url} target="_blank" rel="noopener noreferrer" onClick={() => trackJobClick(job, jobIndex)}>{job.title}</a></h3>
+                    {job.gated
+                      ? <h3 className="gated-h">{job.title}</h3>
+                      : <h3><a href={job.post_url} target="_blank" rel="noopener noreferrer" onClick={() => trackJobClick(job, jobIndex)}>{job.title}</a></h3>}
                     <p className="meta">
                       <b>{job.company ?? 'Company not disclosed'}</b>
                       {job.location && <><span className="sep">·</span>{job.location}</>}
@@ -1647,6 +1675,25 @@ export default function HomePage() {
                       </p>
                     )}
 
+                    {job.gated ? (
+                      // Free tier: the role is all there, the person is not. This line is the one
+                      // route from a card to /offer — no button, no badge.
+                      <div className="card-foot gated">
+                        <span className="avatar silhouette" aria-hidden="true">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" /></svg>
+                        </span>
+                        <a className="author gated-author" href="/offer?src=recruiter_line" onClick={() => track('cta_click', { where: 'recruiter_line', age_days: job.posted_at ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000) : null })}>
+                          Posted by <span className="blur-name" aria-hidden="true">{standInName(job.id)}</span>
+                          {job.author_headline && <> · {job.author_headline}</>}
+                          <span className="named">Named with Premium</span>
+                        </a>
+                        <div className="card-actions">
+                          <button className={`ghost-btn${saved.has(job.id) ? ' saved' : ''}`} onClick={() => toggleSaved(job.id)}>
+                            {saved.has(job.id) ? '★ Saved' : '☆ Save'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
                     <div className="card-foot">
                       <span className="avatar">
                         {job.author_avatar
@@ -1671,6 +1718,7 @@ export default function HomePage() {
                         </a>
                       </div>
                     </div>
+                    )}
                   </article>
                 )
               })}
@@ -2413,7 +2461,33 @@ export default function HomePage() {
         .ulj .card.locked-title:hover { translate: 0 0; box-shadow: var(--shadow); border-color: var(--hairline); }
         .ulj .card h3.locked-h { color: var(--link); }
         .ulj .locked-blur { filter: blur(5px); user-select: none; pointer-events: none; }
-        .ulj .lock-foot { background: linear-gradient(90deg, var(--accent-soft), transparent 85%); justify-content: flex-end; }
+        .ulj .lock-foot { background: linear-gradient(90deg, var(--accent-soft), transparent 85%); justify-content: space-between; }
+        .ulj .lock-when { font-size: 12.5px; color: var(--ink-2); }
+        .ulj .lock-when b { color: var(--ink); font-weight: 600; }
+        .ulj .lock-now { font-size: 12.5px; font-weight: 600; color: var(--accent); text-decoration: none; white-space: nowrap; }
+        .ulj .lock-now:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+        /* ── The one line at the top of the free feed ── */
+        .ulj .feed-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; padding: 11px 16px; border: 1px solid var(--hairline-2); border-radius: 12px; background: var(--accent-soft); color: var(--ink-2); font-size: 14px; text-decoration: none; transition: border-color .15s; }
+        .ulj .feed-top b { color: var(--ink); font-weight: 600; }
+        .ulj .feed-top em { font-style: normal; font-size: 13px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+        .ulj .feed-top:hover { border-color: var(--cta); }
+
+        /* ── Gated cards: the role in full, the person withheld ── */
+        .ulj .card h3.gated-h { color: var(--ink); }
+        .ulj .avatar.silhouette { color: var(--ink-3); }
+        .ulj .author.gated-author { text-decoration: none; color: var(--ink-2); }
+        .ulj .author.gated-author:hover .named { text-decoration: underline; text-underline-offset: 3px; }
+        .ulj .blur-name { display: inline-block; filter: blur(4px); color: var(--ink); font-weight: 600; user-select: none; }
+        .ulj .author .named { margin-left: 8px; color: var(--accent); font-weight: 600; }
+        @media (max-width: 640px) {
+          .ulj .card-foot.gated { flex-wrap: wrap; row-gap: 10px; }
+          .ulj .card-foot.gated .author { white-space: normal; display: block; padding: 4px 0; line-height: 1.4; }
+          .ulj .card-foot.gated .author .named { display: block; margin-left: 0; }
+          .ulj .card-foot.gated .card-actions { margin-left: 0; width: 100%; }
+          .ulj .feed-top { flex-direction: column; align-items: flex-start; gap: 4px; }
+          .ulj .lock-foot { flex-wrap: wrap; row-gap: 6px; }
+        }
 
         /* ── Sidebar pass card ── */
         .ulj .pass { background: #14213D; color: #F3F1EA; border-radius: 16px; padding: 20px; }

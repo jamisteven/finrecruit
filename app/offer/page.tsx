@@ -158,6 +158,14 @@ export default function OfferPage() {
         }
         setLive(next)
         track('offer_view', { fresh: next.fresh, has_pass: next.hasPass, src: srcRef.current })
+        // first-party copy: which link brought this visitor here, so offer views and checkouts can
+        // be read by source in Supabase rather than only in GA4
+        try {
+          fetch('/api/offer-view', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+            body: JSON.stringify({ visitor_id: getVisitorId(), src: srcRef.current, fresh: next.fresh, has_pass: next.hasPass }),
+          }).catch(() => {})
+        } catch { /* never block the page */ }
       })
       .catch(() => {})
   }, [])
@@ -200,6 +208,7 @@ export default function OfferPage() {
           visitor_id: getVisitorId(),
           device: deviceType(),
           attribution: getAttribution(),
+          src: srcRef.current,
         }),
       })
       const data = await res.json().catch(() => null)

@@ -19,6 +19,7 @@ export type JobPost = {
   author_headline: string | null
   author_avatar?: string | null
   author_linkedin_url: string | null
+  gated?: boolean         // free tier: recruiter and post link withheld server-side
   raw_text: string
   posted_at: string | null
   extracted_at: string

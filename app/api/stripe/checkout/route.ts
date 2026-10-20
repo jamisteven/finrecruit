@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     ? 'tablet' : /Mobi|iPhone|Android/i.test(userAgent ?? '') ? 'mobile' : 'desktop'
   const device = ['mobile', 'tablet', 'desktop'].includes(body?.device) ? (body.device as string) : uaDevice
   const visitorId = clip(body?.visitor_id, 80)
+  const src = clip(body?.src, 60)          // which link on the site led to /offer (?src=…)
   const attr = (body?.attribution && typeof body.attribution === 'object' ? body.attribution : {}) as Record<string, unknown>
   const price = PRICES[plan]
   if (!price) return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 })
@@ -116,6 +117,7 @@ export async function POST(req: NextRequest) {
       user_id: userId ?? null,
       email: email ?? null,
       plan,
+      src: src || null,
       device,
       user_agent: userAgent,
       referrer: clip(attr.referrer, 300),
