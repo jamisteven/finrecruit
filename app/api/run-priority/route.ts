@@ -44,7 +44,9 @@ export async function POST(req: NextRequest) {
   if (Array.isArray(body.queries) && body.queries.length) {
     batch = body.queries.slice(0, 6).map(String)   // same ceiling as the cron batch below
   } else {
-    // Cron path: anything active that hasn't run in the last 12 hours. Queries that
+    // Cron path (every 2h on weekdays): anything active that hasn't run in the last
+    // 12 hours, oldest first, six per run — the cooldown, not the schedule, sets the
+    // Apify spend; a faster schedule only drains a new member's backlog sooner. Queries that
     // LinkedIn barely has posts for (two runs in a row with <=1 kept) wait
     // DUD_COOLDOWN_DAYS instead — their widened regional query still runs.
     const { data } = await db.from('priority_queries')
@@ -66,7 +68,14 @@ export async function POST(req: NextRequest) {
   const result = { total: 0, inserted: 0, duplicates_skipped: 0, errors: 0, prefiltered: 0, gated: 0 }
   console.log(`[run-priority] ${batch.join(', ')}`)
 
+  // Stop starting new Apify runs once most of the function's time is spent; the
+  // cron comes back in two hours and picks up whatever is left.
+  const startedAt = Date.now()
+  const TIME_BUDGET_MS = 230_000
+  const deferred: string[] = []
+
   for (const query of batch) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS) { deferred.push(query); continue }
     let queryInserted = 0, queryDuplicates = 0, queryRejected = 0, queryPosts = 0
     try {
       const budget = await batchSizeFor(db, 'priority', query)
@@ -226,8 +235,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (deferred.length) console.log(`[run-priority] out of time, left for next run: ${deferred.join(', ')}`)
   console.log('[run-priority] done:', result)
-  return NextResponse.json({ success: true, ran: batch.length, result })
+  return NextResponse.json({ success: true, ran: batch.length - deferred.length, deferred, result })
 }
 
 export async function GET(req: NextRequest) {

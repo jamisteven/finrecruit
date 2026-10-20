@@ -64,3 +64,25 @@ export async function findDuds(db: Db, pipeline: string, queries: string[]): Pro
   }
   return duds
 }
+
+/**
+ * Kept-rate per query over the last 14 days: jobs inserted / posts returned.
+ * Queries with fewer than 40 posts in the window are treated as unknown (null).
+ */
+export async function keptRates(db: Db, pipeline: string, queries: string[]): Promise<Map<string, number | null>> {
+  const out = new Map<string, number | null>(queries.map((q) => [q.toLowerCase(), null]))
+  if (!queries.length) return out
+  const since = new Date(Date.now() - 14 * 86_400_000).toISOString()
+  const { data } = await db.from('ingest_runs')
+    .select('query, posts_returned, jobs_inserted')
+    .eq('pipeline', pipeline).in('query', queries).gte('run_at', since)
+  const agg = new Map<string, { posts: number; kept: number }>()
+  for (const r of (data as { query: string; posts_returned: number | null; jobs_inserted: number | null }[] | null) ?? []) {
+    const k = r.query.toLowerCase()
+    const a = agg.get(k) ?? { posts: 0, kept: 0 }
+    a.posts += r.posts_returned ?? 0; a.kept += r.jobs_inserted ?? 0
+    agg.set(k, a)
+  }
+  for (const [k, a] of agg) if (a.posts >= 40) out.set(k, a.kept / a.posts)
+  return out
+}

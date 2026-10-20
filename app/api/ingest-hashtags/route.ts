@@ -1,17 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { inferWorkType } from '@/lib/workType'
-import { normalisePost, ApifyPost } from '@/lib/apify'
+import { normalisePost, ApifyPost, dayIndex } from '@/lib/apify'
 import { classifyPost } from '@/lib/classifier'
 import { alreadySeen, rememberDiscard } from '@/lib/seenPosts'
 import { prefilterPost } from '@/lib/prefilter'
 import { offMarketReason } from '@/lib/market'
 import { logPrefilter, logGateDiscard, recordDecision, type ClassifyContext } from '@/lib/classifierLog'
 import { runGate } from '@/lib/gate'
-import { batchSizeFor } from '@/lib/sweepBudget'
+import { batchSizeFor, keptRates } from '@/lib/sweepBudget'
+import { apifyBudget, budgetMode } from '@/lib/apifyBudget'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
 export const maxDuration = 300
+
+// Extra runs when we're under-spending the Apify plan: the queries with the best
+// kept-rate in the last fortnight, in the cities visitors actually filter for.
+const BONUS_QUERIES = [
+  'hiring new york', 'hiring atlanta', 'hiring zurich', 'hiring new jersey', 'hiring pittsburgh',
+  'hiring los angeles', 'hiring richmond', 'hiring salt lake city', 'hiring minneapolis', 'hiring chicago',
+  'hiring london', 'hiring manchester', 'hiring washington dc', 'hiring toronto', 'hiring miami',
+  'hiring seattle', 'hiring boston', 'hiring philadelphia', 'hiring grc remote', 'hiring fixed income',
+]
 
 const HASHTAG_QUERIES = [
   // English
@@ -128,10 +138,34 @@ export async function POST(req: NextRequest) {
         return cur % HASHTAG_QUERIES.length
       })()
 
-  const batch = [...HASHTAG_QUERIES, ...HASHTAG_QUERIES].slice(offset, offset + 4)
-  console.log(`[ingest-hashtags] Running: ${batch.join(', ')} (offset ${offset})`)
+  // Spend the Apify plan, not more and not less: behind pace, add the best-yielding
+  // queries to this run; ahead of pace, buy smaller batches; over target, minimum only.
+  const budget = await apifyBudget(db)
+  const plan = budgetMode(budget)
+  console.log(`[ingest-hashtags] apify budget: $${budget.spentUsd.toFixed(2)} spent of $${budget.targetUsd.toFixed(2)} target, pace $${budget.paceUsd.toFixed(2)} (day ${budget.dayOfCycle}/${budget.daysInCycle}) -> ${plan.mode}`)
+
+  let rotation = [...HASHTAG_QUERIES, ...HASHTAG_QUERIES].slice(offset, offset + 4)
+  if (plan.minKeptRate > 0) {
+    // ahead of pace: drop the weak queries from this run, keep the strong ones at full size
+    const rates = await keptRates(db, 'hashtag', rotation)
+    const dropped = rotation.filter((q) => { const r = rates.get(q.toLowerCase()); return r !== null && r !== undefined && r < plan.minKeptRate })
+    if (dropped.length) console.log(`[ingest-hashtags] ${plan.mode}: skipping low-yield ${dropped.map((q) => `${q} (${Math.round((rates.get(q.toLowerCase()) ?? 0) * 100)}%)`).join(', ')}`)
+    rotation = rotation.filter((q) => !dropped.includes(q))
+  }
+  const bonus = plan.bonusQueries > 0
+    ? [...BONUS_QUERIES, ...BONUS_QUERIES].slice(dayIndex() % BONUS_QUERIES.length, dayIndex() % BONUS_QUERIES.length + plan.bonusQueries)
+        .filter((q) => !rotation.includes(q))
+    : []
+  const batch = [...rotation, ...bonus]
+  console.log(`[ingest-hashtags] Running: ${batch.join(', ')} (offset ${offset}${bonus.length ? `, +${bonus.length} bonus` : ''})`)
+
+  // Bonus queries only run while there's function time left; the rotation always runs.
+  const startedAt = Date.now()
+  const TIME_BUDGET_MS = 230_000
+  const skippedBonus: string[] = []
 
   for (const query of batch) {
+    if (bonus.includes(query) && Date.now() - startedAt > TIME_BUDGET_MS) { skippedBonus.push(query); continue }
     let queryInserted = 0
     let queryDuplicates = 0
     let queryRejected = 0
@@ -139,8 +173,9 @@ export async function POST(req: NextRequest) {
 
     try {
       // Buy fewer posts from queries whose last visit was mostly repeats (Apify bills per post)
-      const budget = await batchSizeFor(db, 'hashtag', query)
-      console.log(`[ingest-hashtags] "${query}" maxPosts=${budget.maxPosts} (${budget.why})`)
+      const sized = await batchSizeFor(db, 'hashtag', query)
+      const maxPosts = sized.maxPosts
+      console.log(`[ingest-hashtags] "${query}" maxPosts=${maxPosts} (${sized.why})`)
       const startRes = await fetch(
         `https://api.apify.com/v2/acts/harvestapi~linkedin-post-search/runs?token=${apiToken}`,
         {
@@ -148,7 +183,7 @@ export async function POST(req: NextRequest) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             searchQueries: [query],
-            maxPosts: budget.maxPosts,
+            maxPosts,
             // LinkedIn returns nothing for very high-volume tags when sorted by date
             ...(query === '#hiring' ? {} : { sortBy: 'date' }),
             postedLimit: 'month',
@@ -335,6 +370,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (skippedBonus.length) console.log(`[ingest-hashtags] bonus skipped (out of time): ${skippedBonus.join(', ')}`)
   console.log('[ingest-hashtags] Done:', result)
   return NextResponse.json({ success: true, result })
 }

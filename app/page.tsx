@@ -632,7 +632,7 @@ export default function HomePage() {
     if (myTargets.length === 0) return false
     return myTargets.some((t) => {
       if (!keywordMatches(t.keyword, j.title ?? '', null)) return false
-      return strict ? locationMatches(t.location, j.location ?? null) : true
+      return strict ? locationMatches(t.location, j.location ?? null, j.work_type ?? null) : true
     })
   }, [myTargets])
 

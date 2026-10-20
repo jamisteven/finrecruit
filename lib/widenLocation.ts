@@ -106,3 +106,44 @@ export function wideningLadder(location: string | null): WidenStep[] {
 export function widenedQuery(keyword: string, step: WidenStep): string {
   return step.location ? `hiring ${keyword} ${step.location}` : `hiring ${keyword}`
 }
+
+// Names people type for the same place. Keys and values lower-case.
+const PLACE_ALIASES: Record<string, string> = {
+  'uae': 'uae', 'united arab emirates': 'uae', 'emirates': 'uae',
+  'uk': 'united kingdom', 'united kingdom': 'united kingdom', 'great britain': 'united kingdom', 'england': 'united kingdom',
+  'usa': 'united states', 'us': 'united states', 'united states': 'united states', 'america': 'united states',
+  'nyc': 'new york', 'sf': 'san francisco', 'dc': 'washington dc',
+}
+
+/** A place name as we compare it: trimmed, lower-case, aliases folded ("UK" → "united kingdom"). */
+export const canonPlace = (s: string) => {
+  const k = s.trim().toLowerCase()
+  return PLACE_ALIASES[k] ?? k
+}
+const canon = canonPlace
+
+/**
+ * Every region a location belongs to, lower-case, narrowest first — the location
+ * itself, its state/metro or country, and the US for a US state. "Dubai, UAE"
+ * → ["dubai, uae", "dubai", "uae"]; "Chicago" → ["chicago", "illinois",
+ * "united states"]. Used so a member who asked for a country sees the city jobs
+ * inside it.
+ */
+export function regionsOf(location: string | null): string[] {
+  if (!location) return []
+  const out = new Set<string>()
+  const whole = canon(location)
+  out.add(whole)
+  // "Dubai, UAE" / "Zürich, Switzerland": each comma part is a place in its own right
+  const parts = location.split(/[,/|·]/).map(canon).filter(Boolean)
+  for (const part of parts) {
+    out.add(part)
+    const region = CITY_TO_REGION[part]
+    if (region) {
+      out.add(canon(region))
+      if (US_REGIONS.has(region)) out.add('united states')
+    }
+    if (US_REGIONS.has(part.replace(/\b\w/g, (c) => c.toUpperCase()))) out.add('united states')
+  }
+  return [...out]
+}

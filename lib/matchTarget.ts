@@ -1,3 +1,5 @@
+import { regionsOf, canonPlace } from './widenLocation'
+
 // Matching a member's saved target against a role.
 //
 // Exact-substring matching was too strict: someone who asked for
@@ -109,11 +111,25 @@ export function keywordMatches(keyword: string, title: string, summary?: string 
   })
 }
 
-/** Location match: substring, so "london" catches "London, UK" and "Greater London". */
-export function locationMatches(target: string | null, location: string | null): boolean {
+/**
+ * Location match. Substring in either direction, so "london" catches "London, UK"
+ * and "Greater London"; plus region membership, so a member who asked for "uae",
+ * "switzerland" or "united states" sees the jobs located in Dubai, Zürich or
+ * Chicago. A "remote" target also accepts a job whose work type is remote even
+ * when its location names a city.
+ */
+export function locationMatches(target: string | null, location: string | null, workType?: string | null): boolean {
   if (!target) return true
+  const t = target.trim().toLowerCase()
+  if (t === 'remote' && (workType ?? '').toLowerCase() === 'remote') return true
   if (!location) return false
-  return location.toLowerCase().includes(target.toLowerCase())
+  const loc = location.toLowerCase()
+  if (loc.includes(t)) return true
+  // one direction only: the job's place, or any region it sits in, must be the
+  // place the member named — never the other way round (a London target must
+  // not match Manchester just because both are in the UK)
+  const want = canonPlace(target)
+  return regionsOf(location).some((h) => h === want || h.includes(want))
 }
 
 
