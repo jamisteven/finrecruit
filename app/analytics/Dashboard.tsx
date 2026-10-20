@@ -108,6 +108,13 @@ export default function Dashboard() {
                   </tbody>
                 </table>
               )}
+              {m.widened?.length > 0 ? (
+                <p className="an-widened"><b>Also running for them (wider areas):</b> {m.widened.map((w: Data, i: number) => (
+                  <span key={w.query}>{i > 0 && ' · '}<span className="mono">{w.query}</span> <span className={w.stale ? 'an-flag' : 'an-muted-inline'}>{w.active ? ago(w.lastRunAt) : 'inactive'}</span></span>
+                ))}</p>
+              ) : m.targets.some((t: Data) => t.location && t.location !== 'remote') ? (
+                <p className="an-widened an-warn-text">No wider-area queries behind this member&apos;s cities — their fallback matches rely on the shared sweep only.</p>
+              ) : null}
             </article>
           ))}
         </section>
@@ -240,6 +247,10 @@ const CSS = `
 .an tr.flag td { background: var(--warn); }
 .an-flag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #F0D9A6; color: var(--warn-ink); font-size: 11.5px; font-weight: 600; }
 .an-lane { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #EFEBE1; color: var(--ink-2); font-size: 11px; font-weight: 600; }
+.an-widened { margin: 10px 2px 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.7; }
+.an-widened b { color: var(--ink); font-weight: 600; }
+.an-muted-inline { color: var(--ink-3); }
+.an-warn-text { color: var(--warn-ink); }
 .an-pill { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; margin-right: 4px; }
 .an-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .an-list li { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid #EEE9DD; font-size: 13.5px; }

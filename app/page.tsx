@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { JobPost, FilterState, Sector, WorkType } from '@/types'
 import { keywordMatches, locationMatches } from '@/lib/matchTarget'
+import { nearness } from '@/lib/widenLocation'
 import EmployerStrip, { type StripCompany } from '@/components/EmployerStrip'
 import { captureAttribution } from '@/lib/attribution'
 
@@ -637,19 +638,32 @@ export default function HomePage() {
   }, [myTargets])
 
   const myExact = useMemo(() => allJobs.filter((j) => matchesTargets(j, true)), [allJobs, matchesTargets])
+  // How near a fallback job is to the member's own places: same state, same country, elsewhere.
+  const roughTier = useCallback((j: JobPost): 1 | 2 | 3 => {
+    let best: 1 | 2 | 3 = 3
+    for (const t of myTargets) {
+      if (!keywordMatches(t.keyword, j.title ?? '', null)) continue
+      const n = nearness(t.location, j.location ?? null)
+      if (n < best) best = n
+    }
+    return best
+  }, [myTargets])
   const myRough = useMemo(
     () => allJobs
       .filter((j) => !matchesTargets(j, true) && matchesTargets(j, false))
-      .sort((a, b) => toTime(b.posted_at) - toTime(a.posted_at))
+      .sort((a, b) => roughTier(a) - roughTier(b) || toTime(b.posted_at) - toTime(a.posted_at))
       .slice(0, 60),
-    [allJobs, matchesTargets])
+    [allJobs, matchesTargets, roughTier])
+  const myNearby = useMemo(() => myRough.filter((j) => roughTier(j) < 3).length, [myRough, roughTier])
 
   const displayJobs = useMemo(() => {
     if (myFeedOn) {
-      return [...myExact, ...myRough].sort((a, b) => {
+      // exact matches first (by date), then the fallback already ordered nearest-first
+      const byDate = (a: JobPost, b: JobPost) => {
         const d = toTime(b.posted_at) - toTime(a.posted_at)
         return filters.sortBy === 'newest' ? d : -d
-      })
+      }
+      return [...[...myExact].sort(byDate), ...myRough]
     }
     const list = allJobs.filter((job) => {
       if (filters.sector !== 'all' && job.sector !== filters.sector) return false
@@ -1558,13 +1572,13 @@ export default function HomePage() {
               {myFeedOn && myExact.length > 0 && myRough.length > 0 && (
                 <p className="match-note">
                   <b>{myExact.length} match your searches exactly.</b> Below those,
-                  {' '}{myRough.length} more with the same job titles in other places.
+                  {' '}{myRough.length} more with the same job titles{myNearby > 0 ? <> — {myNearby} nearby (same state or country), then the rest</> : ' in other places'}.
                 </p>
               )}
               {myFeedOn && myExact.length === 0 && myRough.length > 0 && (
                 <p className="match-note">
                   Nothing in your locations yet — here are {myRough.length} roles with the
-                  same job titles elsewhere.
+                  same job titles{myNearby > 0 ? <>, nearest first ({myNearby} in your state or country)</> : ' elsewhere'}.
                 </p>
               )}
               {earlierJobs.slice(0, visibleCount).map((job, jobIndex) => {

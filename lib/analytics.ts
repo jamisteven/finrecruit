@@ -85,7 +85,15 @@ export async function membersPanel(db: Db) {
           slowLane: dud, flag,
         }
       })
+      // the regional / national queries claimed for this member's cities (not shown per target)
+      const myKeywords = new Set(mine.map((t) => String(t.keyword).toLowerCase()))
+      const myLocations = new Set(mine.map((t) => String(t.location ?? '').toLowerCase()))
+      const widened = queries
+        .filter((q) => myKeywords.has(String(q.keyword).toLowerCase()) && !myLocations.has(String(q.location ?? '').toLowerCase()))
+        .map((q) => ({ query: q.query, active: q.active, lastRunAt: q.last_run_at ?? null,
+          stale: !q.active || !q.last_run_at || now - new Date(q.last_run_at).getTime() > 2 * DAY }))
       return {
+        widened,
         email: p.email, plan: paid[0]?.plan ?? null, paidAt: paid[0]?.paid_at ?? null, payments: paid.length,
         expiresAt: p.pass_expires_at, daysLeft: Math.ceil((exp - now) / DAY), active: exp > now,
         device: p.signup_device ?? null, lastVisit: lastVisit.get(p.id) ?? null,

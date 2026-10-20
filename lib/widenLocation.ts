@@ -147,3 +147,21 @@ export function regionsOf(location: string | null): string[] {
   }
   return [...out]
 }
+
+/**
+ * How close a job is to a target the member named, for ordering fallback matches:
+ *   1 = same state/region (target San Jose, job Sacramento)
+ *   2 = same country      (target San Jose, job Austin)
+ *   3 = elsewhere
+ * Exact matches are handled before this is consulted.
+ */
+export function nearness(target: string | null, jobLocation: string | null): 1 | 2 | 3 {
+  if (!target || !jobLocation) return 3
+  const tr = regionsOf(target)
+  if (tr.length < 2) return 3
+  const jr = regionsOf(jobLocation)
+  if (jr.includes(tr[1])) return 1
+  const country = tr[tr.length - 1]
+  if (country !== tr[1] && jr.includes(country)) return 2
+  return 3
+}
