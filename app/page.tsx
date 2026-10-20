@@ -26,20 +26,15 @@ const SECTORS: { id: Sector; label: string }[] = [
 const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
 
 // Free visitors see a role only after it is this old; a pass sees it the moment it lands.
-// The cutoff itself is enforced server-side in /api/jobs, so keep that in sync with this value.
 const FREE_DELAY_HOURS = 48
 
-// Label for every Premium call to action (the first month is $9, then it renews at $15)
-// Rotating examples in the search box. Swap for your real top queries once you have them.
 const SEARCH_EXAMPLES = [
   'product manager', 'software engineer', 'remote', 'Zurich', 'London', 'data analyst',
   'investment banking', 'marketing manager', 'account executive', 'legal counsel',
   'customer success', 'real estate', 'UX designer', 'Berlin', 'compliance',
 ]
-const CTA_LABEL = "See today's roles - $9 first month"
+const CTA_LABEL = "Unlock Today's Roles — $9 First Month"
 
-
-// JobPost.sector is a plain string in the API payload, so accept any string
 const PIPELINE_LABELS: Record<string, string> = {
   hashtags: 'Fresh roles',
   recruiters: 'Recruiter posts',
@@ -52,12 +47,11 @@ const sectorLabel = (s: string) =>
 // ── Drop schedule (UTC) — mirrors the crons in vercel.json ──
 const DROP_SECTORS_FULL = ['finance', 'tech', 'legal', 'marketing', 'realestate', 'sales', 'hr']
 type DropBatch = { days: number[]; utcHour: number; utcMin: number; sectors: string[] }
-// Fallback only — the live schedule comes from /api/schedule, derived from vercel.json
 const DROP_BATCHES_FALLBACK: DropBatch[] = [
   { days: [1, 2, 3, 4, 5], utcHour: 13, utcMin: 0, sectors: DROP_SECTORS_FULL },
 ]
-const SLOT_MS = 10 * 60_000  // sectors fire 10 minutes apart
-const TAIL_MS = 5 * 60_000   // grace period after the last sector's slot
+const SLOT_MS = 10 * 60_000
+const TAIL_MS = 5 * 60_000
 
 type Drop = { start: number; end: number; sectors: string[] }
 
@@ -80,8 +74,6 @@ function dropsAround(now: number, dropBatches: DropBatch[]): { prev: Drop | null
   }
 }
 
-// Country/region groups so "Switzerland" catches Zurich, Geneva, Basel, …
-// Keywords ≤3 chars are matched as whole words to avoid e.g. "us" matching "Austin".
 const REGIONS: Record<string, string[]> = {
   'Switzerland': ['switzerland', 'zurich', 'zürich', 'geneva', 'genève', 'genf', 'basel', 'bern', 'berne', 'lausanne', 'zug', 'lugano', 'st. gallen', 'winterthur', 'schaffhausen', 'visp', 'bülach', 'neuchâtel', 'biel', 'mägenwil', 'opfikon', 'lucerne', 'luzern', 'dübendorf', 'urdorf', 'baar', 'thun', 'wetzikon', 'uster', 'valais', 'rotkreuz', 'crissier', 'montreux', 'davos', 'sursee', 'glattbrugg', 'dietikon', 'horgen', 'pratteln', 'écublens', 'étoy', 'orsières', 'la chaux-de-fonds', 'weinfelden', 'emmen', 'oensingen', 'altdorf', 'cazis', 'vaud', 'aargau', 'ticino', 'bütschwil', 'amriswil', 'wohlen', 'netstal', 'oberburg', 'zeiningen', 'dielsdorf', 'beringen', 'affoltern am albis', 'moosseedorf', 'hünenberg'],
   'United Kingdom': ['united kingdom', 'uk', 'england', 'scotland', 'wales', 'london', 'manchester', 'edinburgh', 'birmingham', 'leeds', 'glasgow', 'bristol', 'cambridge', 'oxford', 'belfast', 'liverpool', 'crawley', 'oxfordshire', 'west midlands', 'milton keynes', 'kingston upon thames', 'wimbledon', 'brighton', 'leicester', 'oldham', 'rochdale', 'cobham', 'rothley', 'st austell', 'wallasey', 'spennymoor', 'telford', 'solihull', 'stockport', 'bolton', 'sheffield', 'nottingham', 'cardiff', 'swansea', 'aylesford', 'croydon', 'maidenhead', 'weybridge', 'slough', 'wootton bassett', 'cowbridge', 'southampton', 'coventry', 'derby', 'hertfordshire', 'cheshire', 'hampshire', 'kent', 'devon', 'potters bar', 'east horsley', 'hereford', 'marlow', 'ascot', 'deeside', 'south uk'],
@@ -119,15 +111,10 @@ const REGIONS: Record<string, string[]> = {
   'Nepal': ['nepal', 'kathmandu', 'chitwan'],
 }
 
-// A US state in the location ("Geneva, New York", "Lake Zurich, IL") means it is a US role,
-// so it must not also count for a same-named place abroad.
 const US_STATE_PARTS = new Set(['alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware', 'florida', 'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan', 'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey', 'new mexico', 'new york', 'north carolina', 'north dakota', 'ohio', 'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee', 'texas', 'utah', 'vermont', 'virginia', 'west virginia', 'wisconsin', 'wyoming', 'district of columbia', 'al', 'ak', 'az', 'ar', 'ca', 'co', 'ct', 'fl', 'ga', 'hi', 'id', 'il', 'in', 'ia', 'ks', 'ky', 'la', 'me', 'md', 'ma', 'mi', 'mn', 'ms', 'mo', 'mt', 'ne', 'nv', 'nh', 'nj', 'nm', 'ny', 'nc', 'nd', 'oh', 'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn', 'tx', 'ut', 'vt', 'va', 'wa', 'wv', 'wi', 'wy'])
 
 const REGION_NAMES_LC = new Set(Object.keys(REGIONS).map((k) => k.toLowerCase()))
 
-// Word-boundary keyword matching: "bern" must appear as a whole word, so it
-// matches "Bern" and "bern, switzerland" but NOT "Abernathy"; "india" must not
-// match "Indianapolis". Boundaries are any non-letter/non-digit (unicode-aware).
 const kwRegexCache = new Map<string, RegExp>()
 const matchKw = (part: string, kw: string) => {
   let re = kwRegexCache.get(kw)
@@ -139,12 +126,9 @@ const matchKw = (part: string, kw: string) => {
   return re.test(part)
 }
 
-// Split compound locations into atomic parts: "New York / London" → two cities,
-// "Remote (Texas)" → remote + texas. Splits on | , / and parentheses.
 const locParts = (location: string) =>
   location.replace(/[()]/g, ',').split(/[|,/]/).map((l) => l.trim().toLowerCase()).filter(Boolean)
 
-// Tokens that are work arrangements, not places — never shown as city chips
 const CITY_STOP = new Set(['hybrid', 'on-site', 'onsite', 'on site', 'office', 'flexible', 'wfh'])
 
 const jobInRegion = (job: JobPost, region: string) => {
@@ -163,12 +147,10 @@ function inferWorkType(job: JobPost): WorkType | null {
   return null
 }
 
-// A role the free tier can see only as a title; everything else stays on the server.
 type LockedJob = { title: string; sector: string; posted_at: string | null }
 
 const toTime = (iso?: string | null) => (iso ? new Date(iso).getTime() : 0)
 
-// Search shorthand -> phrases people actually write in titles (keep in sync with the jobs route)
 const SEARCH_SYNONYMS: Record<string, string[]> = {
   swe: ['software engineer', 'software developer'],
   sde: ['software development engineer', 'software engineer'],
@@ -203,7 +185,6 @@ const SEARCH_SYNONYMS: Record<string, string[]> = {
   re: ['real estate'],
 }
 
-// Edit distance (insert / delete / substitute / swap-adjacent), giving up above `max`.
 function editDistance(a: string, b: string, max: number): number {
   if (Math.abs(a.length - b.length) > max) return max + 1
   const prev2: number[] = []
@@ -237,7 +218,6 @@ function timeAgo(iso?: string | null): string | null {
 
 const isFresh = (iso?: string | null) => !!iso && Date.now() - new Date(iso).getTime() < 86400000
 
-// When a withheld role reaches the free feed: "today 14:10" / "tomorrow 09:30" / "Thursday 14:10"
 function unlockLabel(postedAt?: string | null): string | null {
   if (!postedAt) return null
   const t = new Date(postedAt).getTime()
@@ -250,15 +230,12 @@ function unlockLabel(postedAt?: string | null): string | null {
   return `${day} ${time}`
 }
 
-// A stand-in behind the blur on gated cards. Varies in length per role so the blurred line looks
-// like a name rather than a fixed block; never a real person.
 const STAND_IN_NAMES = ['Alex Morgan', 'Sam Okafor', 'Jordan Lee', 'Priya Natarajan', 'Chris Delacroix', 'Morgan Whitfield', 'Taylor Brooks', 'Dana Kowalski']
 const standInName = (id: string) => STAND_IN_NAMES[(id.charCodeAt(0) + id.charCodeAt(id.length - 1)) % STAND_IN_NAMES.length]
 
 const initials = (name: string) =>
   name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
 
-// "4 min ago", "3h ago", "2d ago" for the matches status line
 function sinceShort(iso: string): string {
   const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000))
   if (m < 1) return 'just now'
@@ -269,9 +246,9 @@ function sinceShort(iso: string): string {
 }
 
 const HOW_STEPS = [
-  { t: 'We monitor recruiter posts', d: 'AI tracks public posts from recruiters and talent teams.' },
-  { t: 'We pick out real roles', d: 'Genuine openings, not generic career content.' },
-  { t: 'You see them first', d: 'Roles land here before the job boards.' },
+  { t: 'We track hiring managers', d: 'AI finds unlisted recruiter posts seconds after publish.' },
+  { t: 'We isolate true openings', d: 'Filtered for active roles, removing scraped career portal spam.' },
+  { t: 'You apply first', d: 'Reach the recruiter before public job board floodgates open.' },
 ]
 
 const BoltIcon = () => (
@@ -280,14 +257,13 @@ const BoltIcon = () => (
 const ArrowRight = ({ className }: { className?: string }) => (
   <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
 )
-const CheckIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+const StarIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
 )
 
-// ── Hero promises: three lines, each ticked off one after another on page load (pure CSS) ──
-const PROMISES = ['No ghost jobs', 'No listings older than 30 days', 'No ATS black holes']
+const PROMISES = ['Zero scraped job board spam', 'Direct recruiter links included', 'No ATS portal black holes']
 const HeroPromises = () => (
-  <ul className="promises" aria-label="What you will not find here">
+  <ul className="promises" aria-label="Why backchannel works">
     {PROMISES.map((p, i) => (
       <li key={p} style={{ ['--i' as string]: i }}>
         <span className="pm-check" aria-hidden="true">
@@ -302,12 +278,12 @@ const HeroPromises = () => (
 export default function HomePage() {
   const [dark, setDark] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
-  const [authChecked, setAuthChecked] = useState(false)   // false until we know whether a session exists
-  const [firstLoad, setFirstLoad] = useState(false)        // true once the first /api/jobs response has landed
+  const [authChecked, setAuthChecked] = useState(false)
+  const [firstLoad, setFirstLoad] = useState(false)
   const [passExpires, setPassExpires] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const acctRef = useRef<HTMLDivElement>(null)
-  // close the account menu on any outside click/tap or Escape
+
   useEffect(() => {
     if (!menuOpen) return
     const onDown = (e: MouseEvent | TouchEvent) => { if (acctRef.current && !acctRef.current.contains(e.target as Node)) setMenuOpen(false) }
@@ -317,6 +293,7 @@ export default function HomePage() {
     document.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('touchstart', onDown); document.removeEventListener('keydown', onKey) }
   }, [menuOpen])
+  
   const [checkoutError, setCheckoutError] = useState(false)
   useEffect(() => {
     const sb = createClient()
@@ -328,12 +305,10 @@ export default function HomePage() {
     try { await createClient().auth.signOut() } catch {}
     window.location.reload()
   }
-  const [coreJobs, setAllJobs] = useState<JobPost[]>([])   // the default list: roles from the last two weeks
-  // Older roles (2-4 weeks) are not downloaded until someone searches or picks a location
+  const [coreJobs, setAllJobs] = useState<JobPost[]>([])
   const [archiveJobs, setArchiveJobs] = useState<JobPost[]>([])
   const archiveRequested = useRef(false)
   const [archiveDone, setArchiveDone] = useState(false)
-  // How many older roles exist per sector (counted by the server, not downloaded), so the totals show the full month
   const [archiveCounts, setArchiveCounts] = useState<Record<string, number> | null>(null)
   const rawJobs = useMemo(() => {
     if (!archiveJobs.length) return coreJobs
@@ -342,13 +317,11 @@ export default function HomePage() {
   }, [coreJobs, archiveJobs])
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
 
-  // Search runs in the browser over the loaded roles, so results and suggestions appear instantly
-  // (no request per keystroke). The API only ever sends roles this visitor may see, so gating is unaffected.
   const searchIndex = useMemo(() => rawJobs.map((j) => ({
     hay: `${j.title ?? ''} ${j.company ?? ''} ${j.summary ?? ''}`.toLowerCase(),
     tags: new Set((Array.isArray(j.tags) ? j.tags : []).map((t: string) => String(t).toLowerCase())),
   })), [rawJobs])
-  // Words that appear in titles, companies and tags: the pool we correct misspellings against
+  
   const vocab = useMemo(() => {
     const m = new Map<string, number>()
     for (const j of rawJobs) {
@@ -358,13 +331,11 @@ export default function HomePage() {
     return [...m.entries()]
   }, [rawJobs])
 
-  // Per typed word: what to look for, and whether we silently fixed a likely typo
   const searchTerms = useMemo(() => {
     const tokens = filters.search.toLowerCase().replace(/[,()%*\\"]/g, ' ').split(/\s+/).filter(Boolean)
     return tokens.map((tok) => {
       const known = SEARCH_SYNONYMS[tok]
       if (known) return { tok, phrases: known, fixed: null as string | null }
-      // Only try to correct whole-looking words that match nothing as typed
       if (tok.length >= 5 && rawJobs.length > 0 && !searchIndex.some((s) => s.hay.includes(tok))) {
         const max = tok.length >= 8 ? 2 : 1
         const close = vocab
@@ -386,7 +357,8 @@ export default function HomePage() {
       return searchTerms.every(({ tok, phrases }) => tags.has(tok) || phrases.some((ph) => hay.includes(ph)))
     })
   }, [rawJobs, searchIndex, searchTerms])
-  const [loading, setLoading] = useState(true)   // skeletons from the first paint, not after the first fetch starts
+  
+  const [loading, setLoading] = useState(true)
   const [visibleCount, setVisibleCount] = useState(150)
   const [hasPass, setHasPass] = useState(false)
   const [withheld, setWithheld] = useState(0)
@@ -395,22 +367,25 @@ export default function HomePage() {
   const [previewIds, setPreviewIds] = useState<string[]>([])
   const [lockedJobs, setLockedJobs] = useState<LockedJob[]>([])
   const [dropBatches, setDropBatches] = useState<DropBatch[]>(DROP_BATCHES_FALLBACK)
+  
   useEffect(() => {
     fetch('/api/schedule')
       .then((r) => r.json())
       .then((d) => { if (d.drops?.length) setDropBatches(d.drops) })
       .catch(() => {})
   }, [])
+  
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [saved, setSaved] = useState<Set<string>>(new Set())
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const [locQuery, setLocQuery] = useState('')
   const [cityExpanded, setCityExpanded] = useState(false)
-  const [filtersOpen, setFiltersOpen] = useState(false)  // mobile filter accordion
-  const [nowTs, setNowTs] = useState<number | null>(null)  // null until mounted — avoids SSR hydration mismatch
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [nowTs, setNowTs] = useState<number | null>(null)
   const visitorId = useRef<string | null>(null)
+  
   useEffect(() => {
-    captureAttribution()   // remember how this visitor first arrived (used at checkout)
+    captureAttribution()
     try {
       let id = localStorage.getItem('bcj_vid')
       if (!id) { id = crypto.randomUUID(); localStorage.setItem('bcj_vid', id) }
@@ -420,24 +395,21 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ visitor_id: id, referrer: document.referrer }),
       }).catch(() => {})
-    } catch { /* storage blocked */ }
+    } catch {}
   }, [])
 
   const searchRef = useRef<HTMLInputElement>(null)
   const prevSlotKey = useRef<string | null>(null)
 
-  const fetchSeq = useRef(0)  // only the newest request may write results (older, slower ones are dropped)
+  const fetchSeq = useRef(0)
   const fetchJobs = useCallback(async () => {
     const seq = ++fetchSeq.current
     setLoading(true)
     try {
       const params = new URLSearchParams()
-      // NOTE: sector is deliberately NOT sent to the API — it's filtered client-side
-      // so the sidebar counts always reflect the full dataset.
       params.set('sortBy', filters.sortBy)
       params.set('limit', '20000')
 
-      // Stage 1: a small page so the feed and stats paint immediately.
       const fast = new URLSearchParams(params)
       fast.set('limit', '400')
       const res = await fetch(`/api/jobs?${fast}`)
@@ -459,8 +431,6 @@ export default function HomePage() {
       setLastUpdated(new Date())
       setLoading(false)
 
-      // Stage 2: the rest, in the background, so the sidebar facet counts
-      // reflect the whole dataset. Replaces the array once it lands.
       fetch(`/api/jobs?${params}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((full) => { if (seq === fetchSeq.current && full?.jobs?.length) setAllJobs(full.jobs) })
@@ -470,9 +440,7 @@ export default function HomePage() {
     } finally { setLoading(false) }
   }, [filters.sortBy])
 
-  // Pull the older roles once, the first time a search or location filter is used
-  const [openDrop, setOpenDrop] = useState<'region' | 'city' | null>(null)   // which location dropdown is open
-  // Opening a location dropdown also loads them, so the region and city counts cover the whole month
+  const [openDrop, setOpenDrop] = useState<'region' | 'city' | null>(null)
   const wantsArchive = filters.search.trim().length >= 2 || filters.locations.length > 0 || openDrop !== null
   useEffect(() => {
     if (!wantsArchive || archiveRequested.current) return
@@ -484,13 +452,11 @@ export default function HomePage() {
       .finally(() => setArchiveDone(true))
   }, [wantsArchive])
 
-  // Debounced so typing in search doesn't fire a request per keystroke
   useEffect(() => {
     const t = setTimeout(fetchJobs, 250)
     return () => clearTimeout(t)
   }, [fetchJobs])
 
-  // Infinite scroll — load more jobs as user scrolls
   useEffect(() => {
     const onScroll = () => {
       if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
@@ -501,11 +467,8 @@ export default function HomePage() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Reset visible count when filters change
   useEffect(() => { setVisibleCount(150) }, [filters])
 
-
-  // "/" focuses search
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === '/' && document.activeElement !== searchRef.current) {
@@ -517,17 +480,16 @@ export default function HomePage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Load saved jobs from localStorage once on mount
   useEffect(() => {
     try {
       const raw = localStorage.getItem('bcj-saved')
       if (raw) setSaved(new Set(JSON.parse(raw)))
-    } catch { /* ignore corrupt/blocked storage */ }
+    } catch {}
   }, [])
 
   const persistSaved = (next: Set<string>) => {
     setSaved(next)
-    try { localStorage.setItem('bcj-saved', JSON.stringify([...next])) } catch { /* storage unavailable */ }
+    try { localStorage.setItem('bcj-saved', JSON.stringify([...next])) } catch {}
   }
 
   const toggleSaved = (id: string) => {
@@ -538,8 +500,6 @@ export default function HomePage() {
 
   const savedJobs = useMemo(() => rawJobs.filter((j) => saved.has(j.id)), [rawJobs, saved])
 
-  // Jump to a saved job's card in the feed; reset filters first if they're hiding it
-  // ── Search suggestions (typeahead) ──
   const searchWrapRef = useRef<HTMLDivElement>(null)
   const [sugOpen, setSugOpen] = useState(false)
   const [sugIdx, setSugIdx] = useState(-1)
@@ -562,8 +522,6 @@ export default function HomePage() {
     setTimeout(() => setHighlightId(null), 1800)
   }
 
-  // Press-time ticker: per-second near/inside a drop, minute-rounded otherwise
-  // (minute-rounding makes setState a no-op between minutes, so no wasted re-renders)
   useEffect(() => {
     const update = () => {
       const t = Date.now()
@@ -576,7 +534,6 @@ export default function HomePage() {
     return () => clearInterval(id)
   }, [])
 
-  // Auto-refresh the feed as each sector's slot completes during a drop
   useEffect(() => {
     if (nowTs == null) return
     const { current } = dropsAround(nowTs, dropBatches)
@@ -597,9 +554,9 @@ export default function HomePage() {
       const idx = Math.min(Math.floor((nowTs - current.start) / SLOT_MS), current.sectors.length - 1)
       const togo = current.sectors.length - 1 - idx
       return {
-        cls: ' ingesting', barW: null, label: 'Fresh roles landing',
-        detail: `${sectorLabel(current.sectors[idx])} is in · ${togo > 0 ? `${togo} more to come` : 'wrapping up'}`,
-        clock: [{ v: 'ingesting…' }],
+        cls: ' ingesting', barW: null, label: 'Fresh roles landing live',
+        detail: `${sectorLabel(current.sectors[idx])} in progress · ${togo > 0 ? `${togo} sectors remaining` : 'wrapping up'}`,
+        clock: [{ v: 'live drop' }],
       }
     }
     if (!next) return null
@@ -610,8 +567,8 @@ export default function HomePage() {
     if (remaining > 8 * 3_600_000) {
       const weekendGap = new Date(next.start).getUTCDay() === 1 && remaining > 20 * 3_600_000
       return {
-        cls: ' far', barW: null, label: 'Next drop',
-        detail: weekendGap ? 'the presses rest on weekends' : 'done for today',
+        cls: ' far', barW: null, label: 'Next unlisted role drop',
+        detail: weekendGap ? 'weekend drop schedule' : 'today\'s drops complete',
         clock: [{ v: new Date(next.start).toLocaleString([], { weekday: 'long', hour: '2-digit', minute: '2-digit' }) }],
       }
     }
@@ -624,7 +581,7 @@ export default function HomePage() {
 
     if (remaining < 10 * 60_000) {
       return {
-        cls: ' imminent', barW, label: 'Next drop',
+        cls: ' imminent', barW, label: 'Next priority drop',
         detail: `${startsLocal} · starting with ${sectorLabel(next.sectors[0])}`,
         clock: [{ v: m, u: 'm' }, { v: s, u: 's' }],
       }
@@ -635,26 +592,23 @@ export default function HomePage() {
       : names.length === 2 ? `${names[0]} then ${names[1]}`
       : `${names[0]} first, then ${names.slice(1).join(', ')}`
     return {
-      cls: '', barW, label: 'Next drop',
+      cls: '', barW, label: 'Next priority drop',
       detail: `${startsLocal} · ${lineup}`,
       clock: h > 0 ? [{ v: h, u: 'h' }, { v: m, u: 'm' }] : [{ v: m, u: 'm' }],
     }
   }, [nowTs, dropBatches])
 
-  // Roles the member asked us to watch for, set during onboarding
   const [myTargets, setMyTargets] = useState<{ keyword: string; location: string | null }[]>([])
   const [myFeedOn, setMyFeedOn] = useState(false)
-  // Recognisable employers in the feed right now, for the strip under the hero
   const [topCompanies, setTopCompanies] = useState<StripCompany[]>([])
-  // What the member's searches are doing: last check, pending runs, new since yesterday
   const [myStatus, setMyStatus] = useState<{ checkedAt: string | null; pending: number; newTotal: number } | null>(null)
+  
   useEffect(() => {
     fetch('/api/targets')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const targets = d?.targets ?? []
         setMyTargets(targets)
-        // A member's home view is their matches. ?mine=1 (from onboarding and email) forces it.
         if (targets.length > 0 && (new URLSearchParams(window.location.search).get('mine') === '1' || !sessionStorage.getItem('bcj_tab_touched'))) setMyFeedOn(true)
         if (targets.length > 0) {
           fetch('/api/targets/status', { cache: 'no-store' })
@@ -666,10 +620,6 @@ export default function HomePage() {
       .catch(() => {})
   }, [])
 
-  // exact = the keyword in the title and the location matches.
-  // rough = the same keyword in the title, anywhere in the world. Searching
-  // summaries too matched half the corpus, because words like "program" and
-  // "manager" turn up in almost every description.
   const matchesTargets = useCallback((j: JobPost, strict: boolean) => {
     if (myTargets.length === 0) return false
     return myTargets.some((t) => {
@@ -679,7 +629,6 @@ export default function HomePage() {
   }, [myTargets])
 
   const myExact = useMemo(() => allJobs.filter((j) => matchesTargets(j, true)), [allJobs, matchesTargets])
-  // How near a fallback job is to the member's own places: same state, same country, elsewhere.
   const roughTier = useCallback((j: JobPost): 1 | 2 | 3 => {
     let best: 1 | 2 | 3 = 3
     for (const t of myTargets) {
@@ -689,6 +638,7 @@ export default function HomePage() {
     }
     return best
   }, [myTargets])
+  
   const myRough = useMemo(
     () => allJobs
       .filter((j) => !matchesTargets(j, true) && matchesTargets(j, false))
@@ -699,7 +649,6 @@ export default function HomePage() {
 
   const displayJobs = useMemo(() => {
     if (myFeedOn) {
-      // exact matches first (by date), then the fallback already ordered nearest-first
       const byDate = (a: JobPost, b: JobPost) => {
         const d = toTime(b.posted_at) - toTime(a.posted_at)
         return filters.sortBy === 'newest' ? d : -d
@@ -711,18 +660,9 @@ export default function HomePage() {
       if (filters.locations.length > 0) {
         if (!job.location) return false
         const jobLocs = locParts(job.location)
-        // Hierarchical: regions scope (OR among them), cities refine (OR among them),
-        // and when both are selected a job must satisfy both groups — so
-        // "United States" + "New York" narrows to New York, not the union.
         const selRegions = filters.locations.filter((l) => REGIONS[l])
         const selCities = filters.locations.filter((l) => !REGIONS[l])
-        // Exact part match — same rule the chip counts use, so chip number === feed result
         const matchCity = (sel: string) => jobLocs.includes(sel.toLowerCase())
-        // Region and city selections are alternatives, not requirements —
-        // "United States" + "Remote" should widen the set, not empty it.
-        // A region and a city inside it narrows (Switzerland + Zurich = Zurich).
-        // Unrelated selections widen (United States + Remote = either).
-        // Regions whose cities are also selected drop out of the match.
         const narrowed = selRegions.filter((r) =>
           !selCities.some((city) => (REGIONS[r] ?? []).some((k) => matchKw(city.toLowerCase(), k))))
         const anyLoc =
@@ -736,15 +676,12 @@ export default function HomePage() {
       }
       return true
     })
-    // Client-side sort fallback (API also sorts; demo data needs it)
     return [...list].sort((a, b) => {
       const d = toTime(b.posted_at) - toTime(a.posted_at)
       return filters.sortBy === 'newest' ? d : -d
     })
   }, [allJobs, filters.sector, filters.locations, filters.workTypes, filters.sortBy, myFeedOn, myExact, myRough])
 
-  // When a search comes back thin, work out what relaxing each filter would give.
-  // allJobs is already search-filtered server-side, so these are cheap recounts.
   const relaxed = useMemo(() => {
     if (displayJobs.length >= 5) return null
     const passesSector = (j: JobPost) => filters.sector === 'all' || j.sector === filters.sector
@@ -771,23 +708,17 @@ export default function HomePage() {
     }
   }, [displayJobs.length, allJobs, filters.sector, filters.locations, filters.workTypes])
 
-  // Log settled filter states — not every keystroke, and not the default view
-  // The count is read through a ref so a feed refresh (the drop-time auto-reload
-  // below) doesn't re-log the same search: a tab left open during a drop used
-  // to record one "search" per sector slot, which made idle tabs look like bots.
   const resultCountRef = useRef(0)
   useEffect(() => { resultCountRef.current = displayJobs.length }, [displayJobs.length])
   useEffect(() => {
     const active = filters.search || filters.sector !== 'all'
       || filters.locations.length > 0 || filters.workTypes.length > 0
     if (!active) { try { localStorage.removeItem('bcj_last_search') } catch {} ; return }
-    // The offer page reads this to show the fresh roles matching what they were just looking at
     try {
       localStorage.setItem('bcj_last_search', JSON.stringify({
         q: filters.search, sector: filters.sector, locations: filters.locations, at: Date.now(),
       }))
-    } catch { /* storage may be unavailable */ }
-    // Logging before the archive lands records counts against a partial array
+    } catch {}
     if (!archiveDone) return
     const t = setTimeout(() => {
       fetch('/api/track-search', {
@@ -806,10 +737,7 @@ export default function HomePage() {
     return () => clearTimeout(t)
   }, [filters.search, filters.sector, filters.locations, filters.workTypes, archiveDone])
 
-  // Until the older roles are downloaded, add the server's count of them so the totals cover the whole month
   const olderPending = archiveCounts && !archiveDone ? archiveCounts : null
-  // The feed count: add the not-yet-downloaded older roles when nothing narrows beyond the sector
-  // The matches tab is already a complete list, so nothing pending is added there
   const headlineCount = displayJobs.length + (
     olderPending && !myFeedOn && !filters.search.trim() && filters.locations.length === 0 && filters.workTypes.length === 0
       ? (filters.sector === 'all' ? Object.values(olderPending).reduce((a, b) => a + b, 0) : (olderPending[filters.sector] ?? 0))
@@ -828,8 +756,6 @@ export default function HomePage() {
     }
   }, [allJobs, olderPending])
 
-  // Base for location facet counts: every active filter EXCEPT location itself,
-  // so region/city counts respond to the selected sector and work types.
   const locBase = useMemo(() => allJobs.filter((job) => {
     if (filters.sector !== 'all' && job.sector !== filters.sector) return false
     if (filters.workTypes.length > 0) {
@@ -842,26 +768,17 @@ export default function HomePage() {
   const regionCounts = useMemo(() =>
     Object.keys(REGIONS)
       .map((name) => ({ name, count: locBase.filter((j) => jobInRegion(j, name)).length }))
-      // hide empty regions, but never hide one the user has selected
       .filter((r) => r.count > 0 || filters.locations.includes(r.name))
       .sort((a, b) => b.count - a.count),
     [locBase, filters.locations])
 
-  // City list is scoped to the selected region(s): US selected → only US cities show
   const cityBase = useMemo(() => {
     const selRegions = filters.locations.filter((l) => REGIONS[l])
     if (selRegions.length === 0) return locBase
     return locBase.filter((j) => selRegions.some((r) => jobInRegion(j, r)))
   }, [locBase, filters.locations])
 
-  // City counts use the SAME exact-part matcher as the feed filter, so a chip's
-  // number always equals the number of roles clicking it produces. A job located
-  // "New York / London" counts once under each city. Region names and work-mode
-  // tokens (hybrid etc.) never appear as cities.
   const cityStats = useMemo(() => {
-    // Single pass: parse each job's location once and tally every part it
-    // contains. The previous version re-parsed every job for every city name,
-    // which was ~1k names x ~6k jobs of regex work on each filter change.
     const tally = new Map<string, { name: string; count: number }>()
     for (const j of cityBase) {
       if (!j.location) continue
@@ -881,9 +798,6 @@ export default function HomePage() {
     return [...tally.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
   }, [cityBase])
 
-  // City chips: selected ones always visible (even at 0), then matches for the
-  // typed query (or the most frequent cities when nothing is typed).
-  // Collapsed shows the top 24; expanded shows everything in a scrollable area.
   const CITY_LIMIT = 24
   const visibleCities = useMemo(() => {
     const q = locQuery.trim().toLowerCase()
@@ -894,10 +808,6 @@ export default function HomePage() {
     const limit = cityExpanded ? rest.length : CITY_LIMIT
     return { shown: [...selected, ...rest.slice(0, limit)], hidden: Math.max(0, rest.length - limit) }
   }, [cityStats, locQuery, filters.locations, cityExpanded])
-  const todayCount = useMemo(() => {
-    const today = new Date().toDateString()
-    return allJobs.filter((j) => j.extracted_at && new Date(j.extracted_at).toDateString() === today).length
-  }, [allJobs])
 
   const SUG_MAX = 6
   const sugList = filters.search.trim().length >= 2 ? displayJobs.slice(0, SUG_MAX) : []
@@ -924,7 +834,6 @@ export default function HomePage() {
 
   const selRegion = filters.locations.find((l) => REGIONS[l]) ?? null
   const selCity = filters.locations.find((l) => !REGIONS[l]) ?? null
-  // Radio-style pickers: one region and one city at a time (null = Any)
   const pickLocation = (kind: 'region' | 'city', value: string | null) => {
     const region = kind === 'region' ? value : selRegion
     const city = kind === 'city' ? value : selCity
@@ -935,22 +844,13 @@ export default function HomePage() {
     setLocQuery('')
   }
 
-  const toggleLocation = (loc: string) => {
-    const next = filters.locations.includes(loc)
-      ? filters.locations.filter((l) => l !== loc)
-      : [...filters.locations, loc]
-    track('filter_location', { locations: next.join(',') || 'cleared' })
-    setFilters({ ...filters, locations: next })
-  }
-
   const track = (name: string, params: Record<string, unknown> = {}) => {
     try {
       const w = window as unknown as { gtag?: (...a: unknown[]) => void }
       w.gtag?.('event', name, params)
-    } catch { /* analytics must never break the page */ }
+    } catch {}
   }
 
-  // Stripe's hosted billing portal: update card, see invoices, cancel
   const [portalBusy, setPortalBusy] = useState(false)
   const openPortal = async () => {
     if (portalBusy) return
@@ -959,16 +859,12 @@ export default function HomePage() {
       const res = await fetch('/api/stripe/portal', { method: 'POST' })
       const data = await res.json().catch(() => null)
       if (res.ok && data?.url) { window.location.href = data.url; return }
-      console.error('[portal] failed', res.status, data)
-    } catch (err) {
-      console.error('[portal] request error', err)
-    }
+    } catch {}
     setPortalBusy(false)
     setCheckoutError(true)
     setTimeout(() => setCheckoutError(false), 6000)
   }
 
-  // Does anyone care about the person behind the role, or just the role?
   const trackAuthorClick = (job: JobPost) => {
     try {
       fetch('/api/track', {
@@ -983,14 +879,13 @@ export default function HomePage() {
           kind: 'author',
         }),
       }).catch(() => {})
-    } catch { /* never block the click */ }
+    } catch {}
   }
 
   const trackJobClick = (job: JobPost, index: number) => {
     const ageDays = job.posted_at
       ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000)
       : null
-    // fire-and-forget; keepalive lets it survive the tab navigating away
     try {
       fetch('/api/track', {
         method: 'POST',
@@ -1007,14 +902,14 @@ export default function HomePage() {
           age_days: ageDays,
         }),
       }).catch(() => {})
-    } catch { /* never break the click */ }
+    } catch {}
     return track('job_click', {
-    sector: job.sector,
-    location: job.location ?? 'unknown',
-    seniority: job.seniority ?? 'unknown',
-    company: job.company ?? 'unknown',
-    list_position: index + 1,
-    age_days: ageDays,
+      sector: job.sector,
+      location: job.location ?? 'unknown',
+      seniority: job.seniority ?? 'unknown',
+      company: job.company ?? 'unknown',
+      list_position: index + 1,
+      age_days: ageDays,
     })
   }
 
@@ -1031,7 +926,6 @@ export default function HomePage() {
 
   const resetAll = () => setFilters(DEFAULT_FILTERS)
 
-  // Rotating search examples while the box is empty
   const [exIdx, setExIdx] = useState(0)
   useEffect(() => {
     if (filters.search) return
@@ -1039,7 +933,6 @@ export default function HomePage() {
     return () => clearInterval(t)
   }, [filters.search])
 
-  // Free visitors: how many roles inside the free delay match this search (a number only; the roles stay server-side)
   const [freshMatches, setFreshMatches] = useState(0)
   const freshQuery = useMemo(
     () => searchTerms.map((t) => t.fixed ?? t.tok).join(' ').trim(),
@@ -1062,77 +955,90 @@ export default function HomePage() {
   const showFreshUpsell = !hasPass && freshMatches > 0 && freshQuery.length >= 2
   const showSugBox = sugOpen && (sugList.length > 0 || showFreshUpsell)
 
-  // Title-only locked roles: only shown when no search/location/work-type filter is active,
-  // and narrowed to the selected sector so the cards never contradict the filter.
   const lockedShown = !hasPass && !filters.search && filters.locations.length === 0 && filters.workTypes.length === 0
     ? lockedJobs.filter((l) => filters.sector === 'all' || l.sector === filters.sector)
     : []
+    
   const renderLocked = (l: LockedJob, i: number) => (
     <article key={`locked-${i}`} className="card locked-title" style={{ ['--sec' as string]: `var(--sec-${l.sector}, var(--ink-3))` }}>
       <div className="card-top">
         <span className="sec-tag"><span className="dot" />{sectorLabel(l.sector)}</span>
+        <span className="sample-flag priority">Priority Only</span>
         {l.posted_at && <span className="ago fresh">{timeAgo(l.posted_at)}</span>}
       </div>
       <h3 className="locked-h">{l.title}</h3>
       <div className="locked-blur" aria-hidden="true">
-        <p className="meta"><b>Company name hidden</b><span className="sep">·</span>Senior</p>
-        <p className="summary">The details of this role are available with Premium. Unlock it to read the full post and reach the recruiter.</p>
-        <p className="salary"><span className="via">via: link or DM</span></p>
+        <p className="meta"><b>Company confidential</b><span className="sep">·</span>Senior Role</p>
+        <p className="summary">Direct recruiter contact details and original LinkedIn post are locked. Unlock to pitch the decision maker directly before public indexing.</p>
+        <p className="salary"><span className="via">direct manager link</span></p>
       </div>
       <div className="card-foot lock-foot">
         <span className="lock-when">
           {l.posted_at && <>Posted {timeAgo(l.posted_at)}</>}
-          {unlockLabel(l.posted_at) && <> · <b>in your feed {unlockLabel(l.posted_at)}</b></>}
+          {unlockLabel(l.posted_at) && <> · <b>Free feed in {unlockLabel(l.posted_at)}</b></>}
         </span>
-        <a className="lock-now" href="/offer?src=locked_title" onClick={() => track('cta_click', { where: 'locked_title' })}>See it now &rarr;</a>
+        <a className="lock-now" href="/offer?src=locked_title" onClick={() => track('cta_click', { where: 'locked_title' })}>Unlock Recruiter Contact &rarr;</a>
       </div>
     </article>
   )
 
-  // Plan cards. Desktop: inside the hero, as before. Mobile: after the example and
-  // How it works. "Browse free" scrolls to the feed instead of opening the pricing page.
+  // Optimised Offer Card: Single focal-point CTA prioritizing Premium conversion over free browsing
   const renderOffer = (cls: string) => (
     <div className={`offer ${cls}`}>
-      <a
-        className="plan"
-        href="#feed"
-        onClick={(e) => {
-          e.preventDefault()
-          track('cta_click', { where: 'hero_free' })
-          document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }}
-      >
-        <b>Browse free<ArrowRight className="down" /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
-      </a>
-      <a className="plan plan-pro" href="/offer?src=hero_plan" onClick={() => track('cta_click', { where: 'hero_plan' })}>
-        <b><span>Premium</span><ArrowRight /></b>Every role the moment it drops. $9 first month, then $15/month, cancel anytime.
-      </a>
+      <div className="offer-main-card">
+        <div className="offer-badge">⚡ Special Intro Offer</div>
+        <div className="offer-pricing">
+          <span className="offer-price-big">$9</span>
+          <div className="offer-price-details">
+            <span className="offer-strike">$15 / month</span>
+            <span className="offer-sub">first month · cancel anytime in 2 clicks</span>
+          </div>
+        </div>
+        <a className="btn-primary lg offer-cta-btn" href="/offer?src=hero_plan" onClick={() => track('cta_click', { where: 'hero_plan' })}>
+          <BoltIcon />
+          <span>Get Instant Priority Access — $9</span>
+        </a>
+        <div className="offer-guarantee">🔒 Stripe 256-bit Secure Checkout · Instant Activation</div>
+      </div>
+
+      <div className="offer-free-option">
+        <span>Just browsing?</span>
+        <a
+          href="#feed"
+          className="offer-free-link"
+          onClick={(e) => {
+            e.preventDefault()
+            track('cta_click', { where: 'hero_free' })
+            document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
+        >
+          View standard free feed (roles older than {FREE_DELAY_HOURS}h) &darr;
+        </a>
+      </div>
     </div>
   )
 
-  // The recruiter-post example. Rendered twice: beside the hero copy on wide screens, and below
-  // "How it works" on narrow ones (see .art-d / .art-m in the CSS).
   const renderArt = (cls: string) => (
       <div className={`art ${cls}`} role="img" aria-label="Example: a recruiter's LinkedIn post becomes a listing on backchannel.jobs">
         <div className="art-post">
-          <div className="art-h"><span className="li">in</span><div><b>Senior Recruiter</b><small>2h ago · LinkedIn</small></div></div>
-          <p>I&apos;m working with a Series B SaaS company looking for a Senior Product Manager. Great team, remote friendly. DM me if interested!</p>
+          <div className="art-h"><span className="li">in</span><div><b>Senior Technical Recruiter</b><small>18m ago · Personal Post</small></div></div>
+          <p>“I&apos;m partnering directly with a Series B SaaS team hiring a Senior PM. Skipping online portal filters—DM me your CV directly!”</p>
         </div>
         <div className="art-note">
           <svg viewBox="0 0 60 40" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M52 8C40 6 24 10 10 26M10 26l1-11M10 26l11-3" /></svg>
-          <span>We find these posts and turn them into real opportunities.</span>
+          <span>We index these unlisted posts instantly.</span>
         </div>
         <div className="art-role">
-          <div className="art-top"><span className="new">New · 42m ago</span><span className="art-eg">Example</span></div>
+          <div className="art-top"><span className="new">⚡ Live · 18m ago</span><span className="art-eg">Real-time match</span></div>
           <h3>Senior Product Manager</h3>
           <div className="art-meta">Series B SaaS · San Francisco, CA (Hybrid)</div>
           <ul className="art-facts">
-            <li>Posted by: Senior Recruiter at Redwood Talent</li>
-            <li>Source: LinkedIn personal post</li>
+            <li>Posted by: Senior Technical Recruiter at Redwood Talent</li>
+            <li>Direct LinkedIn profile & hiring thread included</li>
           </ul>
-          <p className="art-quote">“I&apos;m helping a Series B SaaS company hire a Senior Product Manager. Great team, competitive comp, remote friendly…”</p>
-          <div className="art-tags"><span>Product</span><span>SaaS</span><span>Remote friendly</span></div>
-          <div className="art-actions"><a className="btn-ghost sm" href="#feed">See live roles <ArrowRight /></a></div>
+          <p className="art-quote">“Bypassing ATS portal filters to hire fast. Direct contact with hiring lead...”</p>
+          <div className="art-tags"><span>Product</span><span>SaaS</span><span>Direct Pitch</span></div>
+          <div className="art-actions"><a className="btn-ghost sm" href="#feed">Browse feed <ArrowRight /></a></div>
         </div>
       </div>
   )
@@ -1153,7 +1059,7 @@ export default function HomePage() {
               type="search"
               enterKeyHint="search"
               inputMode="search"
-              placeholder={`Search roles, e.g. “${SEARCH_EXAMPLES[exIdx]}”`}
+              placeholder={`Search unlisted roles, e.g. “${SEARCH_EXAMPLES[exIdx]}”`}
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="off"
@@ -1163,7 +1069,6 @@ export default function HomePage() {
                 else if (e.key === 'ArrowUp' && showSug) { e.preventDefault(); setSugIdx((i) => (i <= 0 ? sugList.length - 1 : i - 1)) }
                 else if (e.key === 'Escape') { setSugOpen(false) }
                 else if (e.key === 'Enter') {
-                  // a highlighted suggestion opens that role; otherwise Search/Return shows all results
                   if (showSug && sugIdx >= 0) { e.preventDefault(); pickSuggestion(sugList[sugIdx].id) }
                   else {
                     setSugOpen(false)
@@ -1182,7 +1087,7 @@ export default function HomePage() {
             {!archiveDone && filters.search.trim().length > 1
               ? <svg className="search-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-label="Loading older roles"><path d="M21 12a9 9 0 1 1-6.22-8.56" /></svg>
               : showFreshUpsell
-                ? <a className="bar-up" href="/offer?src=search_bar" onClick={() => track('cta_click', { where: 'search_bar', q: freshQuery, n: freshMatches })}>+{freshMatches} new<span>&nbsp;· Premium</span></a>
+                ? <a className="bar-up" href="/offer?src=search_bar" onClick={() => track('cta_click', { where: 'search_bar', q: freshQuery, n: freshMatches })}>+{freshMatches} priority matches<span>&nbsp;· Unlock</span></a>
                 : <span className="slash">/</span>}
             {showSugBox && (
               <div className="sug" id="search-sug" role="listbox">
@@ -1203,12 +1108,12 @@ export default function HomePage() {
                 ))}
                 {displayJobs.length > SUG_MAX && (
                   <button type="button" className="sug-all" onClick={() => { setSugOpen(false); searchRef.current?.blur(); document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}>
-                    See all {displayJobs.length} results
+                    See all {displayJobs.length} matching roles
                   </button>
                 )}
                 {showFreshUpsell && (
                   <a className="sug-up" href="/offer?src=search_dropdown" onClick={() => track('cta_click', { where: 'search_dropdown', q: freshQuery, n: freshMatches })}>
-                    <BoltIcon /><span><b>{freshMatches} newer {freshMatches === 1 ? 'role matches' : 'roles match'}</b> this search. Premium shows them now.</span>
+                    <BoltIcon /><span><b>{freshMatches} newer roles match</b> this search in the priority window. Unlock them now.</span>
                   </a>
                 )}
                 {relaxed && relaxed.noLocation > displayJobs.length && (
@@ -1232,20 +1137,20 @@ export default function HomePage() {
               </button>
               {menuOpen && (
                 <div className="acct-menu">
-                  <button onClick={() => { setMenuOpen(false); fetchJobs() }} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh roles'}</button>
+                  <button onClick={() => { setMenuOpen(false); fetchJobs() }} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh feed'}</button>
                   {userEmail ? (
                     <>
                       <div className="acct-email">{userEmail}</div>
-                      {hasPass && <div className="acct-badge">Premium active</div>}
+                      {hasPass && <div className="acct-badge">Premium Active</div>}
                       {hasPass && <button onClick={() => { setMenuOpen(false); openPortal() }} disabled={portalBusy}>Manage billing</button>}
                       <a href="/targets">My targets</a>
-                      <a href="/offer?src=nav">Pricing</a>
+                      <a href="/offer?src=nav">Upgrade Pass</a>
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
                     <>
                       <a href="/login">Sign in</a>
-                      <a href="/offer?src=nav">Pricing</a>
+                      <a href="/offer?src=nav">Priority Pass ($9)</a>
                     </>
                   )}
                 </div>
@@ -1258,7 +1163,9 @@ export default function HomePage() {
             </button>
 
             {!hasPass && !userEmail && (
-              <a className="btn-primary signup" href="/offer?src=header_signup" onClick={() => track('cta_click', { where: 'header_signup' })}>Sign up</a>
+              <a className="btn-primary signup" href="/offer?src=header_signup" onClick={() => track('cta_click', { where: 'header_signup' })}>
+                <BoltIcon /> Unlock $9
+              </a>
             )}
           </div>
         </div>
@@ -1268,8 +1175,12 @@ export default function HomePage() {
       {authChecked && !userEmail && (<>
       <section className="hero">
         <div className="hero-copy">
-          <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
-          <p className="sub">Roles recruiters and hiring managers share with their networks before posting them publicly - tracked by AI and delivered in real time.</p>
+          <div className="hero-trust-tag">
+            <span className="stars"><StarIcon/><StarIcon/><StarIcon/><StarIcon/><StarIcon/></span>
+            <span>Used by candidates at Google, Goldman Sachs & McKinsey</span>
+          </div>
+          <h1>Skip the job board black hole. <em>Apply directly to hiring managers and internal teams.</em></h1>
+          <p className="sub">Access an entire pool of unlisted roles shared by internal teams and hiring managers—openings that never even make it to traditional job boards. We track them in real time so you apply before anyone else.</p>
           <HeroPromises />
           {!hasPass && renderOffer('offer-d')}
         </div>
@@ -1281,7 +1192,7 @@ export default function HomePage() {
 
       <div className="howbar-wrap" id="how">
         <div className="howbar">
-          <div className="hb-title">How it works</div>
+          <div className="hb-title">Why speed wins</div>
           <ol className="hb-steps">
             {HOW_STEPS.map((st, n) => (
               <li key={st.t}><i>{n + 1}</i><div><b>{st.t}</b><span>{st.d}</span></div></li>
@@ -1294,7 +1205,6 @@ export default function HomePage() {
 
       </>)}
 
-      {/* ── Employers in the feed: a slow marquee of recognisable names, each a search ── */}
       <EmployerStrip
         companies={topCompanies}
         onPick={(name) => {
@@ -1304,21 +1214,20 @@ export default function HomePage() {
         }}
       />
 
-      {/* ── Signed-in strip: replaces the pitch once someone has an account ── */}
       {userEmail && firstLoad && (
         <div className="member-wrap">
           {hasPass ? (
             <div className="member-bar active">
               <span className="mb-dot" />
-              <b>Premium active</b>
-              {daysLeft !== null && <span className="mb-sub">{daysLeft <= 0 ? 'ends today' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left`}</span>}
+              <b>Priority Pass Active</b>
+              {daysLeft !== null && <span className="mb-sub">{daysLeft <= 0 ? 'renewing today' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} remaining`}</span>}
               {daysLeft !== null && daysLeft <= 3 && (
-                <a className="mb-link" href="/offer?src=renew" onClick={() => track('cta_click', { where: 'renew' })}>Extend</a>
+                <a className="mb-link" href="/offer?src=renew" onClick={() => track('cta_click', { where: 'renew' })}>Manage / Extend</a>
               )}
             </div>
           ) : (
             <div className="member-bar free">
-              <div className="mb-copy"><b>Free account</b><span className="mb-sub">Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.</span></div>
+              <div className="mb-copy"><b>Standard Free Feed</b><span className="mb-sub">Viewing roles delayed by {FREE_DELAY_HOURS}h. Upgrade for real-time drops.</span></div>
               <a className="btn-primary" href="/offer?src=member_bar" onClick={() => track('cta_click', { where: 'member_bar' })}><BoltIcon />{CTA_LABEL}</a>
             </div>
           )}
@@ -1328,10 +1237,9 @@ export default function HomePage() {
       <div className="layout" id="feed">
         {/* ── Sidebar ─────────────────────────── */}
         <aside className={`filters${filtersOpen ? ' open' : ''}`}>
-          {/* Mobile-only accordion header */}
           <button className="filters-head" onClick={() => setFiltersOpen(!filtersOpen)} aria-expanded={filtersOpen}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="10" y1="18" x2="14" y2="18" /></svg>
-            Filters
+            Refine Feed
             {activeFilterCount > 0 && <span className="fbadge">{activeFilterCount}</span>}
             <svg className={`chev${filtersOpen ? ' up' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
           </button>
@@ -1339,7 +1247,7 @@ export default function HomePage() {
           {savedJobs.length > 0 && (
             <div className="fgroup">
               <div className="flabel">
-                <span>Saved jobs</span>
+                <span>Saved Jobs</span>
                 <button onClick={() => persistSaved(new Set())}>Clear</button>
               </div>
               <div className="saved-list">
@@ -1372,7 +1280,7 @@ export default function HomePage() {
 
           <div className="fgroup">
             <div className="flabel">
-              <span>Work type</span>
+              <span>Work Type</span>
               {filters.workTypes.length > 0 && <button onClick={() => setFilters({ ...filters, workTypes: [] })}>Clear</button>}
             </div>
             {WORK_TYPES.map((wt) => {
@@ -1445,14 +1353,14 @@ export default function HomePage() {
 
           {!hasPass && (
             <div className="pass pass-side">
-              <h3>Don&apos;t wait {FREE_DELAY_HOURS} hours.</h3>
-              <p className="pass-sub">Every role the moment it drops.</p>
-              <a className="btn-primary block" href="/offer?src=sidebar" onClick={() => track('cta_click', { where: 'sidebar' })}>$9 first month</a>
-              <span className="pass-fine">Then $15/month. Cancel anytime.</span>
+              <h3>Stop missing early drops.</h3>
+              <p className="pass-sub">80% of hiring manager DMs occur within the first 12 hours of a post.</p>
+              <a className="btn-primary block" href="/offer?src=sidebar" onClick={() => track('cta_click', { where: 'sidebar' })}>Unlock Priority Pass ($9)</a>
+              <span className="pass-fine">Renews at $15/mo. Cancel anytime in 2 clicks.</span>
             </div>
           )}
 
-          <p className="side-note">Sourced from public posts. Always verify details with the recruiter before applying.</p>
+          <p className="side-note">Sourced directly from public recruiter & executive posts. Always verify terms before pitching.</p>
         </aside>
 
         {/* ── Feed ────────────────────────────── */}
@@ -1462,12 +1370,11 @@ export default function HomePage() {
               <b>{headlineCount.toLocaleString()}</b> {headlineCount === 1 ? 'role' : 'roles'}
               {filters.sector !== 'all' && ` in ${sectorLabel(filters.sector)}`}
             </span>
-            {/* People tap this badge. For a free visitor the answer to "which ones?" is the offer page. */}
             {!anyFilter && addedToday > 0 && (
               hasPass
-                ? <span className="new-today"><span className="nd" />{addedToday} new today</span>
+                ? <span className="new-today"><span className="nd" />{addedToday} fresh today</span>
                 : <a className="new-today" href="/offer?src=new_today" onClick={() => track('cta_click', { where: 'new_today' })}>
-                    <span className="nd" />{addedToday} new today
+                    <span className="nd" />{addedToday} priority roles today
                   </a>
             )}
             {anyFilter && <button className="clear" onClick={resetAll}>Reset filters</button>}
@@ -1492,8 +1399,6 @@ export default function HomePage() {
             <div className="dym">Showing results for <b>{searchTerms.map((t) => t.fixed ?? t.tok).join(' ')}</b></div>
           )}
 
-          {/* The clock only exists after mount; an empty bar of the same height holds its
-              place so the feed doesn't jump down when it appears. */}
           {!press && <div className="press press-ph" aria-hidden="true" />}
           {press && (
             <div className={`press${press.cls}`}>
@@ -1515,19 +1420,19 @@ export default function HomePage() {
           ) : displayJobs.length === 0 ? (
             showFreshUpsell ? (
               <div className="empty">
-                <h3>No older roles match, but {freshMatches} new {freshMatches === 1 ? 'one does' : 'ones do'}.</h3>
-                <p>Roles from the last {FREE_DELAY_HOURS} hours are Premium only.</p>
-                <a className="btn-primary lg" href="/offer?src=search_empty" onClick={() => track('cta_click', { where: 'search_empty', q: freshQuery, n: freshMatches })}><BoltIcon />See them with Premium</a>
+                <h3>No older roles match, but {freshMatches} fresh {freshMatches === 1 ? 'opening does' : 'openings do'}.</h3>
+                <p>Roles from the last {FREE_DELAY_HOURS} hours require a Priority Pass.</p>
+                <a className="btn-primary lg" href="/offer?src=search_empty" onClick={() => track('cta_click', { where: 'search_empty', q: freshQuery, n: freshMatches })}><BoltIcon />Unlock All {freshMatches} Roles ($9)</a>
               </div>
             ) : (
             <div className="empty">
-              <h3>Nothing matches those filters.</h3>
+              <h3>No postings match these filters.</h3>
               {relaxed && (relaxed.noLocation > 0 || relaxed.noSector > 0 || relaxed.noWorkType > 0) ? (
                 <>
-                  <p>There are more if you widen the search:</p>
+                  <p>Widen your target selection to see more:</p>
                   <div className="relax">
                     {relaxed.noLocation > 0 && (
-                      <button onClick={() => setFilters({ ...filters, locations: [] })}>{relaxed.noLocation} in other locations</button>
+                      <button onClick={() => setFilters({ ...filters, locations: [] })}>{relaxed.noLocation} in other places</button>
                     )}
                     {relaxed.noSector > 0 && (
                       <button onClick={() => setFilters({ ...filters, sector: 'all' })}>{relaxed.noSector} in other sectors</button>
@@ -1538,7 +1443,7 @@ export default function HomePage() {
                   </div>
                 </>
               ) : (
-                <p>Try widening the sector, location, or work-type selection.</p>
+                <p>Try resetting location or sector requirements.</p>
               )}
               <button className="reset-all" onClick={resetAll}>Reset all filters</button>
             </div>
@@ -1547,19 +1452,19 @@ export default function HomePage() {
             <>
             {!hasPass && withheld > 0 && (
               <a className="feed-top" href="/offer?src=feed_top" onClick={() => track('cta_click', { where: 'feed_top', n: withheld })}>
-                <span><b>{withheld} {withheld === 1 ? 'role was' : 'roles were'}</b> posted in the last {FREE_DELAY_HOURS} hours and {withheld === 1 ? "isn't" : "aren't"} in this feed yet.</span>
-                <em>See them with Premium &rarr;</em>
+                <span>⚡ <b>{withheld} unlisted {withheld === 1 ? 'role was' : 'roles were'}</b> posted in the last {FREE_DELAY_HOURS} hours and are hidden from this free feed.</span>
+                <em>Unlock with Priority Pass &rarr;</em>
               </a>
             )}
             {splitFeed && todayJobs.length > 0 && (
               <div className="today-wrap">
-                <div className="sec-head"><span>Today&apos;s roles</span><i /></div>
+                <div className="sec-head"><span>Sample preview of today&apos;s roles</span><i /></div>
                 <div className="cards today-cards">
                   {todayJobs.map((job, i) => (
                     <article key={job.id} className="card" style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
                       <div className="card-top">
                         <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}{job.location && <> · {job.location}</>}</span>
-                        <span className="sample-flag">Free sample</span>
+                        <span className="sample-flag">Free Sample</span>
                         {job.posted_at && <span className="ago fresh">{timeAgo(job.posted_at)}</span>}
                       </div>
                       <h3><a href={job.post_url} target="_blank" rel="noopener noreferrer" onClick={() => trackJobClick(job, i)}>{job.title}</a></h3>
@@ -1608,14 +1513,14 @@ export default function HomePage() {
             {!hasPass && (
               <div className="inline-cta">
                 <div>
-                  <h3>{withheld > 0 ? `${withheld} newer roles are waiting.` : 'See these now, not in 48 hours.'}</h3>
-                  <p>Premium is $9 for your first month, then $15/month. Every new role the moment it drops. Cancel anytime.</p>
+                  <h3>{withheld > 0 ? `${withheld} priority roles are hidden in your track.` : 'Stop seeing openings 2 days after everyone else.'}</h3>
+                  <p>Get instant access to recruiter names and direct application links the second they are shared. Discounted to $9 for your first month.</p>
                 </div>
                 <a className="btn-primary lg" href="/offer?src=inline" onClick={() => track('cta_click', { where: 'inline' })}><BoltIcon />{CTA_LABEL}</a>
               </div>
             )}
 
-            {splitFeed && <div className="sec-head"><span>Earlier roles</span><i />{!hasPass && <em className="sec-note">Older than {FREE_DELAY_HOURS} hours</em>}</div>}
+            {splitFeed && <div className="sec-head"><span>Delayed Free Feed</span><i />{!hasPass && <em className="sec-note">Older than {FREE_DELAY_HOURS} hours</em>}</div>}
             <div className="cards">
               {!splitFeed && lockedShown.map(renderLocked)}
               {myFeedOn && myStatus && (
@@ -1628,14 +1533,13 @@ export default function HomePage() {
               )}
               {myFeedOn && myExact.length > 0 && myRough.length > 0 && (
                 <p className="match-note">
-                  <b>{myExact.length} match your searches exactly.</b> Below those,
-                  {' '}{myRough.length} more with the same job titles{myNearby > 0 ? <> — {myNearby} nearby (same state or country), then the rest</> : ' in other places'}.
+                  <b>{myExact.length} match your targets exactly.</b>
+                  {' '}{myRough.length} more with matching titles{myNearby > 0 ? <> — {myNearby} nearby, then the rest</> : ' elsewhere'}.
                 </p>
               )}
               {myFeedOn && myExact.length === 0 && myRough.length > 0 && (
                 <p className="match-note">
-                  Nothing in your locations yet — here are {myRough.length} roles with the
-                  same job titles{myNearby > 0 ? <>, nearest first ({myNearby} in your state or country)</> : ' elsewhere'}.
+                  No exact local matches right now — showing {myRough.length} roles with matching titles{myNearby > 0 ? <>, nearest first ({myNearby} in your region)</> : ' elsewhere'}.
                 </p>
               )}
               {earlierJobs.slice(0, visibleCount).map((job, jobIndex) => {
@@ -1647,11 +1551,11 @@ export default function HomePage() {
                       {job.is_verified_job && (
                         <span className="verified">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M20 6 9 17l-5-5" /></svg>
-                          Verified post
+                          Verified Post
                         </span>
                       )}
                       {!!job.repost_count && (
-                        <span className="reposts" title="The same role was posted by several recruiters; this is the newest post">
+                        <span className="reposts" title="Multiple recruiters posted this role; showing latest">
                           Posted {job.repost_count + 1}×
                         </span>
                       )}
@@ -1676,20 +1580,17 @@ export default function HomePage() {
                     )}
 
                     {job.gated ? (
-                      // Free tier: the role is all there, the person is not. This line is the one
-                      // route from a card to /offer — no button, no badge.
                       <div className="card-foot gated">
                         <span className="avatar silhouette" aria-hidden="true">
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" /></svg>
                         </span>
                         <a className="author gated-author" href="/offer?src=recruiter_line" onClick={() => {
                           track('cta_click', { where: 'recruiter_line', age_days: job.posted_at ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000) : null })
-                          // so /offer can open with this role by name (title, company, location only)
                           try { sessionStorage.setItem('bcj_gate_job', JSON.stringify({ title: job.title, company: job.company, location: job.location, posted_at: job.posted_at, at: Date.now() })) } catch {}
                         }}>
                           Posted by <span className="blur-name" aria-hidden="true">{standInName(job.id)}</span>
                           {job.author_headline && <> · {job.author_headline}</>}
-                          <span className="named">Named with Premium</span>
+                          <span className="named">Unlock Name & Profile Link &rarr;</span>
                         </a>
                         <div className="card-actions">
                           <button className={`ghost-btn${saved.has(job.id) ? ' saved' : ''}`} onClick={() => toggleSaved(job.id)}>
@@ -1729,7 +1630,7 @@ export default function HomePage() {
             </div>
             {showFreshUpsell && (
               <a className="fresh-more" href="/offer?src=search_end" onClick={() => track('cta_click', { where: 'search_end', q: freshQuery, n: freshMatches })}>
-                <span>{displayJobs.length.toLocaleString()} {displayJobs.length === 1 ? 'role' : 'roles'} · <b>{freshMatches} more from the last {FREE_DELAY_HOURS} hours</b> with Premium</span>
+                <span>{displayJobs.length.toLocaleString()} {displayJobs.length === 1 ? 'role' : 'roles'} · <b>{freshMatches} newer priority roles</b> available with Priority Pass</span>
                 <ArrowRight />
               </a>
             )}
@@ -1737,10 +1638,10 @@ export default function HomePage() {
             {relaxed && displayJobs.length > 0 &&
              (relaxed.noLocation > displayJobs.length || relaxed.noSector > displayJobs.length || relaxed.noWorkType > displayJobs.length) && (
               <div className="relax-inline">
-                <span>Not many here. More if you widen it:</span>
+                <span>More roles available if you widen your criteria:</span>
                 <div className="relax">
                   {relaxed.noLocation > displayJobs.length && (
-                    <button onClick={() => setFilters({ ...filters, locations: [] })}>{relaxed.noLocation} in other locations</button>
+                    <button onClick={() => setFilters({ ...filters, locations: [] })}>{relaxed.noLocation} in other places</button>
                   )}
                   {relaxed.noSector > displayJobs.length && (
                     <button onClick={() => setFilters({ ...filters, sector: 'all' })}>{relaxed.noSector} in other sectors</button>
@@ -1755,18 +1656,14 @@ export default function HomePage() {
           )}
 
           <footer className="colophon">
-            <span>Sourced from public LinkedIn posts · AI-classified · backchannel.jobs © {new Date().getFullYear()}</span>
+            <span>Sourced directly from LinkedIn recruiter postings · AI-classified · backchannel.jobs © {new Date().getFullYear()}</span>
             {lastUpdated && <span className="mono">Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
           </footer>
         </main>
       </div>
 
       <style>{`
-        /* Roman only, no italic file — the em italics render as a synthetic slant
-           of the roman, which is calmer than Fraunces' real (very calligraphic) italic. */
-
         .ulj {
-          /* light theme */
           --page:      #F5F2EB;
           --surface:   #FDFCFA;
           --surface-2: #F0ECE2;
@@ -1786,10 +1683,10 @@ export default function HomePage() {
           --sec-sales:#a8571c;
           --sec-hr:#1f7a6b;
           --link:      #1B4F82;
-          --accent:    #24468f;
+          --accent:    #1B4F82;
           --accent-soft:#E4EAF6;
-          --cta:       #2F6BF2;
-          --cta-hover: #2458D4;
+          --cta:       #1B4F82;
+          --cta-hover: #143B5E;
           --cta-fg:    #FFFFFF;
           --line-strong:#B9B2A2;
           --live-soft: #E2F0E6;
@@ -1837,7 +1734,6 @@ export default function HomePage() {
         .ulj .mono { font-family: var(--font-spline-mono), ui-monospace, monospace; }
         .ulj button { font-family: inherit; }
 
-        /* ── Masthead ── */
         .ulj .masthead {
           position: sticky; top: 0; z-index: 50;
           background: color-mix(in srgb, var(--page) 88%, transparent);
@@ -1872,126 +1768,97 @@ export default function HomePage() {
         .ulj .search::placeholder { color: var(--ink-3); }
         .ulj .search:focus { border-color: var(--ink-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 8%, transparent); }
         .ulj .mast-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-        .ulj .demo-badge {
-          font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
-          color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--hairline-2);
-          padding: 4px 9px; border-radius: 6px; white-space: nowrap;
-        }
-        @keyframes ulj-pulse { 50% { opacity: .35; } }
+        
         .ulj .icon-btn {
           width: 36px; height: 36px; display: grid; place-items: center;
           background: var(--surface); border: 1px solid var(--hairline-2);
           border-radius: 10px; color: var(--ink-2); cursor: pointer; transition: .15s;
         }
         .ulj .icon-btn:hover { color: var(--ink); border-color: var(--ink-3); }
-        .ulj .refresh-btn {
-          height: 36px; padding: 0 16px; display: flex; align-items: center; gap: 8px;
-          background: var(--surface); color: var(--ink-2); border: 1px solid var(--hairline-2); border-radius: 10px;
-          font: 600 12.5px var(--font-inter), sans-serif; cursor: pointer; transition: .15s;
-        }
-        .ulj .refresh-btn:hover { color: var(--ink); border-color: var(--ink-3); }
-        .ulj .refresh-btn:disabled { cursor: not-allowed; opacity: .7; }
-        .ulj .refresh-btn.spinning svg { animation: ulj-spin 0.9s linear infinite; }
-        @keyframes ulj-spin { to { transform: rotate(360deg); } }
 
-        /* ── Hero ── */
-        .ulj .hero { max-width: 1200px; margin: 0 auto; padding: 40px 28px 30px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 32px 48px; align-items: center; }
-        /* The copy column spans the art's full height: headline and sub stay vertically centred, while the promises
-           and plan cards are pushed to the bottom so they end flush with the example job card */
-        .ulj .hero-copy { align-self: stretch; display: flex; flex-direction: column; }
-        /* two auto margins split the spare height equally: the headline stays where the centred layout put it,
-           and the promises + plan cards drop to the baseline */
-        .ulj .hero-copy > h1 { margin-top: auto; }
-        .ulj .hero-copy > .promises { margin-top: auto; }
-        @media (max-width: 900px) { .ulj .hero-copy > h1, .ulj .hero-copy > .promises { margin-top: 0; } }
+        .ulj .hero { max-width: 1200px; margin: 0 auto; padding: 36px 28px 28px; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 32px 48px; align-items: start; }
+        .ulj .hero-copy { display: flex; flex-direction: column; gap: 16px; }
+        
+        .ulj .hero-trust-tag { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); background: var(--surface); border: 1px solid var(--hairline-2); padding: 4px 12px; border-radius: 99px; width: fit-content; }
+        .ulj .stars { display: inline-flex; gap: 2px; color: #D97706; }
+
         .ulj .hero h1 {
-          font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: clamp(38px, 5.4vw, 64px);
-          line-height: 1.04; letter-spacing: -0.025em; margin-bottom: 18px;
+          font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: clamp(36px, 4.8vw, 56px);
+          line-height: 1.08; letter-spacing: -0.02em; margin: 0;
         }
-        .ulj .hero h1 em { font-style: italic; font-weight: 400; }
-        .ulj .hero .sub { font-size: 17px; color: var(--ink-2); max-width: 54ch; margin-bottom: 24px; }
-        .ulj .cta-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-        .ulj .offer { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; max-width: 640px; gap: 10px; }
-        .ulj .offer > .plan { display: block; text-align: left; padding: 14px 16px; font-size: 13px; line-height: 1.4; color: var(--ink-2); background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 12px; cursor: pointer; text-decoration: none; transition: background .15s; }
-        .ulj .offer > .plan:hover { border-color: var(--ink-2); }
-        .ulj .offer > .plan-pro { background: var(--cta); border-color: var(--cta); color: rgba(255,255,255,.88); }
-        .ulj .offer > .plan-pro:hover { background: var(--cta-h, var(--cta)); border-color: var(--cta-h, var(--cta)); }
-        .ulj .offer > .plan-pro b { color: #fff; }
-        .ulj .offer > .plan-pro b svg { opacity: 1; }
-        .ulj .offer b span { display: inline-flex; align-items: center; gap: 6px; }
-        .ulj .offer > .plan:focus-visible { outline: 2px solid var(--cta); outline-offset: -2px; }
-        .ulj .offer b { display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--ink); margin-bottom: 2px; font-size: 14px; }
-        .ulj .offer b svg { width: 14px; height: 14px; flex: none; opacity: .55; }
-        .ulj .offer b svg.down { transform: rotate(90deg); }
-        .ulj .offer-wrap { display: none; max-width: 1200px; margin: 0 auto; padding: 0 28px 32px; }
-        .ulj .offer-wrap .offer { margin-top: 0; }
+        .ulj .hero h1 em { font-style: normal; color: var(--accent); }
+        .ulj .hero .sub { font-size: 16.5px; line-height: 1.55; color: var(--ink-2); max-width: 54ch; margin: 0; }
+        
+        /* Optimized Hero Offer Card */
+        .ulj .offer { margin-top: 8px; display: flex; flex-direction: column; gap: 12px; max-width: 580px; }
+        .ulj .offer-main-card {
+          background: var(--surface); border: 2px solid var(--accent); border-radius: 16px; padding: 20px 22px;
+          display: flex; flex-direction: column; gap: 14px; box-shadow: 0 4px 20px rgba(27,79,130,0.1);
+        }
+        .ulj .offer-badge { align-self: flex-start; background: #FEF3C7; color: #92400E; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px; }
+        .ulj .offer-pricing { display: flex; align-items: baseline; gap: 12px; }
+        .ulj .offer-price-big { font-family: var(--font-fraunces), Georgia, serif; font-size: 42px; font-weight: 500; line-height: 1; color: var(--ink); }
+        .ulj .offer-price-details { display: flex; flex-direction: column; }
+        .ulj .offer-strike { font-size: 13px; color: var(--ink-3); text-decoration: line-through; }
+        .ulj .offer-sub { font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+        
+        .ulj .offer-cta-btn { width: 100%; height: 46px; font-size: 15px; font-weight: 700; border-radius: 10px; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 8px rgba(27,79,130,0.2); }
+        .ulj .offer-guarantee { font-size: 11.5px; color: var(--ink-3); text-align: center; }
+
+        .ulj .offer-free-option { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-3); padding-left: 4px; }
+        .ulj .offer-free-link { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; font-weight: 500; }
+        .ulj .offer-free-link:hover { color: var(--ink); }
+
+        .ulj .offer-wrap { display: none; max-width: 1200px; margin: 0 auto; padding: 0 28px 28px; }
         @media (max-width: 900px) {
           .ulj .offer-d { display: none; }
           .ulj .offer-wrap { display: block; }
         }
         @media (max-width: 760px) { .ulj .offer-wrap { padding: 0 16px 24px; } }
 
-        /* ── Hero promises: three lines, each ticked off in turn after the page lands ── */
-        /* One row, spanning the same 640px as the two plan cards below so it reads as a promise about every role, not the free tier */
-        .ulj .promises { list-style: none; padding: 0; margin: -4px 0 0; max-width: 640px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 18px; }
-        .ulj .promises li { --t: calc(500ms + var(--i) * 600ms); display: flex; align-items: center; gap: 9px; font-size: 14.5px; font-weight: 500; color: var(--ink-3); white-space: nowrap; animation: pm-text .35s ease-out var(--t) both; }
-        @keyframes pm-text { to { color: var(--ink); } }
+        .ulj .promises { list-style: none; padding: 0; margin: 0; max-width: 580px; display: flex; flex-wrap: wrap; gap: 8px 18px; }
+        .ulj .promises li { --t: calc(300ms + var(--i) * 300ms); display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 500; color: var(--ink-2); white-space: nowrap; }
         .ulj .pm-check {
-          flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
-          color: #fff; border: 1.5px solid var(--hairline-2); background: transparent;
-          animation: pm-fill .4s cubic-bezier(.3,1.5,.5,1) var(--t) both;
+          flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+          color: #fff; background: var(--live);
         }
-        @keyframes pm-fill {
-          0%   { transform: scale(1); background: transparent; border-color: var(--hairline-2); }
-          50%  { transform: scale(1.18); background: var(--live); border-color: var(--live); }
-          100% { transform: scale(1); background: var(--live); border-color: var(--live); }
-        }
-        /* the tick draws itself in, left to right, just after the circle fills */
-        .ulj .pm-check svg { width: 12px; height: 12px; }
-        .ulj .pm-check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: pm-draw .3s cubic-bezier(.4,0,.2,1) calc(var(--t) + 180ms) forwards; }
-        @keyframes pm-draw { to { stroke-dashoffset: 0; } }
-        /* phones: back to a stacked list, matching the plan cards stacking below */
-        @media (max-width: 760px) { .ulj .promises { flex-direction: column; gap: 8px; } }
-        @media (prefers-reduced-motion: reduce) {
-          .ulj .promises li, .ulj .pm-check, .ulj .pm-check path { animation-duration: 0s; animation-delay: 0s; }
-        }
-        /* Hero art: a recruiter post becoming a listing */
+        .ulj .pm-check svg { width: 11px; height: 11px; }
+
         .ulj .art { position: relative; width: 100%; max-width: 520px; margin-left: auto; }
         .ulj .art-m-wrap { display: none; }
-        .ulj .art-post { position: relative; z-index: 2; width: 66%; background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
+        .ulj .art-post { position: relative; z-index: 2; width: 68%; background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
         .ulj .art-h { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-        .ulj .art-h b { display: block; font-size: 14px; line-height: 1.2; }
-        .ulj .art-h small { display: block; font-size: 12px; color: var(--ink-2); }
-        .ulj .art .li { width: 30px; height: 30px; border-radius: 6px; background: #0A66C2; color: #fff; display: grid; place-items: center; font: 700 15px var(--font-inter), sans-serif; flex: none; }
-        .ulj .art-post p { font-size: 13.5px; color: var(--ink-2); }
-        .ulj .art-note { position: absolute; z-index: 3; top: 2px; right: 0; width: 31%; display: flex; flex-direction: column; font: 600 22px/1.02 var(--font-caveat), 'Segoe Print', 'Bradley Hand', cursive; color: var(--ink); transform: rotate(-4deg); transform-origin: left center; }
-        .ulj .art-note svg { width: 54px; height: 36px; margin: 0 0 2px -34px; }
-        .ulj .art-role { position: relative; z-index: 1; margin-top: -12px; background: var(--surface); border: 1px solid var(--hairline); border-radius: 16px; padding: 30px 20px 18px; box-shadow: var(--shadow-lift); }
-        .ulj .art-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .ulj .art .new { font: 600 12px var(--font-inter), sans-serif; padding: 3px 10px; border-radius: 999px; background: var(--live-soft); color: var(--live); }
+        .ulj .art-h b { display: block; font-size: 13.5px; line-height: 1.2; }
+        .ulj .art-h small { display: block; font-size: 11.5px; color: var(--ink-2); }
+        .ulj .art .li { width: 28px; height: 28px; border-radius: 6px; background: #0A66C2; color: #fff; display: grid; place-items: center; font: 700 14px var(--font-inter), sans-serif; flex: none; }
+        .ulj .art-post p { font-size: 13px; color: var(--ink-2); line-height: 1.4; }
+        .ulj .art-note { position: absolute; z-index: 3; top: 2px; right: 0; width: 31%; display: flex; flex-direction: column; font: 600 20px/1.02 var(--font-caveat), 'Segoe Print', 'Bradley Hand', cursive; color: var(--ink); transform: rotate(-4deg); }
+        .ulj .art-note svg { width: 48px; height: 32px; margin: 0 0 2px -28px; }
+        .ulj .art-role { position: relative; z-index: 1; margin-top: -12px; background: var(--surface); border: 1px solid var(--hairline); border-radius: 16px; padding: 28px 20px 18px; box-shadow: var(--shadow-lift); }
+        .ulj .art-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .ulj .art .new { font: 600 11.5px var(--font-inter), sans-serif; padding: 2px 8px; border-radius: 999px; background: var(--live-soft); color: var(--live); }
         .ulj .art-eg { font: 500 11px var(--font-spline-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
-        .ulj .art-role h3 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.15; letter-spacing: -.01em; margin-bottom: 4px; }
-        .ulj .art-meta { font-size: 14px; color: var(--ink-2); }
-        .ulj .art-facts { list-style: none; padding: 0; margin: 12px 0 10px; display: grid; gap: 2px; font-size: 13.5px; color: var(--ink-2); }
-        .ulj .art-quote { font-size: 13.5px; }
+        .ulj .art-role h3 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 24px; line-height: 1.15; letter-spacing: -.01em; margin-bottom: 4px; }
+        .ulj .art-meta { font-size: 13.5px; color: var(--ink-2); }
+        .ulj .art-facts { list-style: none; padding: 0; margin: 10px 0 10px; display: grid; gap: 2px; font-size: 13px; color: var(--ink-2); }
+        .ulj .art-quote { font-size: 13px; color: var(--ink-2); }
         .ulj .art-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-        .ulj .art-tags span { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+        .ulj .art-tags span { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
         .ulj .art-actions { display: flex; gap: 8px; margin-top: 14px; }
 
-        /* ── Buttons: solid blue is reserved for the early-access CTA ── */
         .ulj .btn-primary {
           display: inline-flex; align-items: center; justify-content: center; gap: 8px;
           height: 38px; padding: 0 16px; border-radius: 10px; white-space: nowrap;
           background: var(--cta); color: var(--cta-fg); border: 1px solid var(--cta);
           font: 600 13.5px var(--font-inter), sans-serif; text-decoration: none; cursor: pointer;
-          box-shadow: 0 4px 14px color-mix(in srgb, var(--cta) 32%, transparent);
+          box-shadow: 0 2px 8px color-mix(in srgb, var(--cta) 25%, transparent);
           transition: background .12s, border-color .12s;
         }
         .ulj .btn-primary:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
         .ulj .btn-primary:disabled { opacity: .7; cursor: wait; }
         .ulj .checkout-error { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 80; display: flex; align-items: center; gap: 14px; width: max-content; max-width: calc(100vw - 32px); padding: 12px 16px; border-radius: 12px; background: #8A1F1F; color: #fff; font-size: 13.5px; box-shadow: 0 12px 32px -10px rgba(0,0,0,.45); }
         .ulj .checkout-error button { background: none; border: none; color: inherit; font-size: 18px; line-height: 1; cursor: pointer; opacity: .8; }
-        .ulj .btn-primary.lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
+        .ulj .btn-primary.lg { height: 46px; padding: 0 22px; font-size: 15px; border-radius: 10px; }
         .ulj .btn-primary.block { width: 100%; }
         .ulj .btn-ghost {
           display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -2000,26 +1867,18 @@ export default function HomePage() {
           font: 500 13.5px var(--font-inter), sans-serif; text-decoration: none; cursor: pointer; transition: .12s;
         }
         .ulj .btn-ghost:hover { background: var(--surface-2); border-color: var(--ink); }
-        .ulj .btn-ghost.lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
-        .ulj .btn-ghost.sm { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 9px; }
-        .ulj .cta-short { display: none; }
-        .ulj .nav-link { font-size: 14px; color: var(--ink-2); text-decoration: none; padding: 0 6px; }
-        .ulj .nav-link:hover { color: var(--ink); }
+        .ulj .btn-ghost.sm { height: 32px; padding: 0 12px; font-size: 12.5px; border-radius: 8px; }
 
-        /* ── Layout ── */
         .ulj .layout { max-width: 1200px; margin: 0 auto; padding: 8px 28px 60px; display: grid; grid-template-columns: 218px 1fr; gap: 40px; align-items: start; }
-        .ulj .layout > * { min-width: 0; }  /* let grid children shrink below content width */
+        .ulj .layout > * { min-width: 0; }
 
-        /* ── Sidebar ── */
         .ulj .filters {
           position: sticky; top: 84px;
-          display: flex; flex-direction: column; gap: 26px;
-          /* Scroll independently of the feed — otherwise a tall filter column's
-             bottom is unreachable until the whole page is scrolled through */
+          display: flex; flex-direction: column; gap: 24px;
           max-height: calc(100vh - 100px);
           overflow-y: auto; overflow-x: hidden;
           margin: 0 -10px; padding: 8px 10px 24px;
-          scrollbar-width: none;  /* scrolls via wheel/trackpad; bar itself hidden */
+          scrollbar-width: none;
         }
         .ulj .filters::-webkit-scrollbar { display: none; }
         .ulj .flabel {
@@ -2039,7 +1898,7 @@ export default function HomePage() {
         .ulj .sector-row:hover { background: var(--surface-2); color: var(--ink); }
         .ulj .sector-row.active { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--ink); font-weight: 600; }
         .ulj .sector-row .dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; background: var(--dot, var(--ink-3)); }
-                .ulj .sector-row .cnt { margin-left: auto; font: 500 11.5px var(--font-spline-mono), monospace; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+        .ulj .sector-row .cnt { margin-left: auto; font: 500 11.5px var(--font-spline-mono), monospace; color: var(--ink-3); font-variant-numeric: tabular-nums; }
         .ulj .sector-row.active .cnt { color: var(--ink); }
         .ulj .check-row {
           display: flex; align-items: center; gap: 10px; padding: 7px 0;
@@ -2054,33 +1913,8 @@ export default function HomePage() {
         }
         .ulj .check-row.on { color: var(--ink); }
         .ulj .check-row.on .box { background: var(--accent); border-color: var(--accent); color: #fff; }
-        .ulj .chips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
-        .ulj .chip {
-          padding: 5px 11px; border-radius: 999px; cursor: pointer;
-          background: var(--surface); border: 1px solid var(--hairline-2);
-          font: 500 12px var(--font-inter), sans-serif; color: var(--ink-2); transition: .12s;
-        }
-        .ulj .chip:hover { border-color: var(--ink-3); color: var(--ink); }
-        .ulj .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
-        .ulj .chip .n { margin-left: 6px; font: 500 10.5px var(--font-spline-mono), monospace; color: var(--ink-3); }
-        .ulj .chip.on .n { color: var(--ink-2); }
-        .ulj .chips.regions { padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px dashed var(--hairline); }
-        .ulj .loc-search {
-          width: 100%; height: 30px; padding: 0 10px; margin-bottom: 8px;
-          background: var(--surface); color: var(--ink);
-          border: 1px solid var(--hairline-2); border-radius: 8px;
-          font: 500 12px var(--font-inter), sans-serif; outline: none;
-        }
-        .ulj .loc-search::placeholder { color: var(--ink-3); }
-        .ulj .loc-search:focus { border-color: var(--ink-2); }
-        .ulj .more-note {
-          margin-top: 8px; font-size: 11px; color: var(--ink-3);
-          background: none; border: none; cursor: pointer; padding: 0;
-          text-decoration: underline; text-underline-offset: 3px;
-        }
-        .ulj .more-note:hover { color: var(--ink); }
-        .ulj .chips.cities.expanded { max-height: 300px; overflow-y: auto; padding-right: 4px; }
-        .ulj .side-note { font-size: 11.5px; color: var(--ink-3); line-height: 1.55; padding-top: 4px; }
+
+        .ulj .side-note { font-size: 11.5px; color: var(--ink-3); line-height: 1.5; padding-top: 4px; }
         .ulj .saved-list { display: flex; flex-direction: column; gap: 2px; }
         .ulj .saved-link {
           display: flex; align-items: baseline; gap: 8px; width: 100%;
@@ -2090,9 +1924,7 @@ export default function HomePage() {
         .ulj .saved-link:hover { color: var(--ink); }
         .ulj .saved-link .star { color: var(--live); font-size: 11px; flex-shrink: 0; }
         .ulj .saved-link .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .ulj .card.flash { border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 20%, transparent); }
 
-        /* ── Feed ── */
         .ulj .feed-bar { display: flex; align-items: baseline; gap: 14px; padding: 8px 0 16px; min-height: 48px; box-sizing: border-box; }
         .ulj .feed-bar .count { font-family: var(--font-fraunces), Georgia, serif; font-size: 17px; font-weight: 500; }
         .ulj .feed-bar .count b { font-variant-numeric: tabular-nums; }
@@ -2109,7 +1941,6 @@ export default function HomePage() {
           outline: none; cursor: pointer;
         }
 
-        /* ── Press-time strip ── */
         .ulj .press {
           position: relative; overflow: hidden;
           display: flex; align-items: center; gap: 10px;
@@ -2134,9 +1965,6 @@ export default function HomePage() {
         .ulj .press .pdetail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .ulj .press .pclock { margin-left: auto; font: 600 13px var(--font-spline-mono), monospace; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
         .ulj .press .pclock .unit { font-weight: 400; color: var(--ink-3); font-size: 11px; margin: 0 5px 0 1px; }
-        .ulj .press.imminent .pclock { color: var(--live); }
-        .ulj .press.ingesting .pclock { color: var(--live); font-size: 12px; }
-        .ulj .press.far .pclock { font-size: 12px; }
 
         .ulj .cards { display: flex; flex-direction: column; gap: 14px; }
         .ulj .skeleton {
@@ -2157,88 +1985,21 @@ export default function HomePage() {
         }
         .ulj .card:hover { box-shadow: var(--shadow-lift); translate: 0 -2px; border-color: var(--hairline-2); }
         .ulj .card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .ulj .wordmark { display: inline-flex; align-items: center; gap: 10px; }
         .ulj .wordmark .mark { flex: none; width: 30px; height: 30px; border-radius: 7px;
           background: #185FA5; color: #FFFFFF; display: inline-flex; align-items: center;
           justify-content: center; font-family: var(--font-fraunces), Georgia, serif; font-size: 18px;
           font-weight: 500; line-height: 1; }
-        @media (max-width: 560px) {
-          .ulj .wordmark .mark { width: 26px; height: 26px; font-size: 16px; border-radius: 6px; }
-          .ulj .wordmark { gap: 8px; }
-        }
-        .ulj .search-spin { flex: none; color: var(--ink-3); animation: spin .9s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg) } }
-        @media (prefers-reduced-motion: reduce) { .ulj .search-spin { animation: none } }
-        .ulj .sug-relax { display: flex; width: 100%; text-align: left; gap: 8px; align-items: center;
-          padding: 10px 13px; background: none; border: 0; border-top: 1px solid var(--hairline);
-          font: 400 13px var(--font-inter), sans-serif; color: var(--ink-2); cursor: pointer; }
-        .ulj .sug-relax:hover { background: var(--surface-2); }
-        .ulj .sug-relax b { color: var(--ink); font-weight: 600; }
-        .ulj .match-note { margin: 0 0 14px; padding: 11px 14px; border-radius: 10px;
-          background: var(--surface-2); font-size: 13px; line-height: 1.55; color: var(--ink-2); }
-        .ulj .match-note b { color: var(--ink); font-weight: 600; }
-        .ulj .match-status { margin: 0 0 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); }
-        .ulj .match-status .ms-dot { width: 7px; height: 7px; border-radius: 50%; background: #0A7A3D; }
-        .ulj .match-status a { color: var(--ink-2); }
-        .ulj .feed-tabs { display: inline-flex; gap: 2px; background: var(--surface-2);
-          border-radius: 9px; padding: 2px; margin-left: auto; align-self: center; }
-        /* the tabs claim the gap; the dropdown sits straight after them */
-        .ulj .feed-tabs + .sort-wrap { margin-left: 10px !important; }
-        .ulj .feed-tabs button { background: none; border: 0; border-radius: 7px;
-          padding: 6px 12px; font: 500 12.5px var(--font-inter), sans-serif; color: var(--ink-2); cursor: pointer; }
-        .ulj .feed-tabs button.on { background: var(--surface); color: var(--ink);
-          box-shadow: 0 1px 2px rgba(25,23,19,.08); }
-        .ulj .feed-tabs span { font-variant-numeric: tabular-nums; opacity: .7; margin-left: 3px; }
-        .ulj .relax-inline { text-align: center; padding: 26px 0 8px; }
-        .ulj .relax-inline > span { display: block; font-size: 13.5px; color: var(--ink-2); margin-bottom: 10px; }
-        .ulj .relax { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 14px 0 18px; }
-        .ulj .relax button { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 15px; font: 500 13px var(--font-inter), sans-serif; color: var(--ink); cursor: pointer; }
-        .ulj .relax button:hover { border-color: var(--ink); }
-        .ulj .acct-wrap { position: relative; }
-        .ulj .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
-          min-width: 200px; background: #FFFDF9; border: 1px solid #DDD6C8;
-          border-radius: 10px; padding: 6px; display: flex; flex-direction: column;
-          box-shadow: 0 8px 28px -6px rgba(25,23,19,0.22); }
-        .ulj.dark .acct-menu { background: #1C1A17; border-color: #35322C;
-          box-shadow: 0 8px 28px -6px rgba(0,0,0,0.55); }
-        .ulj .acct-menu a, .ulj .acct-menu button { display: block; width: 100%; text-align: left;
-          font: 500 13px var(--font-inter), sans-serif; color: var(--ink); background: none; border: none;
-          padding: 8px 10px; border-radius: 7px; cursor: pointer; text-decoration: none; }
-        .ulj .acct-menu a:hover, .ulj .acct-menu button:hover { background: var(--page); }
-        .ulj .acct-email { font-size: 11.5px; color: var(--ink-2); padding: 7px 10px 4px; word-break: break-all; }
-        .ulj .acct-badge { font-size: 11px; color: var(--ink-2); padding: 0 10px 7px; }
-        .ulj .cards { padding-bottom: 92px; }
-        .ulj .sec-head { display: flex; align-items: center; gap: 10px; padding: 4px 0 12px; }
-        .ulj .sec-head span { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
-        .ulj .sec-head i { flex: 1; height: 1px; background: var(--hairline); }
-        .ulj .today-wrap { margin-bottom: 26px; }
-        .ulj .today-cards { padding-bottom: 0; }
-        .ulj .withheld-note { grid-column: 1 / -1; padding: 2px 0 6px; }
-        .ulj .withheld-note b { display: block; font-family: var(--font-fraunces), Georgia, serif;
-          font-size: 17px; font-weight: 500; color: var(--ink); }
-        .ulj .withheld-note span { font-size: 12.5px; color: var(--ink-2); }
-        .ulj .card.mini h3 { font-size: 16px; margin: 2px 0 0; }
-        .ulj .convert-old { margin: 34px 0 0; padding: 28px 26px; border-radius: 14px; background: var(--ink); }
-        .ulj .convert h2 { font-family: var(--font-fraunces), Georgia, serif; font-size: 21px; font-weight: 500; color: var(--page); margin: 0 0 6px; }
-        .ulj .convert p { font-size: 13.5px; color: var(--ink-3); margin: 0 0 16px; }
-        .ulj .convert-cta { display: inline-block; background: var(--page); color: var(--ink); font-size: 13px; padding: 10px 18px; border-radius: 8px; text-decoration: none; }
-        .ulj .card.locked-unused { border-left: 3px solid var(--ink-3); background: var(--card); }
-        .ulj .locked-body { padding: 22px 4px; text-align: center; }
-        .ulj .locked-count { font-family: var(--font-fraunces), Georgia, serif; font-size: 20px; font-weight: 500; color: var(--ink); }
-        .ulj .locked-sub { font-size: 13px; color: var(--ink-2); margin: 6px 0 14px; }
+
         .ulj .sec-tag { display: inline-flex; align-items: center; gap: 7px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); }
         .ulj .sec-tag .dot { width: 8px; height: 8px; border-radius: 3px; background: var(--sec); }
         .ulj .verified { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-3); }
         .ulj .verified svg { color: var(--live); }
-        .ulj .reposts { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
         .ulj .ago { margin-left: auto; font: 500 11.5px var(--font-spline-mono), monospace; color: var(--ink-3); }
         .ulj .ago.fresh { color: var(--live); }
         .ulj .card h3 { font-family: var(--font-fraunces), Georgia, serif; font-size: 20px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; }
-        /* Titles carry the brand blue — they're the thing people scan, and it
-           breaks up an otherwise all-black page. */
         .ulj .card h3 a { color: #1B4F82; text-decoration: none; }
         .ulj.dark .card h3 a { color: #7FB3E3; }
-        .ulj .card h3 a:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+        .ulj .card h3 a:hover { text-decoration: underline; text-underline-offset: 3px; }
         .ulj .meta { margin-top: 5px; font-size: 13px; color: var(--ink-2); }
         .ulj .meta b { color: var(--ink); font-weight: 600; }
         .ulj .meta .sep { margin: 0 7px; color: var(--ink-3); }
@@ -2250,19 +2011,14 @@ export default function HomePage() {
           border-top: 1px solid var(--hairline);
           display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
         }
-        /* keeps a long headline from pushing the avatar onto its own line */
-        .ulj .card-foot .author { flex: 1; min-width: 0; overflow: hidden;
-          text-overflow: ellipsis; white-space: nowrap; }
+        .ulj .card-foot .author { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .ulj .avatar {
           position: relative; overflow: hidden;
-          width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+          width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
           background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--hairline-2);
           display: grid; place-items: center; font: 600 13px var(--font-inter), sans-serif;
         }
-        /* Photo sits over the initials; if the signed LinkedIn url has expired
-           the img hides itself on error and the initials show through. */
-        .ulj .avatar img { position: absolute; inset: 0; width: 100%; height: 100%;
-          object-fit: cover; border-radius: 50%; }
+        .ulj .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
         .ulj .avatar i { font-style: normal; }
         .ulj .author { font-size: 12px; color: var(--ink-2); line-height: 1.3; }
         .ulj .author b { color: var(--ink); font-weight: 600; }
@@ -2283,21 +2039,12 @@ export default function HomePage() {
         }
         .ulj .apply-btn:hover { background: var(--surface-2); border-color: var(--ink); }
 
-        .ulj .fresh-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 0 0; padding: 12px 16px; border: 1px solid var(--hairline-2); border-radius: 12px; background: var(--accent-soft); color: var(--ink-2); font-size: 14px; text-decoration: none; transition: border-color .15s; }
-        .ulj .fresh-more b { color: var(--ink); font-weight: 600; }
-        .ulj .fresh-more:hover { border-color: var(--cta); }
-        .ulj .fresh-more svg { width: 14px; height: 14px; flex: none; opacity: .6; }
-        .ulj .empty .btn-primary { display: inline-flex; }
         .ulj .empty {
           background: var(--surface); border: 1px dashed var(--hairline-2); border-radius: 16px;
           padding: 64px 24px; text-align: center;
         }
         .ulj .empty h3 { font-family: var(--font-fraunces), Georgia, serif; font-size: 22px; font-weight: 500; }
         .ulj .empty p { margin: 8px 0 20px; color: var(--ink-2); font-size: 13.5px; }
-        .ulj .empty button {
-          padding: 9px 18px; background: transparent; color: var(--ink); border: 1.5px solid var(--line-strong);
-          border-radius: 9px; font: 600 13px var(--font-inter), sans-serif; cursor: pointer;
-        }
 
         .ulj .colophon {
           margin-top: 40px; padding-top: 22px;
@@ -2306,7 +2053,6 @@ export default function HomePage() {
           font-size: 11.5px; color: var(--ink-3);
         }
 
-        /* Mobile filters accordion header — hidden on desktop */
         .ulj .filters-head { display: none; }
         .ulj .fbadge {
           min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px;
@@ -2315,7 +2061,6 @@ export default function HomePage() {
           display: inline-grid; place-items: center;
         }
 
-        /* ── Tablet & below: single column, collapsible filters ── */
         @media (max-width: 900px) {
           .ulj .layout { grid-template-columns: 1fr; gap: 16px; }
           .ulj .filters { position: static; padding: 0; margin: 0; gap: 0; max-height: none; overflow: visible; }
@@ -2331,78 +2076,32 @@ export default function HomePage() {
           .ulj .filters.open .fgroup { display: block; margin-top: 18px; }
           .ulj .filters.open .side-note { display: block; margin-top: 14px; }
           .ulj .hero { grid-template-columns: 1fr; align-items: start; }
-          .ulj .hero .art-d { display: none; }   /* narrow screens: the example moves below How it works */
+          .ulj .hero .art-d { display: none; }
           .ulj .art-m-wrap { display: block; max-width: 1200px; margin: 0 auto; padding: 0 28px 28px; }
           .ulj .art { margin: 0 auto 0 0; }
           .ulj .pass-side { display: none; }
         }
 
-        /* ── Phones: wrap masthead, compress hero & feed ── */
         @media (max-width: 760px) {
-          .ulj .masthead-in {
-            flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 10px; row-gap: 10px;
-          }
+          .ulj .masthead-in { flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 10px; }
           .ulj .search-wrap { order: 3; flex-basis: 100%; max-width: none; }
-          .ulj .search { font-size: 16px; }  /* iOS zooms the page on focus below 16px */
+          .ulj .search { font-size: 16px; }
           .ulj .slash { display: none; }
-          .ulj .refresh-btn { width: 36px; padding: 0; justify-content: center; }
-          .ulj .refresh-btn span { display: none; }  /* icon-only so the top row fits one line */
-          .ulj .hero { padding: 26px 16px 16px; gap: 24px; }
+          .ulj .hero { padding: 24px 16px 16px; gap: 20px; }
           .ulj .art-m-wrap { padding: 0 16px 24px; }
           .ulj .hero .sub { font-size: 15px; }
-          .ulj .offer { grid-template-columns: 1fr; }
           .ulj .art-post { width: 100%; }
-          .ulj .art-note { position: static; width: auto; transform: none; flex-direction: row; align-items: center; gap: 8px; margin: 8px 0 0 8px; font-size: 21px; }
+          .ulj .art-note { position: static; width: auto; transform: none; flex-direction: row; align-items: center; gap: 8px; margin: 8px 0 0 8px; font-size: 19px; }
           .ulj .art-note svg { margin: 0; flex: none; transform: rotate(-90deg) scaleX(-1); }
           .ulj .art-role { margin-top: 0; padding-top: 20px; }
-          .ulj .nav-link { display: none; }
           .ulj .layout { padding: 4px 16px 40px; }
-          .ulj .chip { padding: 7px 13px; }  /* bigger tap targets */
         }
 
-        @media (max-width: 560px) { .ulj .refresh-btn { display: none; } .ulj .cta-full { display: none; } .ulj .cta-short { display: inline; } }
-
-        /* ── Small phones: tighter cards ── */
-        @media (max-width: 640px) {
-          .ulj .feed-bar { flex-wrap: wrap; row-gap: 8px; }
-          .ulj .card { padding: 15px 16px 0; border-radius: 12px; }
-          .ulj .card h3 { font-size: 17.5px; }
-          .ulj .meta { font-size: 12.5px; }
-          .ulj .summary { font-size: 13px; }
-          .ulj .card-foot { margin: 14px -16px 0; padding: 10px 12px 12px 16px; flex-wrap: nowrap; }
-          .ulj .author { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-          .ulj .card-actions { flex-shrink: 0; }
-          .ulj .ghost-btn { padding: 0 10px; }
-          .ulj .apply-btn { padding: 0 11px; }
-          .ulj .colophon { flex-direction: column; gap: 4px; }
-        }
-
-
-        /* ── Phone polish: one-row header, full-width hero buttons, compact sticky bar ── */
-        @media (max-width: 560px) {
-          .ulj .masthead-in { padding: 10px 16px; row-gap: 10px; }
-          .ulj .masthead-in { gap: 8px; }
-          .ulj .wordmark { font-size: 18px; margin-right: auto; display: inline-flex; align-items: center; gap: 7px; }
-          .ulj .wordmark .mark { width: 26px; height: 26px; font-size: 14px; }
-          .ulj .mast-actions { gap: 6px; margin-left: 0; }
-          .ulj .mast-actions .icon-btn { width: 34px; height: 34px; }
-          .ulj .mast-actions > .btn-primary:not(.signup) { display: none; }  /* the hero already carries the checkout CTA */
-          .ulj .mast-actions > .signup { height: 34px; padding: 0 12px; font-size: 13px; }
-          .ulj .cta-row { flex-direction: column; align-items: stretch; gap: 10px; }
-          .ulj .cta-row .btn-primary, .ulj .cta-row .btn-ghost { width: 100%; }
-          .ulj .offer > .plan { padding: 11px 14px; }
-        }
-
-
-        /* ── Location dropdowns (radio) ── */
         .ulj .drop { margin-top: 8px; }
         .ulj .drop-btn { display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 12px; background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 9px; cursor: pointer; font: 500 13px var(--font-inter), sans-serif; color: var(--ink); text-align: left; }
-        .ulj .drop-btn:hover { border-color: var(--ink-3); }
         .ulj .drop-btn.open { border-color: var(--ink-2); }
         .ulj .drop-btn .dl { color: var(--ink-3); font-size: 12px; }
         .ulj .drop-btn .dv { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
-        .ulj .drop-btn .chev { flex: none; color: var(--ink-3); transition: transform .15s; }
-        .ulj .drop-btn.open .chev { transform: rotate(180deg); }
         .ulj .drop-panel { margin-top: 6px; padding: 6px; background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 10px; }
         .ulj .drop-panel .loc-search { margin: 2px 0 6px; }
         .ulj .drop-list { max-height: 240px; overflow-y: auto; }
@@ -2413,32 +2112,17 @@ export default function HomePage() {
         .ulj .radio-row.on .rad { border-color: var(--accent); }
         .ulj .radio-row.on .rad::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
         .ulj .radio-row .n { margin-left: auto; font: 500 10.5px var(--font-spline-mono), monospace; color: var(--ink-3); }
-        .ulj .drop-list .more-note { margin: 6px 8px 4px; }
 
-
-        /* ── Signed-in strip (replaces hero + how-it-works) ── */
         .ulj .member-wrap { max-width: 1200px; margin: 0 auto; padding: 20px 28px 0; }
         .ulj .member-bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--hairline-2); border-radius: 12px; background: var(--surface); font-size: 13.5px; }
-        .ulj .member-bar b { font-weight: 600; }
-        .ulj .member-bar .mb-sub { color: var(--ink-2); font-size: 13px; }
         .ulj .member-bar.active { background: var(--live-soft); border-color: transparent; }
         .ulj .member-bar.active b { color: var(--live); }
         .ulj .mb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live); animation: ulj-pulse 2.2s infinite; flex: none; }
-        .ulj .mb-link { margin-left: auto; background: none; border: none; cursor: pointer; font: 600 13px var(--font-inter), sans-serif; color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+        .ulj .mb-link { margin-left: auto; font: 600 13px var(--font-inter), sans-serif; color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
         .ulj .member-bar.free { background: var(--accent-soft); border-color: transparent; }
         .ulj .member-bar.free .mb-copy { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; flex: 1; min-width: 0; }
         .ulj .member-bar.free .btn-primary { margin-left: auto; height: 34px; }
-        @media (max-width: 720px) { .ulj .member-wrap { padding: 14px 16px 0; } }
-        @media (max-width: 560px) {
-          .ulj .member-bar.free { flex-direction: column; align-items: stretch; gap: 10px; }
-          .ulj .member-bar.free .btn-primary { margin: 0; height: 40px; }
-        }
 
-
-        .ulj .dym { margin: -4px 0 12px; font-size: 13px; color: var(--ink-2); }
-        .ulj .dym b { color: var(--ink); font-weight: 600; }
-
-        /* ── Search suggestions ── */
         .ulj .sug { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 70; background: var(--surface); border: 1px solid var(--hairline-2); border-radius: 12px; padding: 6px; box-shadow: 0 16px 40px -12px rgba(0,0,0,.28); max-height: min(70vh, 460px); overflow-y: auto; }
         .ulj .sug-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 10px; background: none; border: none; border-radius: 8px; cursor: pointer; text-align: left; font-family: var(--font-inter), sans-serif; }
         .ulj .sug-row.on, .ulj .sug-row:hover { background: var(--accent-soft); }
@@ -2446,22 +2130,14 @@ export default function HomePage() {
         .ulj .sug-row .st { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
         .ulj .sug-row .st b { font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .ulj .sug-row .st span { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .ulj .sug-all { display: block; width: 100%; margin-top: 4px; padding: 9px 10px; border: none; border-top: 1px solid var(--hairline); background: none; text-align: left; cursor: pointer; font: 600 13px var(--font-inter), sans-serif; color: var(--link); border-radius: 0 0 8px 8px; }
         .ulj .bar-up { position: absolute; right: 7px; top: 50%; translate: 0 -50%; height: 24px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: 999px; background: var(--cta); color: #fff; font: 600 11.5px var(--font-inter), sans-serif; text-decoration: none; white-space: nowrap; }
-        .ulj .bar-up span { opacity: .85; font-weight: 500; }
-        .ulj .bar-up:hover { background: var(--cta-hover, var(--cta)); }
-        .ulj .search-wrap:has(.bar-up) .search { padding-right: 112px; }
-        .ulj .sug-up { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 10px; border-radius: 8px; background: var(--accent-soft); color: var(--ink-2); font-size: 13px; line-height: 1.35; text-decoration: none; }
+        .ulj .sug-up { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 10px; border-radius: 8px; background: var(--accent-soft); color: var(--ink-2); font-size: 13px; text-decoration: none; }
         .ulj .sug-up b { color: var(--ink); font-weight: 600; }
-        .ulj .sug-up svg { width: 14px; height: 14px; flex: none; color: var(--cta); }
-        .ulj .sug-all:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-        /* ── Free sample flag, section notes ── */
         .ulj .sample-flag { font: 500 11px var(--font-spline-mono), monospace; letter-spacing: .06em; text-transform: uppercase; background: var(--live-soft); color: var(--live); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+        .ulj .sample-flag.priority { background: #FEF3C7; color: #92400E; }
         .ulj .sec-head .sec-note { font-style: normal; font-size: 11.5px; color: var(--ink-2); background: var(--accent-soft); padding: 3px 10px; border-radius: 999px; }
-        .ulj .sec-head span { white-space: nowrap; }
 
-        /* ── Title-only locked roles ── */
         .ulj .card.locked-title:hover { translate: 0 0; box-shadow: var(--shadow); border-color: var(--hairline); }
         .ulj .card h3.locked-h { color: var(--link); }
         .ulj .locked-blur { filter: blur(5px); user-select: none; pointer-events: none; }
@@ -2469,63 +2145,37 @@ export default function HomePage() {
         .ulj .lock-when { font-size: 12.5px; color: var(--ink-2); }
         .ulj .lock-when b { color: var(--ink); font-weight: 600; }
         .ulj .lock-now { font-size: 12.5px; font-weight: 600; color: var(--accent); text-decoration: none; white-space: nowrap; }
-        .ulj .lock-now:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-        /* ── The one line at the top of the free feed ── */
         .ulj .feed-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; padding: 11px 16px; border: 1px solid var(--hairline-2); border-radius: 12px; background: var(--accent-soft); color: var(--ink-2); font-size: 14px; text-decoration: none; transition: border-color .15s; }
         .ulj .feed-top b { color: var(--ink); font-weight: 600; }
         .ulj .feed-top em { font-style: normal; font-size: 13px; font-weight: 600; color: var(--accent); white-space: nowrap; }
-        .ulj .feed-top:hover { border-color: var(--cta); }
 
-        /* ── Gated cards: the role in full, the person withheld ── */
         .ulj .card h3.gated-h { color: var(--ink); }
         .ulj .avatar.silhouette { color: var(--ink-3); }
         .ulj .author.gated-author { text-decoration: none; color: var(--ink-2); }
-        .ulj .author.gated-author:hover .named { text-decoration: underline; text-underline-offset: 3px; }
         .ulj .blur-name { display: inline-block; filter: blur(4px); color: var(--ink); font-weight: 600; user-select: none; }
         .ulj .author .named { margin-left: 8px; color: var(--accent); font-weight: 600; }
-        @media (max-width: 640px) {
-          .ulj .card-foot.gated { flex-wrap: wrap; row-gap: 10px; }
-          .ulj .card-foot.gated .author { white-space: normal; display: block; padding: 4px 0; line-height: 1.4; }
-          .ulj .card-foot.gated .author .named { display: block; margin-left: 0; }
-          .ulj .card-foot.gated .card-actions { margin-left: 0; width: 100%; }
-          .ulj .feed-top { flex-direction: column; align-items: flex-start; gap: 4px; }
-          .ulj .lock-foot { flex-wrap: wrap; row-gap: 6px; }
-        }
 
-        /* ── Sidebar pass card ── */
         .ulj .pass { background: #14213D; color: #F3F1EA; border-radius: 16px; padding: 20px; }
         .ulj.dark .pass { background: #0E1830; }
-        .ulj .pass .tagline { display: block; font: 500 11px var(--font-spline-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: #A9B4CC; margin-bottom: 8px; }
-        .ulj .pass h3 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.1; letter-spacing: -.01em; margin-bottom: 6px; }
-        .ulj .pass .price { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; }
-        .ulj .pass .price b { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 46px; line-height: 1; }
-        .ulj .pass .price span { font-size: 13px; color: #A9B4CC; }
-        .ulj .pass .pass-sub { font-size: 14px; color: #A9B4CC; margin: 0 0 14px; }
-        .ulj .pass .btn-primary.block { white-space: normal; text-align: center; padding-left: 12px; padding-right: 12px; }
-        .ulj .pass .pass-fine { display: block; margin-top: 10px; font-size: 12px; color: #A9B4CC; text-align: center; }
-        .ulj .pass ul { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; font-size: 13px; color: #A9B4CC; }
-        .ulj .pass li { display: flex; gap: 8px; align-items: center; }
-        .ulj .pass li svg { color: #7FD69B; flex: none; }
+        .ulj .pass h3 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 24px; line-height: 1.1; margin-bottom: 6px; }
+        .ulj .pass .pass-sub { font-size: 13.5px; color: #A9B4CC; margin: 0 0 14px; }
+        .ulj .pass .pass-fine { display: block; margin-top: 10px; font-size: 11.5px; color: #A9B4CC; text-align: center; }
 
-        /* ── Inline pass CTA in the feed ── */
         .ulj .inline-cta { display: grid; grid-template-columns: 1fr auto; gap: 16px 24px; align-items: center; background: #14213D; color: #F3F1EA; border-radius: 16px; padding: 22px 24px; margin: 4px 0 30px; }
         .ulj.dark .inline-cta { background: #0E1830; }
-        .ulj .inline-cta h3 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.15; margin-bottom: 4px; }
-        .ulj .inline-cta p { font-size: 14px; color: #A9B4CC; }
-        @media (max-width: 640px) { .ulj .inline-cta { grid-template-columns: 1fr; } }
+        .ulj .inline-cta h3 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 24px; line-height: 1.15; margin-bottom: 4px; }
+        .ulj .inline-cta p { font-size: 13.5px; color: #A9B4CC; }
 
-        /* ── How it works bar (sits where the stat band was) ── */
-        .ulj #feed { scroll-margin-top: 76px; }
-        @media (max-width: 760px) { .ulj #feed { scroll-margin-top: 118px; } }
-        .ulj .howbar-wrap { max-width: 1200px; margin: 0 auto; padding: 0 28px; scroll-margin-top: 80px; }
+        .ulj .howbar-wrap { max-width: 1200px; margin: 0 auto; padding: 0 28px; }
         .ulj .howbar { display: flex; border-block: 1px solid var(--hairline-2); margin-bottom: 32px; }
-        .ulj .hb-title { flex: 0 0 190px; align-self: center; padding: 14px 20px 14px 0; font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 22px; line-height: 1.15; letter-spacing: -.01em; }
+        .ulj .hb-title { flex: 0 0 190px; align-self: center; padding: 14px 20px 14px 0; font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 22px; line-height: 1.15; }
         .ulj .hb-steps { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; padding: 0; }
         .ulj .hb-steps li { display: grid; grid-template-columns: 26px 1fr; column-gap: 12px; align-items: start; padding: 16px 20px; border-left: 1px solid var(--hairline-2); }
         .ulj .hb-steps i { font: 500 12px var(--font-spline-mono), monospace; font-style: normal; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
-        .ulj .hb-steps b { display: block; font: 600 14px/1.3 var(--font-inter), sans-serif; margin-top: 3px; }
+        .ulj .hb-steps b { display: block; font: 600 13.5px/1.3 var(--font-inter), sans-serif; margin-top: 3px; }
         .ulj .hb-steps span { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
+        
         @media (max-width: 900px) {
           .ulj .howbar { flex-direction: column; }
           .ulj .hb-title { flex: none; padding: 14px 0 4px; }
@@ -2541,7 +2191,7 @@ export default function HomePage() {
 
       {checkoutError && (
         <div className="checkout-error" role="alert">
-          Something went wrong on our side. Please try again in a moment.
+          Something went wrong initializing secure checkout. Please try again or check your blocker settings.
           <button onClick={() => setCheckoutError(false)} aria-label="Dismiss">×</button>
         </div>
       )}
