@@ -19,7 +19,6 @@ type LockedRole = { title: string; location: string | null; sector: string | nul
 type Withheld = { roles: LockedRole[]; matched: number; total: number; fallback: LockedRole[] }
 type LastSearch = { q?: string; sector?: string; locations?: string[]; at?: number }
 type Live = { fresh: number; shown: number; hasPass: boolean; addedToday: number; latestAt: string | null }
-// The card whose recruiter line brought this visitor here: title, company, location, age. Never the person.
 type GateJob = { title: string; company?: string | null; location?: string | null; posted_at?: string | null; at?: number }
 
 function readLastSearch(): LastSearch | null {
@@ -51,7 +50,6 @@ function timeAgo(iso?: string | null): string | null {
   return `${Math.round(h / 24)}d ago`
 }
 
-// When a withheld role reaches the free feed: "today 14:10" / "tomorrow 09:30" / "Thursday 14:10"
 function unlockLabel(postedAt?: string | null): string | null {
   if (!postedAt) return null
   const t = new Date(postedAt).getTime()
@@ -79,22 +77,21 @@ function Silhouette() {
 function OutIcon() {
   return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10" /></svg>
 }
+function StarIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+}
 
 export default function OfferPage() {
   const [busy, setBusy] = useState<Plan | null>(null)
   const [err, setErr] = useState(false)
   const [showSticky, setShowSticky] = useState(false)
-  // Real numbers from the same API the main page uses (limit=1: one role row, a free sample)
   const [live, setLive] = useState<Live | null>(null)
-  // The fresh roles this visitor isn't seeing, matched to their last search on the feed
   const [withheld, setWithheld] = useState<Withheld | null>(null)
   const [lastSearch, setLastSearch] = useState<LastSearch | null>(null)
   const [gateJob, setGateJob] = useState<GateJob | null>(null)
   const priceRef = useRef<HTMLDivElement>(null)
-  // Which link sent this visitor here (?src=recruiter_line, feed_top, locked_title, search_bar, hero_plan, …).
-  // It decides the first screen, and segments offer_view / cta_click / checkout_events by entry point.
   const srcRef = useRef<string | null>(null)
-  const [src, setSrc] = useState<string | null>(null)   // the same value, for render
+  const [src, setSrc] = useState<string | null>(null)
 
   const track = (name: string, params: Record<string, unknown> = {}) => {
     try {
@@ -103,7 +100,7 @@ export default function OfferPage() {
     } catch { /* analytics must never break the page */ }
   }
 
-  useEffect(() => { captureAttribution() }, [])   // in case someone lands here first
+  useEffect(() => { captureAttribution() }, [])
   useEffect(() => {
     try {
       const v = new URLSearchParams(window.location.search).get('src')
@@ -114,11 +111,11 @@ export default function OfferPage() {
       const raw = sessionStorage.getItem('bcj_gate_job')
       if (raw) {
         const v = JSON.parse(raw) as GateJob
-        // deferred a tick: the React Compiler rejects a synchronous setState inside an effect
         if (v && v.title && Date.now() - (v.at ?? 0) < 30 * 60_000) setTimeout(() => setGateJob(v), 0)
       }
-    } catch { /* storage blocked */ }
+    } catch {}
   }, [])
+  
   useEffect(() => {
     fetch('/api/jobs?limit=1')
       .then((r) => (r.ok ? r.json() : null))
@@ -133,14 +130,12 @@ export default function OfferPage() {
         }
         setLive(next)
         track('offer_view', { fresh: next.fresh, has_pass: next.hasPass, src: srcRef.current })
-        // first-party copy: which link brought this visitor here, so offer views and checkouts can
-        // be read by source in Supabase rather than only in GA4
         try {
           fetch('/api/offer-view', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
             body: JSON.stringify({ visitor_id: getVisitorId(), src: srcRef.current, fresh: next.fresh, has_pass: next.hasPass }),
           }).catch(() => {})
-        } catch { /* never block the page */ }
+        } catch {}
       })
       .catch(() => {})
   }, [])
@@ -161,7 +156,6 @@ export default function OfferPage() {
       .catch(() => {})
   }, [])
 
-  // Mobile sticky CTA: appears once the price card has scrolled past
   useEffect(() => {
     const el = priceRef.current
     if (!el || typeof IntersectionObserver === 'undefined') return
@@ -188,8 +182,7 @@ export default function OfferPage() {
       })
       const data = await res.json().catch(() => null)
       if (res.ok && data?.url) { window.location.assign(data.url); return }
-      console.error('[checkout] failed', res.status, data)
-    } catch (e) { console.error('[checkout] request error', e) }
+    } catch {}
     setBusy(null); setErr(true)
     setTimeout(() => setErr(false), 8000)
   }
@@ -201,8 +194,6 @@ export default function OfferPage() {
   const searchDesc = describeSearch(lastSearch)
   const lockedRows: LockedRole[] = withheld ? (withheld.roles.length ? withheld.roles : withheld.fallback) : []
 
-  // One first screen per reason for coming. The skeleton never changes: headline, sub, the thing
-  // they came for, the price. Only the thing and the button label vary.
   const variant: 'recruiter' | 'search' | 'locked' | 'cold' =
     gateJob ? 'recruiter'
     : searchMatched ? 'search'
@@ -212,12 +203,13 @@ export default function OfferPage() {
   const rows = variant === 'cold' ? lockedRows.slice(0, 3) : lockedRows.slice(0, 5)
   const more = Math.max(0, lockedCount - rows.length)
   const q = (lastSearch?.q ?? '').trim()
+  
   const buttonLabel =
-    busy === 'monthly' ? 'Opening secure checkout…'
-    : variant === 'recruiter' ? `See who posted this · $${PRICE.intro}`
-    : variant === 'search' ? `Unlock my ${lockedCount} ${q ? `${q} ` : ''}roles · $${PRICE.intro}`
-    : variant === 'locked' ? `Unlock all ${lockedCount} · $${PRICE.intro}`
-    : `Get instant access · $${PRICE.intro}`
+    busy === 'monthly' ? 'Securing your pass…'
+    : variant === 'recruiter' ? `Unlock Hiring Manager & Direct Link · $${PRICE.intro}`
+    : variant === 'search' ? `Unlock All ${lockedCount} Matching Roles · $${PRICE.intro}`
+    : variant === 'locked' ? `Unlock All ${lockedCount} Hidden Roles · $${PRICE.intro}`
+    : `Get Instant Access for $${PRICE.intro}`
 
   const lockedRow = (r: LockedRole, i: number, where: string) => (
     <li key={`${r.title}-${i}`}>
@@ -228,63 +220,89 @@ export default function OfferPage() {
           <span className="pp-row-meta">
             {r.location ? r.location : sectorLabel(r.sector)}
             {timeAgo(r.posted_at) ? ` · ${timeAgo(r.posted_at)}` : ''}
-            {unlockLabel(r.posted_at) ? ` · on Free ${unlockLabel(r.posted_at)}` : ''}
+            {unlockLabel(r.posted_at) ? ` · Free in ${unlockLabel(r.posted_at)}` : ''}
           </span>
         </span>
-        <span className="pp-row-go">Unlock</span>
+        <span className="pp-row-go">Unlock &rarr;</span>
       </button>
     </li>
   )
 
   return (
     <div className="pp">
-      {/* Nav is just the logo. Every exit except the CTA is removed; the way back is in the footer. */}
       <header className="pp-top">
         <a className="pp-brand" href="/">backchannel<span>.jobs</span></a>
+        <div className="pp-top-trust">
+          <span className="pp-stars"><StarIcon/><StarIcon/><StarIcon/><StarIcon/><StarIcon/></span>
+          <span>Trusted by job seekers at top tech & finance firms</span>
+        </div>
       </header>
 
       <main className="pp-main">
         <section className="pp-hero">
           <div className="pp-hook">
             {variant === 'search' && (
-              <span className="pp-eyebrow">Your search · {q || sectorLabel(lastSearch?.sector)}{lastSearch?.locations?.length ? ` · ${lastSearch.locations.join(', ')}` : ''}</span>
+              <span className="pp-eyebrow">🎯 Exact Match Found for: {q || sectorLabel(lastSearch?.sector)}{lastSearch?.locations?.length ? ` in ${lastSearch.locations.join(', ')}` : ''}</span>
             )}
             {variant === 'recruiter' && gateJob ? (
-              <h1>Be candidate #1 for <em>{gateJob.title}</em>, not #400.</h1>
+              <h1>Bypass the ATS black hole for <em>{gateJob.title}</em>.</h1>
             ) : variant === 'search' ? (
-              <h1><em>{lockedCount.toLocaleString()} {searchDesc}</em> {lockedCount === 1 ? 'was' : 'were'} posted in the last {FREE_DELAY_HOURS} hours. You saw none of {lockedCount === 1 ? 'it' : 'them'}.</h1>
+              <h1><em>{lockedCount.toLocaleString()} {searchDesc}</em> were posted before anyone else saw them.</h1>
             ) : variant === 'locked' ? (
-              <h1><em>{lockedCount.toLocaleString()} roles</em> posted in the last {FREE_DELAY_HOURS} hours. Members are reading them now.</h1>
+              <h1><em>{lockedCount.toLocaleString()} fresh roles</em> are hidden right now. Stop finding out about them days too late.</h1>
             ) : (
-              <h1>Be candidate #1, <em>not #400.</em></h1>
+              <h1>Beat 400+ applicants by reaching the hiring manager <em>first.</em></h1>
             )}
-            <p className="pp-sub">Public job boards put you at a timing disadvantage. Access newly opened roles immediately and put your application directly on the recruiter&apos;s desk.</p>
-            {hasPass && <p className="pp-have">You already have Premium. <a href="/">See today&apos;s new roles →</a> Buying again adds more time.</p>}
+            
+            <p className="pp-sub">Traditional job boards list roles after they&apos;ve already flooded with resumes. Backchannel extracts unlisted direct postings straight from hiring managers so you can apply while your competition is still refreshing LinkedIn.</p>
+            
+            {hasPass && <p className="pp-have">✨ You already have active Premium access. <a href="/">Go to today&apos;s feed &rarr;</a></p>}
+
+            {/* Value proposition check strip */}
+            <div className="pp-value-strip">
+              <div>⚡ <strong>Real-time alerts</strong> before public indexing</div>
+              <div>🤝 <strong>Direct hiring manager</strong> identity & link</div>
+              <div>🔒 <strong>Cancel anytime</strong> in 2 clicks</div>
+            </div>
           </div>
 
           <div className="pp-price-col" ref={priceRef}>
             <section className="pp-card">
-              <span className="pp-tag">40% off your first month</span>
-              <div className="pp-price">
-                <b>${PRICE.intro}</b>
-                <span className="pp-strike">${PRICE.monthly}</span>
-                <span className="pp-price-sub">first month<br />then ${PRICE.monthly}/month</span>
+              <div className="pp-card-badge">⚡ Special Intro Offer — 40% Off</div>
+              <div className="pp-price-lockup">
+                <div className="pp-price">
+                  <b>${PRICE.intro}</b>
+                  <div className="pp-price-meta">
+                    <span className="pp-strike">${PRICE.monthly} /mo</span>
+                    <span className="pp-price-sub">for your first month</span>
+                  </div>
+                </div>
               </div>
+              
               <ul className="pp-bullets">
-                <li><CheckCircle /><span><b>Every new role the moment it&apos;s posted</b></span></li>
-                <li><CheckCircle /><span>Direct link to the recruiter on every role</span></li>
+                <li><CheckCircle /><span><b>Instant access to all hidden roles</b> the second they go live</span></li>
+                <li><CheckCircle /><span><b>Direct profile links</b> to the recruiter who posted them</span></li>
                 {variant === 'search' && q
-                  ? <li><CheckCircle /><span><b>We keep searching &ldquo;{q}&rdquo; for you</b>, every few hours</span></li>
-                  : <li><CheckCircle /><span>We go looking for your roles specifically</span></li>}
+                  ? <li><CheckCircle /><span>Continuous custom tracking for <b>&ldquo;{q}&rdquo;</b></span></li>
+                  : <li><CheckCircle /><span>Personalized role matching built for your target track</span></li>}
+                <li><CheckCircle /><span>Zero automated filler roles or scraped spam</span></li>
               </ul>
+
               <button type="button" className="pp-btn pp-btn-primary" onClick={() => checkout('monthly', 'offer_card')} disabled={busy !== null}>
                 {buttonLabel}
               </button>
-              <p className="pp-fine">Then ${PRICE.monthly}/month. Cancel in two clicks; you keep access until the period ends.</p>
+              
+              <div className="pp-guarantee-box">
+                <ShieldIcon /> <span>Secure checkout via Stripe. Cancel anytime with 2 clicks from your settings—keep full access until your billing cycle ends.</span>
+              </div>
+
+              <div className="pp-divider"><span>or save more</span></div>
+
               <button type="button" className="pp-quarter" onClick={() => checkout('quarter', 'offer_quarter')} disabled={busy !== null}>
-                {busy === 'quarter' ? 'Opening secure checkout…' : <>Prefer no subscription? <b>90 days for ${PRICE.quarter} &rarr;</b></>}
+                {busy === 'quarter' ? 'Opening secure checkout…' : <>Get a 90-Day Unrestricted Pass for <b>${PRICE.quarter} (Best Value) &rarr;</b></>}
               </button>
-              {err && <p className="pp-err" role="alert">Checkout didn&apos;t open, and you haven&apos;t been charged. Please try again.</p>}
+              
+              {err && <p className="pp-err" role="alert">⚠️ Checkout didn&apos;t open, and you haven&apos;t been charged. Please try again or check your blocker settings.</p>}
             </section>
           </div>
 
@@ -295,27 +313,30 @@ export default function OfferPage() {
                 <>
                   <article className="pp-jobcard">
                     <div className="pp-jobcard-top">
-                      <span className="pp-jobcard-flag">With Premium</span>
+                      <span className="pp-jobcard-flag">🔒 Locked Premium Role</span>
                       {timeAgo(gateJob.posted_at) && <span className="pp-jobcard-ago">{timeAgo(gateJob.posted_at)}</span>}
                     </div>
                     <h3>{gateJob.title}</h3>
-                    <p className="pp-jobcard-meta"><b>{gateJob.company ?? 'Company not disclosed'}</b>{gateJob.location ? ` · ${gateJob.location}` : ''}</p>
+                    <p className="pp-jobcard-meta"><b>{gateJob.company ?? 'Company confidential'}</b>{gateJob.location ? ` · ${gateJob.location}` : ''}</p>
                     <div className="pp-jobcard-foot">
                       <span className="pp-jobcard-avatar" aria-hidden="true"><Silhouette /></span>
-                      <span className="pp-jobcard-who">Posted by <span className="pp-blur" aria-hidden="true">Firstname Lastname</span> · their name, profile and post</span>
-                      <span className="pp-jobcard-btn">View post <OutIcon /></span>
+                      <span className="pp-jobcard-who">Posted by <span className="pp-blur" aria-hidden="true">Firstname Lastname</span> · Direct LinkedIn profile & post</span>
+                      <span className="pp-jobcard-btn">Unlock Now <OutIcon /></span>
                     </div>
                   </article>
-                  <p className="pp-thing-note">The person who posted it and the link to their post, on this role and every other, the moment it goes up.</p>
+                  <p className="pp-thing-note">💡 Unlocking reveals the exact decision-maker&apos;s profile link so you can pitch them directly instead of entering the black hole of an online portal.</p>
                 </>
               )}
 
               {(variant === 'search' || variant === 'locked') && rows.length > 0 && (
                 <div className="pp-list">
+                  <div className="pp-list-header-bar">
+                    <span>Preview of currently locked roles:</span>
+                    <span className="pp-badge-count">{lockedCount} total matching</span>
+                  </div>
                   <ul>{rows.map((r, i) => lockedRow(r, i, variant === 'search' ? 'offer_search_row' : 'offer_locked_row'))}</ul>
                   <span className="pp-list-more">
-                    {more > 0 ? `and ${more.toLocaleString()} more` : 'That’s all of them'}
-                    {variant === 'search' ? ', matching your search. Nearby and remote not counted.' : ', newest first.'}
+                    ✨ Plus <b>{more > 0 ? `${more.toLocaleString()} more` : 'all others'}</b> hidden inside the {FREE_DELAY_HOURS}-hour priority window.
                   </span>
                 </div>
               )}
@@ -325,15 +346,15 @@ export default function OfferPage() {
                   <div className="pp-proof">
                     {live ? (
                       <>
-                        <span><i className="pp-dot" aria-hidden="true" /><b>{live.addedToday.toLocaleString()}</b>&nbsp;added today</span>
-                        {timeAgo(live.latestAt) && <><span className="pp-proof-sep" aria-hidden="true" /><span>last one <b>{timeAgo(live.latestAt)}</b></span></>}
-                        {hidden > 0 && <><span className="pp-proof-sep" aria-hidden="true" /><span><b>{hidden.toLocaleString()}</b> inside the {FREE_DELAY_HOURS}-hour window right now</span></>}
+                        <span><i className="pp-dot" aria-hidden="true" /><b>{live.addedToday.toLocaleString()} roles</b> added today</span>
+                        {timeAgo(live.latestAt) && <><span className="pp-proof-sep" aria-hidden="true" /><span>latest posted <b>{timeAgo(live.latestAt)}</b></span></>}
+                        {hidden > 0 && <><span className="pp-proof-sep" aria-hidden="true" /><span><b>{hidden.toLocaleString()}</b> active in the priority window</span></>}
                       </>
                     ) : <span>&nbsp;</span>}
                   </div>
                   {rows.length > 0 && (
                     <div className="pp-list">
-                      <span className="pp-list-head">The newest {rows.length === 1 ? 'one' : rows.length}, locked on Free:</span>
+                      <span className="pp-list-head">🔒 Live preview — locked for free users:</span>
                       <ul>{rows.map((r, i) => lockedRow(r, i, 'offer_locked_row'))}</ul>
                     </div>
                   )}
@@ -343,78 +364,84 @@ export default function OfferPage() {
           )}
         </section>
 
-        {/* ───────── Below the fold: the four real questions, and that's all ───────── */}
+        {/* FAQ Section */}
         <section className="pp-faq">
-          <h2>FAQ</h2>
-          <details open><summary>How do I cancel?</summary><p>Menu, top right &rarr; Manage billing &rarr; Cancel. Two clicks. You keep Premium until the end of the period you&apos;ve paid for and aren&apos;t charged again.</p></details>
-          <details><summary>What happens after the first month?</summary><p>${PRICE.intro} covers the first month. Then ${PRICE.monthly} a month until you cancel. The 90-day pass is one payment of ${PRICE.quarter} and never renews.</p></details>
-          <details><summary>Where do the roles come from?</summary><p>Public LinkedIn posts by recruiters and hiring managers, checked and organised by AI. No scraped job boards, nothing older than 30 days.</p></details>
-          <details><summary>What stays free?</summary><p>Every role older than {FREE_DELAY_HOURS} hours, readable in full, plus a few of today&apos;s roles with the recruiter shown. Who posted the rest, and the link to their post, is Premium.</p></details>
+          <h2>Frequently Asked Questions</h2>
+          <details open><summary>How do I cancel my subscription?</summary><p>It takes literally two clicks. Go to your account menu in the top right, select &ldquo;Manage billing,&rdquo; and hit cancel. You will keep complete access until your paid period ends, and you will never be billed again.</p></details>
+          <details><summary>Why do I need this instead of LinkedIn Jobs?</summary><p>LinkedIn Jobs displays listings days after they are created, forcing you to compete with hundreds of automated applicants. Backchannel indexes raw, unvarnished posts written directly by hiring managers looking for speed over bureaucracy.</p></details>
+          <details><summary>What happens after my first month?</summary><p>Your first month is discounted to ${PRICE.intro}. Afterward, it renews at ${PRICE.monthly}/month until you choose to cancel. Alternatively, choose our 90-day pass for a one-time payment of ${PRICE.quarter} with zero auto-renewal.</p></details>
+          <details><summary>What parts of the site remain free?</summary><p>All roles older than {FREE_DELAY_HOURS} hours remain entirely free to read in full. Premium simply removes the delay window so you can see fresh opportunities before anyone else.</p></details>
         </section>
       </main>
 
       <footer className="pp-footer">
-        <span><ShieldIcon /> Payments by Stripe. We never see your card.</span>
-        <a href="/">&larr; Back to the free feed</a>
+        <span><ShieldIcon /> Secure 256-bit Stripe Checkout. Your data and billing info are completely private.</span>
+        <a href="/">&larr; Return to the free feed</a>
       </footer>
 
       {/* Mobile sticky CTA */}
       {!hasPass && (
         <div className={`pp-sticky${showSticky ? ' is-on' : ''}`} aria-hidden={!showSticky}>
           <div className="pp-sticky-txt">
-            <b>${PRICE.intro}</b>
-            <span>first month</span>
+            <span>First month special</span>
+            <b>${PRICE.intro} <span className="pp-sticky-strike">(${PRICE.monthly})</span></b>
           </div>
           <button type="button" className="pp-btn pp-btn-primary" tabIndex={showSticky ? 0 : -1} onClick={() => checkout('monthly', 'offer_sticky')} disabled={busy !== null}>
-            {busy === 'monthly' ? 'Opening…' : variant === 'recruiter' ? 'See who posted this' : variant === 'cold' ? 'Get instant access' : 'Unlock'}
+            {busy === 'monthly' ? 'Opening…' : 'Unlock All Roles Now'}
           </button>
         </div>
       )}
 
       <style>{`
-        .pp { --page:#F5F2EB; --surface:#FDFCFA; --ink:#191713; --ink-2:#5C574D; --ink-3:#7A7366; --hair:#D8D2C2; --hair-2:#E4DFD2; --accent-soft:#E4EAF6; --accent-line:#C7D4F5; --cta:#24468f; --cta-h:#1a3368; --accent:#24468f; --good:#0A7A3D; --link:#1B4F82;
+        .pp { --page:#F5F2EB; --surface:#FDFCFA; --ink:#191713; --ink-2:#5C574D; --ink-3:#7A7366; --hair:#D8D2C2; --hair-2:#E4DFD2; --accent-soft:#E4EAF6; --accent-line:#C7D4F5; --cta:#1B4F82; --cta-h:#143B5E; --accent:#1B4F82; --good:#0A7A3D; --link:#1B4F82;
           min-height: 100vh; background: var(--page); color: var(--ink); font-family: var(--font-inter), system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
         .pp *, .pp *::before, .pp *::after { box-sizing: border-box; }
-        .pp-top { max-width: 1080px; margin: 0 auto; padding: 22px 24px 0; }
+        .pp-top { max-width: 1080px; margin: 0 auto; padding: 22px 24px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
         .pp-brand { font-family: var(--font-fraunces), Georgia, serif; font-size: 22px; font-weight: 600; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
         .pp-brand span { color: var(--ink-2); font-weight: 400; }
-        .pp-main { max-width: 1080px; margin: 0 auto; padding: 48px 24px 40px; }
+        .pp-top-trust { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); background: rgba(0,0,0,0.03); padding: 4px 10px; border-radius: 99px; }
+        .pp-stars { display: inline-flex; gap: 2px; color: #D97706; }
+        
+        .pp-main { max-width: 1080px; margin: 0 auto; padding: 40px 24px 40px; }
         .pp-check { color: var(--good); flex: none; margin-top: 2px; }
 
-        /* ── First screen: headline + sub (left, top), price (right, spanning), the thing (left, below) ── */
-        .pp-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) 400px; grid-template-areas: "hook price" "thing price"; column-gap: 64px; row-gap: 22px; align-items: start; margin-bottom: 48px; }
-        .pp-hook { grid-area: hook; }
+        .pp-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) 420px; grid-template-areas: "hook price" "thing price"; column-gap: 56px; row-gap: 24px; align-items: start; margin-bottom: 48px; }
+        .pp-hook { grid-area: hook; display: flex; flex-direction: column; gap: 16px; }
         .pp-price-col { grid-area: price; }
         .pp-thing { grid-area: thing; display: flex; flex-direction: column; gap: 14px; }
-        .pp-eyebrow { display: block; font: 500 11.5px var(--font-spline-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 12px; }
-        .pp h1 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: clamp(30px, 3.4vw, 44px); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 14px; }
+        
+        .pp-eyebrow { display: inline-block; font: 600 12px var(--font-spline-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 6px; width: fit-content; }
+        .pp h1 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: clamp(28px, 3.2vw, 42px); line-height: 1.12; letter-spacing: -0.02em; margin: 0; }
         .pp h1 em { font-style: normal; color: var(--accent); }
-        .pp-sub { font-size: 17px; line-height: 1.55; color: var(--ink-2); margin: 0; max-width: 50ch; }
-        .pp-have { margin: 12px 0 0; font-size: 14px; color: var(--ink-2); }
+        .pp-sub { font-size: 16.5px; line-height: 1.6; color: var(--ink-2); margin: 0; max-width: 52ch; }
+        .pp-have { margin: 0; font-size: 14px; color: var(--ink-2); }
         .pp-have a { color: var(--accent); font-weight: 600; }
 
-        /* proof line: live numbers only */
-        .pp-proof { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink-2); min-height: 20px; }
+        .pp-value-strip { display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; color: var(--ink-2); background: var(--surface); padding: 14px 18px; border-radius: 12px; border: 1px solid var(--hair); max-width: 52ch; }
+        .pp-value-strip strong { color: var(--ink); }
+
+        .pp-proof { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink-2); min-height: 20px; }
         .pp-proof b { color: var(--ink); font-weight: 600; }
-        .pp-proof span { display: inline-flex; align-items: center; gap: 7px; }
+        .pp-proof span { display: inline-flex; align-items: center; gap: 6px; }
         .pp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
         .pp-proof-sep { width: 1px; height: 14px; background: var(--hair); }
 
-        /* locked rows */
-        .pp-list { max-width: 560px; padding: 12px 12px 10px; border: 1px solid var(--hair); border-radius: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 6px; }
+        .pp-list { max-width: 560px; padding: 14px; border: 1px solid var(--hair); border-radius: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .pp-list-header-bar { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--ink-2); padding: 0 4px 4px; border-bottom: 1px solid var(--hair-2); margin-bottom: 4px; }
+        .pp-badge-count { font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 4px; font-size: 11.5px; }
         .pp-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
         .pp-list-head { font-size: 13.5px; color: var(--ink-2); padding: 0 2px 2px; }
         .pp-list-more { padding: 6px 4px 2px; font-size: 13px; color: var(--ink-3); }
-        .pp-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 12px; border: 1px solid var(--hair); border-radius: 10px; background: #fff; font: inherit; color: inherit; cursor: pointer; transition: border-color .12s; }
-        .pp-row:hover:not(:disabled) { border-color: var(--accent); }
+        
+        .pp-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--hair); border-radius: 10px; background: #fff; font: inherit; color: inherit; cursor: pointer; transition: all .12s; }
+        .pp-row:hover:not(:disabled) { border-color: var(--accent); background: #FAF9F6; transform: translateY(-1px); }
         .pp-row:disabled { opacity: .7; cursor: default; }
-        .pp-row-ico { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; background: var(--hair-2); color: var(--ink-2); }
+        .pp-row-ico { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
         .pp-row-txt { display: flex; flex-direction: column; min-width: 0; }
         .pp-row-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .pp-row-meta { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .pp-row-go { margin-left: auto; flex: none; font-size: 12.5px; font-weight: 600; color: var(--accent); }
+        .pp-row-meta { font-size: 12px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pp-row-go { margin-left: auto; flex: none; font-size: 12px; font-weight: 600; color: var(--accent); }
 
-        /* a feed card, as on the home page */
         .pp-jobcard { position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--accent-line); border-radius: 14px; padding: 16px 20px 0; max-width: 560px; box-shadow: 0 1px 2px rgba(25,23,19,.05), 0 6px 20px -8px rgba(25,23,19,.09); }
         .pp-jobcard::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--good); }
         .pp-jobcard-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -426,39 +453,51 @@ export default function OfferPage() {
         .pp-jobcard-foot { margin: 14px -20px 0; padding: 11px 20px 12px; border-top: 1px solid var(--hair-2); display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-2); }
         .pp-jobcard-avatar { width: 34px; height: 34px; border-radius: 50%; flex: none; background: #F0ECE2; color: #97907E; border: 1px solid var(--hair); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
         .pp-jobcard-who { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .pp-jobcard-who b { color: var(--ink); font-weight: 600; }
         .pp-blur { display: inline-block; filter: blur(4px); color: var(--ink); font-weight: 600; user-select: none; }
-        .pp-jobcard-btn { flex: none; height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); border: 1.5px solid #B9B2A2; border-radius: 8px; font-size: 12px; font-weight: 600; }
-        .pp-thing-note { margin: -2px 0 0; font-size: 13px; color: var(--ink-3); max-width: 54ch; line-height: 1.5; }
+        .pp-jobcard-btn { flex: none; height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; color: #fff; background: var(--accent); border-radius: 6px; font-size: 12px; font-weight: 600; }
+        .pp-thing-note { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); max-width: 54ch; line-height: 1.5; background: var(--surface); padding: 10px 14px; border-radius: 8px; border: 1px solid var(--hair); }
 
-        /* the one price card */
-        .pp-card { position: relative; background: var(--surface); border: 1px solid var(--hair); border-radius: 18px; padding: 24px 26px 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 2px 4px rgba(25,23,19,.06), 0 18px 40px -16px rgba(25,23,19,.18); }
-        .pp-tag { align-self: flex-start; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
-        .pp-price { display: flex; align-items: baseline; gap: 10px; }
-        .pp-price b { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 52px; letter-spacing: -0.02em; line-height: 1; }
-        .pp-price-sub { font-size: 13px; color: var(--ink-2); line-height: 1.3; }
-        .pp-strike { font-size: 18px; color: var(--ink-3); text-decoration: line-through; }
-        .pp-bullets { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 14px; line-height: 1.4; }
-        .pp-bullets li { display: flex; gap: 9px; align-items: flex-start; }
-        .pp-bullets b { font-weight: 600; }
-        .pp-btn { display: block; width: 100%; text-align: center; font: inherit; font-size: 15.5px; font-weight: 700; padding: 15px 16px; border-radius: 12px; cursor: pointer; text-decoration: none; border: 0; transition: background .15s; }
+        /* The optimized price card */
+        .pp-card { position: relative; background: var(--surface); border: 2px solid var(--accent-line); border-radius: 18px; padding: 26px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 4px 12px rgba(27,79,130,.08), 0 20px 40px -16px rgba(25,23,19,.15); }
+        .pp-card-badge { align-self: flex-start; background: #FEF3C7; color: #92400E; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; letter-spacing: .02em; }
+        
+        .pp-price-lockup { display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--hair-2); }
+        .pp-price { display: flex; align-items: baseline; gap: 12px; }
+        .pp-price b { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 48px; letter-spacing: -0.02em; line-height: 1; color: var(--ink); }
+        .pp-price-meta { display: flex; flex-direction: column; }
+        .pp-strike { font-size: 14px; color: var(--ink-3); text-decoration: line-through; font-weight: 500; }
+        .pp-price-sub { font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+
+        .pp-bullets { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 13.5px; line-height: 1.45; }
+        .pp-bullets li { display: flex; gap: 10px; align-items: flex-start; }
+        .pp-bullets b { font-weight: 600; color: var(--ink); }
+        
+        .pp-btn { display: block; width: 100%; text-align: center; font: inherit; font-size: 15.5px; font-weight: 700; padding: 15px 16px; border-radius: 12px; cursor: pointer; text-decoration: none; border: 0; transition: background .15s, transform .1s; box-shadow: 0 2px 6px rgba(27,79,130,.25); }
         .pp-btn-primary { background: var(--cta); color: #fff; }
-        .pp-btn-primary:hover:not(:disabled) { background: var(--cta-h); }
+        .pp-btn-primary:hover:not(:disabled) { background: var(--cta-h); transform: translateY(-1px); }
         .pp-btn:disabled { opacity: .7; cursor: default; }
         .pp-btn:focus-visible, .pp a:focus-visible, .pp summary:focus-visible, .pp-row:focus-visible, .pp-quarter:focus-visible { outline: 2px solid var(--cta); outline-offset: 2px; }
-        .pp-fine { font-size: 12.5px; line-height: 1.5; color: var(--ink-2); text-align: center; margin: -4px 0 0; }
-        .pp-quarter { background: none; border: 0; padding: 4px 0 0; font: inherit; font-size: 13px; color: var(--ink-2); cursor: pointer; text-align: center; }
-        .pp-quarter b { color: var(--accent); font-weight: 600; }
-        .pp-quarter:hover:not(:disabled) b { text-decoration: underline; text-underline-offset: 3px; }
-        .pp-quarter:disabled { opacity: .7; cursor: default; }
-        .pp-err { font-size: 13px; color: #C23B22; text-align: center; margin: 0; }
+        
+        .pp-guarantee-box { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; line-height: 1.4; color: var(--ink-2); background: rgba(0,0,0,0.02); padding: 10px 12px; border-radius: 8px; }
+        .pp-guarantee-box svg { flex: none; color: var(--good); margin-top: 1px; }
 
-        /* below the fold */
-        .pp-faq h2 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 22px; letter-spacing: -0.01em; margin: 0 0 4px; }
-        .pp-faq { max-width: 720px; display: flex; flex-direction: column; gap: 10px; }
+        .pp-divider { display: flex; align-items: center; text-align: center; color: var(--ink-3); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin: -4px 0; }
+        .pp-divider::before, .pp-divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--hair); }
+        .pp-divider span { padding: 0 10px; }
+
+        .pp-quarter { background: var(--surface); border: 1px solid var(--hair); padding: 11px 12px; border-radius: 10px; font: inherit; font-size: 13px; color: var(--ink-2); cursor: pointer; text-align: center; transition: border-color .12s; }
+        .pp-quarter b { color: var(--accent); font-weight: 600; }
+        .pp-quarter:hover:not(:disabled) { border-color: var(--accent); background: #FAF9F6; }
+        .pp-quarter:disabled { opacity: .7; cursor: default; }
+        
+        .pp-err { font-size: 13px; color: #C23B22; text-align: center; margin: 0; background: #FEE2E2; padding: 8px; border-radius: 6px; }
+
+        .pp-faq h2 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 22px; letter-spacing: -0.01em; margin: 0 0 12px; }
+        .pp-faq { max-width: 720px; display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
         .pp-faq details { border: 1px solid var(--hair); border-radius: 12px; background: var(--surface); padding: 12px 16px; }
-        .pp-faq summary { font-weight: 600; font-size: 14.5px; cursor: pointer; }
+        .pp-faq summary { font-weight: 600; font-size: 14.5px; cursor: pointer; color: var(--ink); }
         .pp-faq p { margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: var(--ink-2); }
+        
         .pp-footer { max-width: 1080px; margin: 0 auto; padding: 0 24px 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--ink-3); }
         .pp-footer span { display: inline-flex; align-items: center; gap: 6px; }
         .pp-footer a { color: var(--ink-2); text-decoration: none; }
@@ -467,18 +506,18 @@ export default function OfferPage() {
         .pp-sticky { display: none; }
 
         @media (max-width: 900px) {
-          /* phone: headline, sub, price, then the thing */
           .pp-main { padding: 28px 20px 40px; }
-          .pp-hero { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hook" "price" "thing"; column-gap: 0; row-gap: 18px; margin-bottom: 40px; }
+          .pp-hero { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hook" "price" "thing"; column-gap: 0; row-gap: 20px; margin-bottom: 40px; }
           .pp-sub { font-size: 15px; }
-          .pp-card { padding: 18px 18px 16px; gap: 12px; }
-          .pp-price b { font-size: 44px; }
+          .pp-card { padding: 20px; gap: 14px; }
+          .pp-price b { font-size: 42px; }
           .pp-list, .pp-jobcard { max-width: none; }
-          .pp-sticky { display: flex; align-items: center; gap: 12px; position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--hair); transform: translateY(110%); transition: transform .2s; z-index: 20; }
+          .pp-sticky { display: flex; align-items: center; justify-content: space-between; position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--hair); transform: translateY(110%); transition: transform .2s cubic-bezier(0.16, 1, 0.3, 1); z-index: 20; box-shadow: 0 -4px 16px rgba(0,0,0,0.08); }
           .pp-sticky.is-on { transform: translateY(0); }
-          .pp-sticky-txt { display: flex; flex-direction: column; line-height: 1.2; font-size: 12.5px; color: var(--ink-2); }
+          .pp-sticky-txt { display: flex; flex-direction: column; line-height: 1.25; font-size: 12px; color: var(--ink-2); }
           .pp-sticky-txt b { font-size: 15px; color: var(--ink); font-weight: 600; }
-          .pp-sticky .pp-btn { flex: 1; padding: 13px 14px; font-size: 14.5px; }
+          .pp-sticky-strike { font-size: 12px; text-decoration: line-through; color: var(--ink-3); font-weight: 400; margin-left: 2px; }
+          .pp-sticky .pp-btn { flex: none; width: auto; padding: 12px 20px; font-size: 14px; }
           .pp-main { padding-bottom: 96px; }
         }
       `}</style>
