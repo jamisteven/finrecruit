@@ -88,12 +88,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {children}
+        {/* Clarity. Our own visits are kept out with a cookie rather than Clarity's IP block, which is
+            IPv4-only and misses loads that go out over IPv6: open any page with ?noclarity=1 once per
+            browser (?noclarity=0 undoes it) and the tag is never loaded there again. */}
         <Script id="ms-clarity-init" strategy="afterInteractive">
-          {`(function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-          })(window, document, "clarity", "script", "yr0lumcpf1");`}
+          {`(function(){
+            try {
+              var q = new URLSearchParams(location.search).get('noclarity');
+              if (q === '1') document.cookie = 'bcj_noclarity=1; max-age=31536000; path=/; samesite=lax';
+              if (q === '0') document.cookie = 'bcj_noclarity=; max-age=0; path=/';
+              if (/(^|; )bcj_noclarity=1/.test(document.cookie)) { console.info('[clarity] off on this browser'); return; }
+            } catch (e) {}
+            (function(c,l,a,r,i,t,y){
+              c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+              t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+              y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+            })(window, document, "clarity", "script", "yr0lumcpf1");
+          })();`}
         </Script>
 
         <Analytics />
