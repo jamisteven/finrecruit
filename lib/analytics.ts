@@ -40,15 +40,20 @@ const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].s
 // ---------------------------------------------------------------- members
 
 export async function membersPanel(db: Db) {
-  const [profiles, targets, queries, checkouts, jobs, visits] = await Promise.all([
+  const [profiles, targets, queries, checkouts, jobs, visits, priorityRuns] = await Promise.all([
     fetchAll(db, 'profiles', 'id, email, pass_expires_at, created_at, signup_device', (q: Q) => q.not('pass_expires_at', 'is', null)),
     fetchAll(db, 'user_targets', 'user_id, keyword, location, created_at', () => undefined),
     fetchAll(db, 'priority_queries', 'query, keyword, location, active, last_run_at, user_count', () => undefined),
     fetchAll(db, 'checkout_events', '*', (q: Q) => q.not('paid_at', 'is', null)),
     fetchAll(db, 'jobs', 'id, title, location, work_type, extracted_at, quality', (q: Q) => q.gte('extracted_at', ago(14)).or('quality.is.null,quality.neq.low')),
     fetchAll(db, 'visits', 'user_id, visited_at', (q: Q) => q.not('user_id', 'is', null).gte('visited_at', ago(30))),
+    fetchAll(db, 'ingest_runs', 'query, run_at, posts_returned, jobs_inserted', (q: Q) => q.eq('pipeline', 'priority').gte('run_at', ago(30)).order('run_at', { ascending: false })),
   ])
   const now = Date.now()
+  // slow lane = the last two runs each returned a real batch and kept <= 1 (see lib/sweepBudget findDuds)
+  const lastTwo = new Map<string, Row[]>()
+  for (const r of priorityRuns) { const k = String(r.query).toLowerCase(); const a = lastTwo.get(k) ?? []; if (a.length < 2) { a.push(r); lastTwo.set(k, a) } }
+  const isDud = (query: string) => { const a = lastTwo.get(query.toLowerCase()) ?? []; return a.length === 2 && a.every((r) => (r.posts_returned ?? 0) >= 10 && (r.jobs_inserted ?? 0) <= 1) }
   const lastVisit = new Map<string, string>()
   for (const v of visits) if (!lastVisit.has(v.user_id) || v.visited_at > lastVisit.get(v.user_id)!) lastVisit.set(v.user_id, v.visited_at)
   const paidBy = new Map<string, Row[]>()
@@ -69,10 +74,15 @@ export async function membersPanel(db: Db) {
           if (locationMatches(t.location, j.location, j.work_type)) { exact14++; if (j.extracted_at >= ago(7)) exact7++ }
         }
         const lastRun = q?.last_run_at ? new Date(q.last_run_at).getTime() : null
+        const dud = q ? isDud(String(q.query)) : false
+        const ageDays = lastRun === null ? null : (now - lastRun) / DAY
+        // a problem = something to fix; the slow lane is working as designed (4-day cooldown)
+        const flag = !q ? 'no query' : !q.active ? 'inactive' : lastRun === null ? 'never ran'
+          : dud ? (ageDays! > 5 ? 'stale' : null) : (ageDays! > 2 ? 'stale' : null)
         return {
           keyword: t.keyword, location: t.location, exact7, exact14, anywhere14,
           query: q?.query ?? null, active: q?.active ?? null, lastRunAt: q?.last_run_at ?? null,
-          flag: !q ? 'no query' : !q.active ? 'inactive' : lastRun === null ? 'never ran' : now - lastRun > 2 * DAY ? 'stale' : null,
+          slowLane: dud, flag,
         }
       })
       return {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Data = any
@@ -44,8 +45,16 @@ export default function Dashboard() {
   const d = D?.[win]?.[seg]
 
   return (
-    <div className="an">
+    <div className="an-page">
       <style>{CSS}</style>
+      <div className="an-mast">
+        <div className="an-mast-in">
+          <Link className="an-wordmark" href="/" aria-label="backchannel.jobs home"><span className="an-mark">B</span><span>backchannel<em>.jobs</em></span></Link>
+          <span className="an-badge">Internal · Analytics</span>
+          <Link className="an-mast-link" href="/">Open the site &rarr;</Link>
+        </div>
+      </div>
+    <div className="an">
       <header className="an-head">
         <div>
           <h1>Analytics</h1>
@@ -66,7 +75,7 @@ export default function Dashboard() {
           <div className="an-tiles">
             <div className="an-tile"><b>{M.active}</b><span>active members</span></div>
             <div className="an-tile"><b>{M.expiring7.length}</b><span>expire within 7 days</span></div>
-            <div className="an-tile"><b>{M.members.reduce((s: number, m: Data) => s + m.flags, 0)}</b><span>target problems</span></div>
+            <div className="an-tile"><b>{M.members.reduce((s: number, m: Data) => s + m.flags, 0)}</b><span>target problems · stale = no run in 2 days (5 for slow-lane queries)</span></div>
           </div>
           {M.expiring7.length > 0 && (
             <div className="an-card an-warn">
@@ -93,7 +102,7 @@ export default function Dashboard() {
                         <td>{t.keyword}</td><td>{t.location || 'anywhere'}</td>
                         <td className="num">{t.exact7}</td><td className="num">{t.exact14}</td><td className="num">{t.anywhere14}</td>
                         <td className="mono">{t.query ?? '—'}</td>
-                        <td>{t.flag ? <span className="an-flag">{t.flag}</span> : ago(t.lastRunAt)}</td>
+                        <td>{t.flag ? <span className="an-flag">{t.flag}</span> : <>{ago(t.lastRunAt)}{t.slowLane && <span className="an-lane" title="Last two runs kept at most one job; runs every 4 days instead of every 12 hours">slow lane</span>}</>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -176,6 +185,7 @@ export default function Dashboard() {
         </section>
       )}
     </div>
+    </div>
   )
 }
 
@@ -189,8 +199,17 @@ function YieldTable({ rows }: { rows: Data[] }) {
 }
 
 const CSS = `
-.an { --bg:#F5F2EB; --surface:#FDFCFA; --hair:#D8D2C2; --ink:#191713; --ink-2:#5C574D; --ink-3:#8A8378; --accent:#24468f; --accent-soft:#E9EFFC; --warn:#FFF4DB; --warn-ink:#7A4B00;
-  max-width: 1200px; margin: 0 auto; padding: 24px 28px 60px; font-family: var(--font-inter), system-ui, sans-serif; color: var(--ink); font-size: 14px; }
+.an-page { --bg:#F5F2EB; --surface:#FDFCFA; --hair:#D8D2C2; --ink:#191713; --ink-2:#5C574D; --ink-3:#8A8378; --accent:#24468f; --accent-soft:#E9EFFC; --warn:#FFF4DB; --warn-ink:#7A4B00;
+  min-height: 100vh; width: 100%; background: var(--bg); color: var(--ink); font-family: var(--font-inter), system-ui, sans-serif; font-size: 14px; color-scheme: light; }
+.an-mast { background: var(--surface); border-bottom: 1px solid var(--hair); }
+.an-mast-in { max-width: 1200px; margin: 0 auto; padding: 14px 28px; display: flex; align-items: center; gap: 14px; }
+.an-wordmark { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-fraunces), Georgia, serif; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; text-decoration: none; color: var(--ink); }
+.an-wordmark em { font-style: italic; font-weight: 400; color: var(--ink-2); }
+.an-mark { flex: none; width: 30px; height: 30px; border-radius: 7px; background: #185FA5; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-fraunces), Georgia, serif; font-size: 18px; font-weight: 500; line-height: 1; }
+.an-badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.an-mast-link { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--ink-2); text-decoration: none; }
+.an-mast-link:hover { color: var(--ink); }
+.an { max-width: 1200px; margin: 0 auto; padding: 24px 28px 60px; }
 .an-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
 .an h1 { margin: 0; font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 30px; letter-spacing: -.01em; }
 .an h2 { margin: 0 0 10px; font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 17px; }
@@ -220,6 +239,7 @@ const CSS = `
 .an .mono { font-family: var(--font-spline-mono), ui-monospace, monospace; font-size: 12px; color: var(--ink-2); }
 .an tr.flag td { background: var(--warn); }
 .an-flag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #F0D9A6; color: var(--warn-ink); font-size: 11.5px; font-weight: 600; }
+.an-lane { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #EFEBE1; color: var(--ink-2); font-size: 11px; font-weight: 600; }
 .an-pill { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; margin-right: 4px; }
 .an-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .an-list li { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid #EEE9DD; font-size: 13.5px; }
@@ -231,5 +251,5 @@ const CSS = `
 .bar { flex: 1; display: flex; align-items: flex-end; height: 100%; }
 .bar i { display: block; width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; opacity: .85; }
 .an-compact td, .an-compact th { padding: 5px 8px; }
-@media (max-width: 720px) { .an { padding: 16px 16px 48px; } .an-member-sum { text-align: left; } .an table { display: block; overflow-x: auto; } }
+@media (max-width: 720px) { .an { padding: 16px 16px 48px; } .an-mast-in { padding: 12px 16px; } .an-badge { display: none; } .an-member-sum { text-align: left; } .an table { display: block; overflow-x: auto; } }
 `
