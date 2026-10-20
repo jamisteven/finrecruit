@@ -42,11 +42,11 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}))
   if (Array.isArray(body.queries) && body.queries.length) {
-    batch = body.queries.slice(0, 6).map(String)   // same ceiling as the cron batch below
+    batch = body.queries.slice(0, 12).map(String)   // same ceiling as the cron batch below
   } else {
-    // Cron path (every 2h on weekdays): anything active that hasn't run in the last
-    // 12 hours, oldest first, six per run — the cooldown, not the schedule, sets the
-    // Apify spend; a faster schedule only drains a new member's backlog sooner. Queries that
+    // Cron path (hourly, 05–22 UTC): anything active that hasn't run in the last 12
+    // hours, oldest first, twelve per run in two lanes. Members' queries always run on
+    // the 12h cooldown; the shared sweep is what flexes with the budget. Queries that
     // LinkedIn barely has posts for (two runs in a row with <=1 kept) wait
     // DUD_COOLDOWN_DAYS instead — their widened regional query still runs.
     const { data } = await db.from('priority_queries')
@@ -54,13 +54,13 @@ export async function POST(req: NextRequest) {
       .eq('active', true)
       .or(`last_run_at.is.null,last_run_at.lt.${new Date(Date.now() - 12 * 3600_000).toISOString()}`)
       .order('last_run_at', { ascending: true, nullsFirst: true })
-      .limit(18)
+      .limit(30)
     const candidates = (data ?? []).map((r) => ({ query: String(r.query), last: r.last_run_at ? Date.parse(String(r.last_run_at)) : 0 }))
     const duds = await findDuds(db, 'priority', candidates.map((c) => c.query))
     const dudCutoff = Date.now() - DUD_COOLDOWN_DAYS * 86_400_000
     const skipped = new Set(candidates.filter((c) => duds.has(c.query) && c.last > dudCutoff).map((c) => c.query))
     if (skipped.size) console.log(`[run-priority] slow lane (dud, ran < ${DUD_COOLDOWN_DAYS}d ago): ${[...skipped].join(', ')}`)
-    batch = candidates.filter((c) => !skipped.has(c.query)).slice(0, 6).map((c) => c.query)
+    batch = candidates.filter((c) => !skipped.has(c.query)).slice(0, 12).map((c) => c.query)
   }
 
   if (!batch.length) return NextResponse.json({ success: true, ran: 0 })
@@ -74,8 +74,9 @@ export async function POST(req: NextRequest) {
   const TIME_BUDGET_MS = 230_000
   const deferred: string[] = []
 
-  for (const query of batch) {
-    if (Date.now() - startedAt > TIME_BUDGET_MS) { deferred.push(query); continue }
+  // One query end to end. Two run at a time: the Apify wait is remote, so a second
+  // lane costs no function time and doubles how many member queries a run covers.
+  const runOne = async (query: string) => {
     let queryInserted = 0, queryDuplicates = 0, queryRejected = 0, queryPosts = 0
     try {
       const budget = await batchSizeFor(db, 'priority', query)
@@ -91,12 +92,12 @@ export async function POST(req: NextRequest) {
           }),
         }
       )
-      if (!startRes.ok) { console.error(`[run-priority] "${query}" start ${startRes.status}`); continue }
+      if (!startRes.ok) { console.error(`[run-priority] "${query}" start ${startRes.status}`); return }
 
       const runData = await startRes.json()
       const runId = runData.data?.id
       const datasetId = runData.data?.defaultDatasetId
-      if (!runId || !datasetId) continue
+      if (!runId || !datasetId) return
 
       let status = ''
       for (let i = 0; i < 30; i++) {
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest) {
         status = (await s.json()).data?.status
         if (['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) break
       }
-      if (status !== 'SUCCEEDED') { console.error(`[run-priority] "${query}" ${status}`); continue }
+      if (status !== 'SUCCEEDED') { console.error(`[run-priority] "${query}" ${status}`); return }
 
       let items: ApifyPost[] = []
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -234,6 +235,16 @@ export async function POST(req: NextRequest) {
       })
     }
   }
+
+  let next = 0
+  const lane = async () => {
+    while (next < batch.length) {
+      const query = batch[next++]
+      if (Date.now() - startedAt > TIME_BUDGET_MS) { deferred.push(query); continue }
+      await runOne(query)
+    }
+  }
+  await Promise.all([lane(), lane()])
 
   if (deferred.length) console.log(`[run-priority] out of time, left for next run: ${deferred.join(', ')}`)
   console.log('[run-priority] done:', result)

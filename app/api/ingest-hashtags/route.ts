@@ -14,13 +14,13 @@ import { normaliseLocation } from '@/lib/normaliseLocation'
 
 export const maxDuration = 300
 
-// Extra runs when we're under-spending the Apify plan: the queries with the best
-// kept-rate in the last fortnight, in the cities visitors actually filter for.
+// Extra runs when we're under-spending the Apify plan. Only cities with real demand
+// (>= 5 location-filter visitors in 90 days, or a member target) — a high kept-rate in
+// a city nobody searches for is worth nothing.
 const BONUS_QUERIES = [
-  'hiring new york', 'hiring atlanta', 'hiring zurich', 'hiring new jersey', 'hiring pittsburgh',
-  'hiring los angeles', 'hiring richmond', 'hiring salt lake city', 'hiring minneapolis', 'hiring chicago',
-  'hiring london', 'hiring manchester', 'hiring washington dc', 'hiring toronto', 'hiring miami',
-  'hiring seattle', 'hiring boston', 'hiring philadelphia', 'hiring grc remote', 'hiring fixed income',
+  'hiring new york', 'hiring los angeles', 'hiring san francisco', 'hiring chicago', 'hiring seattle',
+  'hiring washington dc', 'hiring boston', 'hiring philadelphia', 'hiring london', 'hiring toronto',
+  'hiring zurich', 'hiring switzerland', 'hiring minneapolis', 'hiring denver', 'hiring portland', 'hiring baltimore',
 ]
 
 const HASHTAG_QUERIES = [
@@ -46,25 +46,18 @@ const HASHTAG_QUERIES = [
   'hiring chicago',
   'hiring boston',
   'hiring los angeles',
+  'hiring san francisco',
+  'hiring portland',
+  'hiring baltimore',
   // US cities - tier 2
-  'hiring atlanta',
-  'hiring nashville',
-  'hiring austin',
-  'hiring miami',
   'hiring dallas',
   'hiring seattle',
   'hiring denver',
   'hiring philadelphia',
   'hiring houston',
-  'hiring phoenix',
   'hiring san diego',
   'hiring minneapolis',
-  'hiring charlotte',
-  'hiring pittsburgh',
-  'hiring salt lake city',
-  'hiring richmond',
   'hiring washington dc',
-  'hiring new jersey',
   // UK
   'hiring london',
   'hiring manchester',
@@ -73,10 +66,7 @@ const HASHTAG_QUERIES = [
   // Canada
   'hiring toronto',
   // Terms paying users searched and found nothing for
-  'hiring revenue growth management',
   'hiring grc',
-  'hiring sales enablement',
-  'hiring instructional design',
   'hiring fixed income',
   'hiring private equity',
   // Function-led — driven by what paying users actually search for
@@ -86,11 +76,6 @@ const HASHTAG_QUERIES = [
   '#financejobs',
   '#remotejobs',
   'hiring product manager',
-  'hiring help desk',
-  'hiring fixed income new york',
-  'hiring corporate finance new york',
-  'hiring customer experience washington dc',
-  'hiring grc remote',
 ]
 
 const GERMAN_HASHTAGS = ['stellenangebot', 'jobsuche', 'neuejobs', 'karriere', 'jobboerse', 'jobangebot', 'stellen', 'wirstellenein']

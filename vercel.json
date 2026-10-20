@@ -42,15 +42,7 @@
     },
     {
       "path": "/api/run-priority",
-      "schedule": "25 5-21/2 * * 1-5"
-    },
-    {
-      "path": "/api/run-priority",
-      "schedule": "25 9 * * 6,0"
-    },
-    {
-      "path": "/api/run-priority",
-      "schedule": "25 15 * * 6,0"
+      "schedule": "25 5-22 * * *"
     }
   ]
 }

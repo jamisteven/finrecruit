@@ -9,17 +9,18 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 type Db = SupabaseClient<any, any, any>
 
 export const FULL_BATCH = 20
-const SMALL_BATCH = 10
 const TINY_BATCH = 5
 
 type Run = { query: string; posts_returned: number | null; jobs_inserted: number | null; duplicates_skipped: number | null; run_at: string }
 
 /**
- * Batch size for the next visit to `query`, from its previous run in ingest_runs.
- *  - mostly repeats last time (>=50% already seen)  -> 5
- *  - a quarter or more repeats, or a dry query      -> 10
- *  - otherwise                                      -> 20
- * A query with no history gets the full batch.
+ * Batch size for the next visit to `query`, sized from how many NEW posts the last
+ * visit found (returned minus already-seen), with headroom:
+ *   next = clamp(ceil(new * 1.5) + 2, 5, 20)
+ * A full batch that was all new means we may have hit the cap and missed some, so
+ * it stays at 20. A full batch with nothing new drops to 5. A query with no history
+ * gets the full batch. (The old rule used the share of repeats, which starved busy
+ * queries: 10 new + 10 repeats read as "50% repeats" and asked for 5 next time.)
  */
 export async function batchSizeFor(db: Db, pipeline: string, query: string): Promise<{ maxPosts: number; why: string }> {
   const { data } = await db.from('ingest_runs')
@@ -29,11 +30,10 @@ export async function batchSizeFor(db: Db, pipeline: string, query: string): Pro
   const last = (data as Run[] | null)?.[0]
   if (!last || !last.posts_returned) return { maxPosts: FULL_BATCH, why: 'no history' }
   const returned = last.posts_returned
-  const dupShare = (last.duplicates_skipped ?? 0) / returned
-  if (returned >= 10 && dupShare >= 0.5) return { maxPosts: TINY_BATCH, why: `${Math.round(dupShare * 100)}% repeats last run` }
-  if (returned >= 10 && dupShare >= 0.25) return { maxPosts: SMALL_BATCH, why: `${Math.round(dupShare * 100)}% repeats last run` }
-  if (returned < 5) return { maxPosts: SMALL_BATCH, why: `only ${returned} posts last run` }
-  return { maxPosts: FULL_BATCH, why: 'fresh last run' }
+  const fresh = Math.max(0, returned - (last.duplicates_skipped ?? 0))
+  if (returned >= FULL_BATCH && fresh >= returned) return { maxPosts: FULL_BATCH, why: `all ${fresh} new last run — may have missed some` }
+  const next = Math.min(FULL_BATCH, Math.max(TINY_BATCH, Math.ceil(fresh * 1.5) + 2))
+  return { maxPosts: next, why: `${fresh} new of ${returned} last run` }
 }
 
 /**
