@@ -126,7 +126,7 @@ export default function OfferPage() {
           fresh: (d.withheld ?? 0) + (d.previewCount ?? 0),
           hasPass: !!d.hasPass,
           addedToday: d.addedToday ?? 0,
-          latestAt: d.jobs?.[0]?.posted_at ?? null,
+          latestAt: d.latestPostedAt ?? null,
         }
         setLive(next)
         track('offer_view', { fresh: next.fresh, has_pass: next.hasPass, src: srcRef.current })
@@ -348,7 +348,6 @@ export default function OfferPage() {
                       <>
                         <span><i className="pp-dot" aria-hidden="true" /><b>{live.addedToday.toLocaleString()} roles</b> added today</span>
                         {timeAgo(live.latestAt) && <><span className="pp-proof-sep" aria-hidden="true" /><span>latest posted <b>{timeAgo(live.latestAt)}</b></span></>}
-                        {hidden > 0 && <><span className="pp-proof-sep" aria-hidden="true" /><span><b>{hidden.toLocaleString()}</b> active in the priority window</span></>}
                       </>
                     ) : <span>&nbsp;</span>}
                   </div>

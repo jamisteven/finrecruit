@@ -280,6 +280,11 @@ export async function GET(req: NextRequest) {
     .filter((r) => { const t = ts(r.posted_at); return !isNaN(t) && t >= cutoff })
     .sort((a, b) => ts(b.posted_at) - ts(a.posted_at))
   const addedToday = recentKept.filter((r) => ts(r.posted_at) >= now - 24 * 3600_000).length
+  // newest posting time across the live set (the feed itself is ordered by extraction, not posting)
+  const latestPostedAt = recentKept.reduce<string | null>((best, r) => {
+    const t = ts(r.posted_at)
+    return !isNaN(t) && t <= now && (!best || t > ts(best)) ? (r.posted_at as string) : best
+  }, null)
 
   // Free tier: everything older than FREE_DELAY_HOURS, plus FREE_SAMPLE_COUNT fresh roles in full.
   // The next FREE_TITLE_ONLY_COUNT fresh roles go out as a title only (no id, company, link or summary).
@@ -363,6 +368,7 @@ export async function GET(req: NextRequest) {
     previewCount: previewIds.length,
     previewIds,
     addedToday,
+    latestPostedAt,
     ...(archive ? {} : { archiveCounts: await loadArchiveCounts() }),
   })
   // the browser may reuse this for a minute (refreshes, sort toggles) without hitting the server
