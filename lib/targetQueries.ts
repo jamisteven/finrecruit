@@ -88,3 +88,28 @@ export async function releaseTargets(db: Db, targets: Target[]): Promise<void> {
     }
   }
 }
+
+/**
+ * Members whose pass ended more than GRACE_DAYS ago still holding targets: release
+ * their queries (stop paying for them) and remove the targets. Called from the
+ * priority cron. A member who comes back inside the grace keeps everything.
+ */
+export const LAPSE_GRACE_DAYS = 3
+
+export async function releaseLapsedMembers(db: Db): Promise<number> {
+  const cutoff = new Date(Date.now() - LAPSE_GRACE_DAYS * 86_400_000).toISOString()
+  const { data: lapsed } = await db.from('profiles')
+    .select('id, email, pass_expires_at')
+    .lt('pass_expires_at', cutoff)
+  if (!lapsed?.length) return 0
+  let released = 0
+  for (const p of lapsed) {
+    const { data: theirs } = await db.from('user_targets').select('keyword, location').eq('user_id', p.id)
+    if (!theirs?.length) continue
+    await releaseTargets(db, theirs as Target[])
+    await db.from('user_targets').delete().eq('user_id', p.id)
+    console.log(`[targets] released ${theirs.length} targets for lapsed member ${p.email} (pass ended ${p.pass_expires_at})`)
+    released++
+  }
+  return released
+}

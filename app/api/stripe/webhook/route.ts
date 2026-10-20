@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createServerClient } from '@/lib/supabase'
-import { releaseTargets } from '@/lib/targetQueries'
 
 export const runtime = 'nodejs'
 
@@ -146,15 +145,11 @@ export async function POST(req: NextRequest) {
 
       await db.from('profiles').update({ stripe_subscription_id: null }).eq('stripe_subscription_id', sub.id)
 
-      if (prof?.id) {
-        const { data: theirs } = await db.from('user_targets')
-          .select('keyword, location').eq('user_id', prof.id)
-
-        await releaseTargets(db, (theirs ?? []) as { keyword: string; location: string | null }[])
-
-        await db.from('user_targets').delete().eq('user_id', prof.id)
-        console.log('[stripe] released searches for', prof.id)
-      }
+      // Their targets and queries stay until the pass they paid for has actually
+      // ended (plus a short grace) — see releaseLapsedMembers in lib/targetQueries,
+      // run by the priority cron. Deleting here took the matches tab away from
+      // members who still had weeks of access left.
+      if (prof?.id) console.log('[stripe] subscription ended for', prof.id, '— targets kept until pass expiry')
 
       return NextResponse.json({ received: true })
     }

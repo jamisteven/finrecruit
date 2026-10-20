@@ -8,6 +8,7 @@ import { offMarketReason } from '@/lib/market'
 import { logPrefilter, logGateDiscard, recordDecision, type ClassifyContext } from '@/lib/classifierLog'
 import { runGate } from '@/lib/gate'
 import { batchSizeFor, findDuds, DUD_COOLDOWN_DAYS } from '@/lib/sweepBudget'
+import { releaseLapsedMembers } from '@/lib/targetQueries'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
@@ -39,6 +40,9 @@ export async function POST(req: NextRequest) {
 
   const db = createServerClient()
   let batch: string[] = []
+
+  // Housekeeping first: stop paying for members whose pass ended a few days ago
+  if (isCron) { try { await releaseLapsedMembers(db) } catch (e) { console.error('[run-priority] lapse release failed', e) } }
 
   const body = await req.json().catch(() => ({}))
   if (Array.isArray(body.queries) && body.queries.length) {
