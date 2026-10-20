@@ -23,7 +23,7 @@ const TESTIMONIAL: { quote: string; name: string; context: string } | null = nul
 
 const WHY_ITEMS: { icon: 'bolt' | 'person' | 'target' | 'clock'; title: string; body: string }[] = [
   { icon: 'bolt', title: 'Be first, not one of hundreds', body: "You see it before it hits LinkedIn's public feed or a job board, not two days after." },
-  { icon: 'person', title: 'Real recruiter posts', body: 'Every role comes from an actual recruiter or hiring manager, not a scraped ATS feed.' },
+  { icon: 'person', title: 'Straight to the recruiter', body: 'Every role links to the recruiter or hiring manager who posted it. You message them; nothing goes into an ATS.' },
   { icon: 'target', title: 'Built from what you search', body: 'Pulled from the sectors and locations people actually search for here, not a generic firehose.' },
   { icon: 'clock', title: 'No long-term commitment', body: 'Cancel in 2 clicks, or skip the subscription entirely with the 90-day pass.' },
 ]
@@ -75,6 +75,7 @@ function describeSearch(ls: LastSearch | null, sectorLabelFn: (s?: string | null
   return `${what}${where}`
 }
 type Live = { fresh: number; shown: number; hasPass: boolean; addedToday: number; example: LockedExample | null }
+type GateJob = { title: string; company?: string | null; location?: string | null; at?: number }
 
 function timeAgo(iso?: string | null): string | null {
   if (!iso) return null
@@ -120,6 +121,9 @@ export default function OfferPage() {
   // Which homepage CTA sent this visitor here (?src=hero_plan, ?src=member_bar, …), so offer_view
   // and cta_click can finally be segmented by entry point instead of lumped together.
   const srcRef = useRef<string | null>(null)
+  // The card whose recruiter line brought this visitor here (title, company, location; never the
+  // person). Written to sessionStorage by the feed on that click, read once here.
+  const [gateJob, setGateJob] = useState<GateJob | null>(null)
 
   const track = (name: string, params: Record<string, unknown> = {}) => {
     try {
@@ -131,6 +135,14 @@ export default function OfferPage() {
   useEffect(() => { captureAttribution() }, [])   // in case someone lands here first
   useEffect(() => {
     try { srcRef.current = new URLSearchParams(window.location.search).get('src') } catch {}
+    try {
+      const raw = sessionStorage.getItem('bcj_gate_job')
+      if (raw) {
+        const v = JSON.parse(raw) as GateJob
+        // deferred a tick: the React Compiler rejects a synchronous setState inside an effect
+        if (v && v.title && Date.now() - (v.at ?? 0) < 30 * 60_000) setTimeout(() => setGateJob(v), 0)
+      }
+    } catch { /* storage blocked */ }
   }, [])
   useEffect(() => {
     fetch('/api/jobs?limit=1')
@@ -254,8 +266,10 @@ export default function OfferPage() {
           <div className="pp-hero-copy">
             <div className="pp-hero-hook">
               <span className="pp-eyebrow"><BoltIcon /> Premium access</span>
-              <h1>The jobs LinkedIn doesn&apos;t show you <em>until it&apos;s too late.</em></h1>
-              <p className="pp-sub">By the time a role goes public, hundreds of people have already applied. Premium puts you there the moment a recruiter posts it, not weeks later.</p>
+              {gateJob && !hasPass
+                ? <h1>Be candidate #1 for <em>{gateJob.title}</em>{gateJob.company ? ` at ${gateJob.company}` : ''}, <em>not #400.</em></h1>
+                : <h1>Be candidate #1, <em>not #400.</em></h1>}
+              <p className="pp-sub">Public job boards put you at a timing disadvantage. Access newly opened roles immediately and put your application directly on the recruiter&apos;s desk.</p>
               {hasPass && <p className="pp-have">You already have Premium. <a href="/">See today&apos;s new roles →</a> Buying again adds more time.</p>}
             </div>
 
@@ -352,8 +366,8 @@ export default function OfferPage() {
               </div>
               <ul>
                 <li><b>Every new role the moment it&apos;s posted</b></li>
-                <li><b>We go looking for your roles specifically</b></li>
-                <li>Full details + direct recruiter link on every role</li>
+                <li><b>Direct link to the recruiter on every role</b></li>
+                <li>We go looking for your roles specifically</li>
                 <li>Everything in Free</li>
               </ul>
               <button type="button" className="pp-btn pp-btn-primary" onClick={() => checkout('monthly', 'offer_card')} disabled={busy !== null}>
@@ -472,7 +486,7 @@ export default function OfferPage() {
           <details><summary>How do I cancel?</summary><p>Open the menu in the top right, choose Manage billing, and cancel. You keep Premium until the end of the period you&apos;ve paid for and won&apos;t be charged again.</p></details>
           <details><summary>What happens after the first month?</summary><p>The ${PRICE.intro} covers your first month. After that it renews at ${PRICE.monthly} a month until you cancel.</p></details>
           <details><summary>Does the 3-month option renew?</summary><p>No. It&apos;s one payment for 90 days and then it simply ends. You can buy again or switch to monthly whenever you like.</p></details>
-          <details><summary>Why does seeing a role early matter?</summary><p>The first applications land in an empty inbox and get read properly. Two days later there can be hundreds. Premium puts you in that first group. Everything older stays free.</p></details>
+          <details><summary>Why does seeing a role early matter?</summary><p>The first messages land in an empty inbox and get read properly. Two days later there can be hundreds. Premium puts you in that first group. Older roles stay readable on Free; who posted them, and the link to the post, are Premium.</p></details>
           <details><summary>How do the custom searches work?</summary><p>After you join we ask which roles you&apos;re after and where. Those become real searches we run against new recruiter posts every few hours, not just a filter on the feed. Edit them any time from the menu.</p></details>
           <details><summary>Where do the roles come from?</summary><p>Public LinkedIn posts from recruiters and hiring managers, collected and organised by AI.</p></details>
         </section>

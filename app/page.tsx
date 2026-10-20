@@ -1682,7 +1682,11 @@ export default function HomePage() {
                         <span className="avatar silhouette" aria-hidden="true">
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" /></svg>
                         </span>
-                        <a className="author gated-author" href="/offer?src=recruiter_line" onClick={() => track('cta_click', { where: 'recruiter_line', age_days: job.posted_at ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000) : null })}>
+                        <a className="author gated-author" href="/offer?src=recruiter_line" onClick={() => {
+                          track('cta_click', { where: 'recruiter_line', age_days: job.posted_at ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000) : null })
+                          // so /offer can open with this role by name (title, company, location only)
+                          try { sessionStorage.setItem('bcj_gate_job', JSON.stringify({ title: job.title, company: job.company, location: job.location, at: Date.now() })) } catch {}
+                        }}>
                           Posted by <span className="blur-name" aria-hidden="true">{standInName(job.id)}</span>
                           {job.author_headline && <> · {job.author_headline}</>}
                           <span className="named">Named with Premium</span>
