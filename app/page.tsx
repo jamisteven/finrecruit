@@ -1104,7 +1104,7 @@ export default function HomePage() {
       >
         <b>Browse free<ArrowRight className="down" /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
       </a>
-      <a className="plan plan-pro" href="/offer" onClick={() => track('cta_click', { where: 'hero_plan' })}>
+      <a className="plan plan-pro" href="/offer?src=hero_plan" onClick={() => track('cta_click', { where: 'hero_plan' })}>
         <b><span>Premium</span><ArrowRight /></b>Every role the moment it drops. $9 first month, then $15/month, cancel anytime.
       </a>
     </div>
@@ -1182,7 +1182,7 @@ export default function HomePage() {
             {!archiveDone && filters.search.trim().length > 1
               ? <svg className="search-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-label="Loading older roles"><path d="M21 12a9 9 0 1 1-6.22-8.56" /></svg>
               : showFreshUpsell
-                ? <a className="bar-up" href="/offer" onClick={() => track('cta_click', { where: 'search_bar', q: freshQuery, n: freshMatches })}>+{freshMatches} new<span>&nbsp;· Premium</span></a>
+                ? <a className="bar-up" href="/offer?src=search_bar" onClick={() => track('cta_click', { where: 'search_bar', q: freshQuery, n: freshMatches })}>+{freshMatches} new<span>&nbsp;· Premium</span></a>
                 : <span className="slash">/</span>}
             {showSugBox && (
               <div className="sug" id="search-sug" role="listbox">
@@ -1207,7 +1207,7 @@ export default function HomePage() {
                   </button>
                 )}
                 {showFreshUpsell && (
-                  <a className="sug-up" href="/offer" onClick={() => track('cta_click', { where: 'search_dropdown', q: freshQuery, n: freshMatches })}>
+                  <a className="sug-up" href="/offer?src=search_dropdown" onClick={() => track('cta_click', { where: 'search_dropdown', q: freshQuery, n: freshMatches })}>
                     <BoltIcon /><span><b>{freshMatches} newer {freshMatches === 1 ? 'role matches' : 'roles match'}</b> this search. Premium shows them now.</span>
                   </a>
                 )}
@@ -1239,13 +1239,13 @@ export default function HomePage() {
                       {hasPass && <div className="acct-badge">Premium active</div>}
                       {hasPass && <button onClick={() => { setMenuOpen(false); openPortal() }} disabled={portalBusy}>Manage billing</button>}
                       <a href="/targets">My targets</a>
-                      <a href="/offer">Pricing</a>
+                      <a href="/offer?src=nav">Pricing</a>
                       <button onClick={signOut}>Sign out</button>
                     </>
                   ) : (
                     <>
                       <a href="/login">Sign in</a>
-                      <a href="/offer">Pricing</a>
+                      <a href="/offer?src=nav">Pricing</a>
                     </>
                   )}
                 </div>
@@ -1258,7 +1258,7 @@ export default function HomePage() {
             </button>
 
             {!hasPass && !userEmail && (
-              <a className="btn-primary signup" href="/offer" onClick={() => track('cta_click', { where: 'header_signup' })}>Sign up</a>
+              <a className="btn-primary signup" href="/offer?src=header_signup" onClick={() => track('cta_click', { where: 'header_signup' })}>Sign up</a>
             )}
           </div>
         </div>
@@ -1313,13 +1313,13 @@ export default function HomePage() {
               <b>Premium active</b>
               {daysLeft !== null && <span className="mb-sub">{daysLeft <= 0 ? 'ends today' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left`}</span>}
               {daysLeft !== null && daysLeft <= 3 && (
-                <a className="mb-link" href="/offer" onClick={() => track('cta_click', { where: 'renew' })}>Extend</a>
+                <a className="mb-link" href="/offer?src=renew" onClick={() => track('cta_click', { where: 'renew' })}>Extend</a>
               )}
             </div>
           ) : (
             <div className="member-bar free">
               <div className="mb-copy"><b>Free account</b><span className="mb-sub">Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.</span></div>
-              <a className="btn-primary" href="/offer" onClick={() => track('cta_click', { where: 'member_bar' })}><BoltIcon />{CTA_LABEL}</a>
+              <a className="btn-primary" href="/offer?src=member_bar" onClick={() => track('cta_click', { where: 'member_bar' })}><BoltIcon />{CTA_LABEL}</a>
             </div>
           )}
         </div>
@@ -1447,7 +1447,7 @@ export default function HomePage() {
             <div className="pass pass-side">
               <h3>Don&apos;t wait {FREE_DELAY_HOURS} hours.</h3>
               <p className="pass-sub">Every role the moment it drops.</p>
-              <a className="btn-primary block" href="/offer" onClick={() => track('cta_click', { where: 'sidebar' })}>$9 first month</a>
+              <a className="btn-primary block" href="/offer?src=sidebar" onClick={() => track('cta_click', { where: 'sidebar' })}>$9 first month</a>
               <span className="pass-fine">Then $15/month. Cancel anytime.</span>
             </div>
           )}
@@ -1517,7 +1517,7 @@ export default function HomePage() {
               <div className="empty">
                 <h3>No older roles match, but {freshMatches} new {freshMatches === 1 ? 'one does' : 'ones do'}.</h3>
                 <p>Roles from the last {FREE_DELAY_HOURS} hours are Premium only.</p>
-                <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'search_empty', q: freshQuery, n: freshMatches })}><BoltIcon />See them with Premium</a>
+                <a className="btn-primary lg" href="/offer?src=search_empty" onClick={() => track('cta_click', { where: 'search_empty', q: freshQuery, n: freshMatches })}><BoltIcon />See them with Premium</a>
               </div>
             ) : (
             <div className="empty">
@@ -1611,7 +1611,7 @@ export default function HomePage() {
                   <h3>{withheld > 0 ? `${withheld} newer roles are waiting.` : 'See these now, not in 48 hours.'}</h3>
                   <p>Premium is $9 for your first month, then $15/month. Every new role the moment it drops. Cancel anytime.</p>
                 </div>
-                <a className="btn-primary lg" href="/offer" onClick={() => track('cta_click', { where: 'inline' })}><BoltIcon />{CTA_LABEL}</a>
+                <a className="btn-primary lg" href="/offer?src=inline" onClick={() => track('cta_click', { where: 'inline' })}><BoltIcon />{CTA_LABEL}</a>
               </div>
             )}
 
@@ -1685,7 +1685,7 @@ export default function HomePage() {
                         <a className="author gated-author" href="/offer?src=recruiter_line" onClick={() => {
                           track('cta_click', { where: 'recruiter_line', age_days: job.posted_at ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000) : null })
                           // so /offer can open with this role by name (title, company, location only)
-                          try { sessionStorage.setItem('bcj_gate_job', JSON.stringify({ title: job.title, company: job.company, location: job.location, at: Date.now() })) } catch {}
+                          try { sessionStorage.setItem('bcj_gate_job', JSON.stringify({ title: job.title, company: job.company, location: job.location, posted_at: job.posted_at, at: Date.now() })) } catch {}
                         }}>
                           Posted by <span className="blur-name" aria-hidden="true">{standInName(job.id)}</span>
                           {job.author_headline && <> · {job.author_headline}</>}
@@ -1728,7 +1728,7 @@ export default function HomePage() {
               })}
             </div>
             {showFreshUpsell && (
-              <a className="fresh-more" href="/offer" onClick={() => track('cta_click', { where: 'search_end', q: freshQuery, n: freshMatches })}>
+              <a className="fresh-more" href="/offer?src=search_end" onClick={() => track('cta_click', { where: 'search_end', q: freshQuery, n: freshMatches })}>
                 <span>{displayJobs.length.toLocaleString()} {displayJobs.length === 1 ? 'role' : 'roles'} · <b>{freshMatches} more from the last {FREE_DELAY_HOURS} hours</b> with Premium</span>
                 <ArrowRight />
               </a>
