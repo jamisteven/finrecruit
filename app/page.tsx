@@ -490,12 +490,30 @@ export default function HomePage() {
     return () => clearTimeout(t)
   }, [fetchJobs])
 
-  // Infinite scroll — load more jobs as user scrolls
+  // Chrome restores the previous scroll position on reload. With an infinite feed that position can be
+  // hundreds of thousands of pixels down, and the restore keeps re-scrolling toward it as each batch
+  // renders — which lands near the bottom, loads another batch, and repeats until thousands of cards
+  // are on the page and the hero is unreachable. Always start at the top instead (unless a hash asks
+  // for a specific spot).
+  useEffect(() => {
+    try {
+      if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
+      if (!window.location.hash) window.scrollTo(0, 0)
+    } catch { /* ignore */ }
+  }, [])
+
+  // Infinite scroll — load more jobs as user scrolls. One batch at a time: a burst of scroll events at
+  // the bottom (trackpad momentum, a restore) must not queue several batches before the first renders.
+  const lastLoadMore = useRef(0)
+  const [showTop, setShowTop] = useState(false)   // "back to top" once the hero has scrolled away
   useEffect(() => {
     const onScroll = () => {
-      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
-        setVisibleCount((c) => c + 150)
-      }
+      setShowTop(window.scrollY > 1400)
+      if (window.innerHeight + window.scrollY < document.body.offsetHeight - 800) return
+      const now = Date.now()
+      if (now - lastLoadMore.current < 600) return
+      lastLoadMore.current = now
+      setVisibleCount((c) => c + 150)
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
@@ -1989,6 +2007,8 @@ export default function HomePage() {
         }
         .ulj .btn-primary:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
         .ulj .btn-primary:disabled { opacity: .7; cursor: wait; }
+        .ulj .to-top { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 60; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border: 1px solid var(--hairline-2); border-radius: 999px; background: var(--surface); color: var(--ink); font: 600 13px var(--font-inter), sans-serif; cursor: pointer; box-shadow: var(--shadow-lift); }
+        .ulj .to-top:hover { border-color: var(--ink-3); }
         .ulj .checkout-error { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 80; display: flex; align-items: center; gap: 14px; width: max-content; max-width: calc(100vw - 32px); padding: 12px 16px; border-radius: 12px; background: #8A1F1F; color: #fff; font-size: 13.5px; box-shadow: 0 12px 32px -10px rgba(0,0,0,.45); }
         .ulj .checkout-error button { background: none; border: none; color: inherit; font-size: 18px; line-height: 1; cursor: pointer; opacity: .8; }
         .ulj .btn-primary.lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
@@ -2539,6 +2559,12 @@ export default function HomePage() {
         }
       `}</style>
 
+      {showTop && (
+        <button type="button" className="to-top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Back to top">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+          Top
+        </button>
+      )}
       {checkoutError && (
         <div className="checkout-error" role="alert">
           Something went wrong on our side. Please try again in a moment.
