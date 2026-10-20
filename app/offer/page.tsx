@@ -251,10 +251,10 @@ export default function OfferPage() {
             ) : variant === 'locked' ? (
               <h1><em>{lockedCount.toLocaleString()} fresh roles</em> are hidden right now. Stop finding out about them days too late.</h1>
             ) : (
-              <h1>Beat 400+ applicants by reaching the hiring manager <em>first.</em></h1>
+              <h1>Skip the job board black hole. <em>Apply directly to hiring managers and internal teams.</em></h1>
             )}
             
-            <p className="pp-sub">Traditional job boards list roles after they&apos;ve already flooded with resumes. Backchannel extracts unlisted direct postings straight from hiring managers so you can apply while your competition is still refreshing LinkedIn.</p>
+            <p className="sub">Most high-value roles are shared directly by hiring managers, internal recruiters, and staff—and never make it to traditional job boards. Backchannel indexes these unlisted posts in real time so you can pitch decision-makers first.</p>            
             
             {hasPass && <p className="pp-have">✨ You already have active Premium access. <a href="/">Go to today&apos;s feed &rarr;</a></p>}
 
