@@ -8,16 +8,6 @@ const FREE_DELAY_HOURS = 48
 // Keep these in sync with Stripe. Copy below is derived from them so price changes stay consistent.
 const PRICE = { intro: 9, monthly: 15, quarter: 39 }
 
-// One fictional example for the "same role, two ways" section. Labelled as an example on the page;
-// never a real person.
-const EXAMPLE = {
-  title: 'Senior Product Manager',
-  company: 'Series B SaaS',
-  meta: 'San Francisco (Hybrid)',
-  summary: "I'm helping a Series B SaaS company hire a Senior Product Manager. Great team, competitive comp, remote friendly…",
-  postedBy: 'Senior Recruiter, Redwood Talent',
-}
-
 const SECTOR_LABELS: Record<string, string> = {
   finance: 'Finance', tech: 'Tech', legal: 'Legal', marketing: 'Marketing',
   realestate: 'Real Estate', sales: 'Sales', hr: 'HR & Talent',
@@ -353,39 +343,9 @@ export default function OfferPage() {
           )}
         </section>
 
-        {/* ───────── Below the fold: one section that shows the difference, then the four real questions ───────── */}
-        {!hasPass && (
-          <section className="pp-compare">
-            <h2>The same role, two ways</h2>
-            <div className="pp-compare-grid">
-              <article className="pp-jobcard pp-jobcard-free">
-                <div className="pp-jobcard-top"><span className="pp-jobcard-flag pp-jobcard-flag-free">On Free · example</span><span className="pp-jobcard-ago">3d ago</span></div>
-                <h3>{EXAMPLE.title}</h3>
-                <p className="pp-jobcard-meta"><b>{EXAMPLE.company}</b> · {EXAMPLE.meta}</p>
-                <p className="pp-jobcard-sum">{EXAMPLE.summary}</p>
-                <div className="pp-jobcard-foot">
-                  <span className="pp-jobcard-avatar" aria-hidden="true"><Silhouette /></span>
-                  <span className="pp-jobcard-who">Posted by <span className="pp-blur" aria-hidden="true">Firstname Lastname</span> · Senior Recruiter</span>
-                </div>
-              </article>
-              <article className="pp-jobcard pp-jobcard-prem">
-                <div className="pp-jobcard-top"><span className="pp-jobcard-flag">With Premium · example</span><span className="pp-jobcard-ago pp-jobcard-ago-fresh">11m ago</span></div>
-                <h3 className="pp-jobcard-link">{EXAMPLE.title}</h3>
-                <p className="pp-jobcard-meta"><b>{EXAMPLE.company}</b> · {EXAMPLE.meta}</p>
-                <p className="pp-jobcard-sum">{EXAMPLE.summary}</p>
-                <div className="pp-jobcard-foot">
-                  <span className="pp-jobcard-avatar pp-jobcard-avatar-on" aria-hidden="true">SR</span>
-                  <span className="pp-jobcard-who"><b>{EXAMPLE.postedBy}</b> · named, with their profile</span>
-                  <span className="pp-jobcard-btn">View post <OutIcon /></span>
-                </div>
-              </article>
-            </div>
-            <p className="pp-compare-note">Left: three days late, with no way to reach the person. Right: eleven minutes after it was posted, with the person. That is the whole difference, on every role.</p>
-          </section>
-        )}
-
+        {/* ───────── Below the fold: the four real questions, and that's all ───────── */}
         <section className="pp-faq">
-          <h2>Before you decide</h2>
+          <h2>FAQ</h2>
           <details open><summary>How do I cancel?</summary><p>Menu, top right &rarr; Manage billing &rarr; Cancel. Two clicks. You keep Premium until the end of the period you&apos;ve paid for and aren&apos;t charged again.</p></details>
           <details><summary>What happens after the first month?</summary><p>${PRICE.intro} covers the first month. Then ${PRICE.monthly} a month until you cancel. The 90-day pass is one payment of ${PRICE.quarter} and never renews.</p></details>
           <details><summary>Where do the roles come from?</summary><p>Public LinkedIn posts by recruiters and hiring managers, checked and organised by AI. No scraped job boards, nothing older than 30 days.</p></details>
@@ -422,7 +382,7 @@ export default function OfferPage() {
         .pp-check { color: var(--good); flex: none; margin-top: 2px; }
 
         /* ── First screen: headline + sub (left, top), price (right, spanning), the thing (left, below) ── */
-        .pp-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) 400px; grid-template-areas: "hook price" "thing price"; column-gap: 64px; row-gap: 22px; align-items: start; margin-bottom: 56px; }
+        .pp-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) 400px; grid-template-areas: "hook price" "thing price"; column-gap: 64px; row-gap: 22px; align-items: start; margin-bottom: 48px; }
         .pp-hook { grid-area: hook; }
         .pp-price-col { grid-area: price; }
         .pp-thing { grid-area: thing; display: flex; flex-direction: column; gap: 14px; }
@@ -459,17 +419,12 @@ export default function OfferPage() {
         .pp-jobcard::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--good); }
         .pp-jobcard-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
         .pp-jobcard-flag { font: 500 11px var(--font-spline-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 6px; }
-        .pp-jobcard-flag-free { color: var(--ink-2); background: #EFEBE1; }
         .pp-jobcard-ago { margin-left: auto; font: 500 11.5px var(--font-spline-mono), monospace; color: var(--ink-3); }
-        .pp-jobcard-ago-fresh { color: var(--good); }
         .pp-jobcard h3 { margin: 0; font-family: var(--font-fraunces), Georgia, serif; font-size: 19px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; color: var(--ink); }
-        .pp-jobcard h3.pp-jobcard-link { color: var(--link); }
         .pp-jobcard-meta { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); }
         .pp-jobcard-meta b { color: var(--ink); font-weight: 600; }
-        .pp-jobcard-sum { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
         .pp-jobcard-foot { margin: 14px -20px 0; padding: 11px 20px 12px; border-top: 1px solid var(--hair-2); display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-2); }
         .pp-jobcard-avatar { width: 34px; height: 34px; border-radius: 50%; flex: none; background: #F0ECE2; color: #97907E; border: 1px solid var(--hair); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
-        .pp-jobcard-avatar-on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
         .pp-jobcard-who { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .pp-jobcard-who b { color: var(--ink); font-weight: 600; }
         .pp-blur { display: inline-block; filter: blur(4px); color: var(--ink); font-weight: 600; user-select: none; }
@@ -499,15 +454,8 @@ export default function OfferPage() {
         .pp-err { font-size: 13px; color: #C23B22; text-align: center; margin: 0; }
 
         /* below the fold */
-        .pp-compare { margin-bottom: 44px; }
-        .pp-compare h2, .pp-faq h2 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 26px; letter-spacing: -0.01em; margin: 0 0 16px; }
-        .pp-compare-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-        .pp-compare-grid .pp-jobcard { max-width: none; }
-        .pp-jobcard-free { border-color: var(--hair-2); box-shadow: none; }
-        .pp-jobcard-prem { box-shadow: 0 2px 4px rgba(25,23,19,.06), 0 14px 34px -10px rgba(25,23,19,.16); }
-        .pp-compare-note { margin: 14px 0 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+        .pp-faq h2 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 22px; letter-spacing: -0.01em; margin: 0 0 4px; }
         .pp-faq { max-width: 720px; display: flex; flex-direction: column; gap: 10px; }
-        .pp-faq h2 { font-size: 22px; margin-bottom: 4px; }
         .pp-faq details { border: 1px solid var(--hair); border-radius: 12px; background: var(--surface); padding: 12px 16px; }
         .pp-faq summary { font-weight: 600; font-size: 14.5px; cursor: pointer; }
         .pp-faq p { margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: var(--ink-2); }
@@ -526,7 +474,6 @@ export default function OfferPage() {
           .pp-card { padding: 18px 18px 16px; gap: 12px; }
           .pp-price b { font-size: 44px; }
           .pp-list, .pp-jobcard { max-width: none; }
-          .pp-compare-grid { grid-template-columns: minmax(0, 1fr); }
           .pp-sticky { display: flex; align-items: center; gap: 12px; position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--hair); transform: translateY(110%); transition: transform .2s; z-index: 20; }
           .pp-sticky.is-on { transform: translateY(0); }
           .pp-sticky-txt { display: flex; flex-direction: column; line-height: 1.2; font-size: 12.5px; color: var(--ink-2); }
