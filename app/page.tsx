@@ -1287,7 +1287,7 @@ export default function HomePage() {
       <section className="hero">
         <div className="hero-copy">
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
-          <p className="sub">Roles recruiters and hiring managers share with their networks before posting them publicly - tracked by AI and delivered in real time.</p>
+          <p className="sub">Apply directly to hiring managers and internal teams. Unlisted roles shared within professional networks before they ever hit public boards - tracked in real time.</p>
           <HeroPromises />
           {!hasPass && renderOffer('offer-d')}
         </div>
