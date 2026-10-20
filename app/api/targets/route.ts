@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
+import { memberStatus } from '@/lib/targetStatus'
+import { sendEmail, searchesReadyEmail } from '@/lib/email'
 import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
 import { normaliseKeyword } from '@/lib/normaliseKeyword'
@@ -10,6 +12,8 @@ export const runtime = 'nodejs'
 // Below this many matching roles in the last 30 days, a target earns its own
 // Apify query. Above it, the feed already covers them.
 const COVERAGE_THRESHOLD = 25
+
+export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
   try {
@@ -60,6 +64,8 @@ export async function POST(req: NextRequest) {
       .select('keyword, location').eq('user_id', user.id)
     const hadBefore = new Set(
       (priorTargets ?? []).map((t) => `${t.keyword}|${t.location ?? ''}`))
+    // first save = onboarding; later saves are edits and don't get the welcome email
+    const isFirstSave = (priorTargets ?? []).length === 0
 
     // A save replaces what they had. Anything they've dropped releases its
     // claim on the shared query, and a query nobody still wants goes quiet
@@ -144,19 +150,47 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Kick the new queries off now rather than waiting for the rotation, so a
-    // user who just paid sees results within minutes. Fire and forget.
+    // Run EVERY new query now, not just the first batch: the first ten minutes after
+    // paying are when a member decides whether this works. The response returns at
+    // once; the runs continue in the background (`after`), in chunks of twelve that
+    // run-priority handles two at a time, and when they're done the member gets the
+    // "your searches have run" email with what landed.
+    const origin = new URL(req.url).origin
+    const email = user.email ?? null
+    // Don't buy posts we already have: a query another member shares, or one this
+    // member just re-saved, that ran in the last 12 hours is fresh — its results
+    // are in the feed already. Only queries that have never run, or not recently, fire.
+    const FRESH_MS = 12 * 3600_000
+    let fireNow = toRun
     if (toRun.length > 0) {
-      const origin = new URL(req.url).origin
-      fetch(`${origin}/api/run-priority`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-ingest-secret': process.env.INGEST_SECRET ?? '' },
-        body: JSON.stringify({ queries: toRun }),
-      }).catch(() => {})
+      const { data: recent } = await db.from('priority_queries').select('query, last_run_at').in('query', toRun)
+      const fresh = new Set((recent ?? [])
+        .filter((q) => q.last_run_at && Date.now() - new Date(q.last_run_at as string).getTime() < FRESH_MS)
+        .map((q) => String(q.query).toLowerCase()))
+      fireNow = toRun.filter((q) => !fresh.has(q.toLowerCase()))
+      if (fresh.size) console.log(`[targets] ${fresh.size} of ${toRun.length} queries ran <12h ago, not re-fired`)
+    }
+    if (fireNow.length > 0) {
+      after(async () => {
+        const chunks: string[][] = []
+        for (let i = 0; i < fireNow.length; i += 12) chunks.push(fireNow.slice(i, i + 12))
+        await Promise.all(chunks.map((queries) => fetch(`${origin}/api/run-priority`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-ingest-secret': process.env.INGEST_SECRET ?? '' },
+          body: JSON.stringify({ queries }),
+        }).catch((e) => console.error('[targets] run-priority call failed', e))))
+        if (email && isFirstSave) {
+          try {
+            const status = await memberStatus(db, user.id)
+            const msg = searchesReadyEmail(status)
+            await sendEmail(email, msg.subject, msg.html, msg.text)
+          } catch (e) { console.error('[targets] ready email failed', e) }
+        }
+      })
     }
 
     console.log(`[targets] ${user.id}: ${added.length} queued, ${covered.length} covered, ${widened.length} widened; targets=${pairs.length}`)
-    return NextResponse.json({ ok: true, added, covered })
+    return NextResponse.json({ ok: true, added, covered, running: fireNow.length })
   } catch (e) {
     console.error('[targets]', (e as Error).message)
     return NextResponse.json({ error: 'Could not save' }, { status: 500 })

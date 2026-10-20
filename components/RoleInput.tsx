@@ -70,6 +70,24 @@ export default function RoleInput({ value, onChange, onSplit, placeholder, class
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('touchstart', onDown) }
   }, [])
 
+  // A title we have no posts for still gets accepted, but with a note and the
+  // nearest titles we do carry — "client relationship executive" matched nothing
+  // for a paying member while "relationship manager" had dozens.
+  const [unknown, setUnknown] = useState<{ phrase: string; alts: Suggestion[] } | null>(null)
+  const checkUnknown = (t: string, known: boolean) => {
+    if (known) { setUnknown(null); return }
+    const words = t.toLowerCase().split(/[^a-z0-9.#+]+/).filter((w) => w.length >= 4 && !STOP.has(w))
+    const seed = words.sort((a, b) => b.length - a.length)[0]
+    if (!seed) { setUnknown(null); return }
+    fetch(`/api/suggest-roles?q=${encodeURIComponent(seed)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const alts: Suggestion[] = (d?.suggestions ?? []).filter((s: Suggestion) => s.phrase !== t.toLowerCase()).slice(0, 3)
+        setUnknown({ phrase: t, alts })
+      })
+      .catch(() => setUnknown({ phrase: t, alts: [] }))
+  }
+
   const commit = (v: string) => {
     const known = list.find((s) => s.phrase === v.trim().toLowerCase())
     const t = (known?.display ?? v).trim()
@@ -77,10 +95,16 @@ export default function RoleInput({ value, onChange, onSplit, placeholder, class
     setPicked(t)
     onChange(t)
     setOpen(false); setList([])
-    if (t && splitRole(t).length < 2) setEditing(false)
+    if (t && splitRole(t).length < 2) { setEditing(false); checkUnknown(t, !!known) }
+  }
+
+  const swapTo = (alt: Suggestion) => {
+    const t = (alt.display ?? alt.phrase).trim()
+    setTyped(t); setPicked(t); onChange(t); setUnknown(null); setEditing(false)
   }
 
   const clear = () => {
+    setUnknown(null)
     setTyped('')
     setPicked(null)
     onChange('')
@@ -112,6 +136,20 @@ export default function RoleInput({ value, onChange, onSplit, placeholder, class
                     onClick={(e) => { e.stopPropagation(); clear() }}>×</button>
           </span>
         </div>
+        {unknown && unknown.phrase === value && (
+          <div className="role-unknown">
+            <p>We haven&apos;t seen a recruiter post use <b>{value}</b> as a title in the last 30 days, so this search may stay quiet.
+              {unknown.alts.length > 0 ? ' Titles we do carry:' : ' Try a more common title for the same job.'}</p>
+            {unknown.alts.length > 0 && (
+              <div className="role-unknown-alts">
+                {unknown.alts.map((a) => (
+                  <button type="button" key={a.phrase} onClick={() => swapTo(a)}>{a.display ?? a.phrase} <span>{a.count}</span></button>
+                ))}
+                <span className="role-unknown-keep">or keep it</span>
+              </div>
+            )}
+          </div>
+        )}
         <style>{STYLE}</style>
       </div>
     )
@@ -182,7 +220,15 @@ export default function RoleInput({ value, onChange, onSplit, placeholder, class
   )
 }
 
+const STOP = new Set(['senior', 'junior', 'lead', 'head', 'chief', 'manager', 'director', 'associate', 'executive', 'specialist', 'officer', 'analyst', 'engineer', 'assistant', 'intern', 'staff', 'principal', 'global', 'regional'])
+
 const STYLE = `
+  .role-unknown { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: #FFF4DB; border: 1px solid #F0D9A6; font-size: 13px; line-height: 1.5; color: #5C4A1E; }
+  .role-unknown p { margin: 0; } .role-unknown b { color: #191713; font-weight: 600; }
+  .role-unknown-alts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+  .role-unknown-alts button { border: 1px solid #C7D4F5; background: #E9EFFC; color: #1E3796; border-radius: 999px; padding: 5px 11px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .role-unknown-alts button span { font-weight: 500; opacity: .75; margin-left: 4px; }
+  .role-unknown-keep { font-size: 12.5px; color: #8A8378; }
   .role-wrap { position: relative; }
   .role-sug { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 6px); margin: 0; padding: 6px;
     list-style: none; background: #fff; border: 1px solid #DED8CC; border-radius: 12px;

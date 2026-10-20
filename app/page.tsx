@@ -240,6 +240,16 @@ const isFresh = (iso?: string | null) => !!iso && Date.now() - new Date(iso).get
 const initials = (name: string) =>
   name.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
 
+// "4 min ago", "3h ago", "2d ago" for the matches status line
+function sinceShort(iso: string): string {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000))
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m} min ago`
+  const h = Math.round(m / 60)
+  if (h < 48) return `${h}h ago`
+  return `${Math.round(h / 24)}d ago`
+}
+
 const HOW_STEPS = [
   { t: 'We monitor recruiter posts', d: 'AI tracks public posts from recruiters and talent teams.' },
   { t: 'We pick out real roles', d: 'Genuine openings, not generic career content.' },
@@ -618,10 +628,23 @@ export default function HomePage() {
   const [myFeedOn, setMyFeedOn] = useState(false)
   // Recognisable employers in the feed right now, for the strip under the hero
   const [topCompanies, setTopCompanies] = useState<StripCompany[]>([])
+  // What the member's searches are doing: last check, pending runs, new since yesterday
+  const [myStatus, setMyStatus] = useState<{ checkedAt: string | null; pending: number; newTotal: number } | null>(null)
   useEffect(() => {
     fetch('/api/targets')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setMyTargets(d?.targets ?? []))
+      .then((d) => {
+        const targets = d?.targets ?? []
+        setMyTargets(targets)
+        // A member's home view is their matches. ?mine=1 (from onboarding and email) forces it.
+        if (targets.length > 0 && (new URLSearchParams(window.location.search).get('mine') === '1' || !sessionStorage.getItem('bcj_tab_touched'))) setMyFeedOn(true)
+        if (targets.length > 0) {
+          fetch('/api/targets/status', { cache: 'no-store' })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((st) => { if (st) setMyStatus({ checkedAt: st.checkedAt ?? null, pending: st.pending ?? 0, newTotal: st.newTotal ?? 0 }) })
+            .catch(() => {})
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -1431,9 +1454,9 @@ export default function HomePage() {
             {myTargets.length > 0 && (
               <div className="feed-tabs" role="tablist">
                 <button role="tab" aria-selected={!myFeedOn} className={myFeedOn ? '' : 'on'}
-                  onClick={() => { setMyFeedOn(false); track('feed_tab', { tab: 'all' }) }}>All roles</button>
+                  onClick={() => { setMyFeedOn(false); try { sessionStorage.setItem('bcj_tab_touched', '1') } catch {} track('feed_tab', { tab: 'all' }) }}>All roles</button>
                 <button role="tab" aria-selected={myFeedOn} className={myFeedOn ? 'on' : ''}
-                  onClick={() => { setMyFeedOn(true); track('feed_tab', { tab: 'mine' }) }}>
+                  onClick={() => { setMyFeedOn(true); try { sessionStorage.setItem('bcj_tab_touched', '1') } catch {} track('feed_tab', { tab: 'mine' }) }}>
                   My matches {myExact.length > 0 && <span>{myExact.length}</span>}
                 </button>
               </div>
@@ -1569,6 +1592,14 @@ export default function HomePage() {
             {splitFeed && <div className="sec-head"><span>Earlier roles</span><i />{!hasPass && <em className="sec-note">Older than {FREE_DELAY_HOURS} hours</em>}</div>}
             <div className="cards">
               {!splitFeed && lockedShown.map(renderLocked)}
+              {myFeedOn && myStatus && (
+                <p className="match-status" aria-live="polite">
+                  <span className="ms-dot" aria-hidden="true" />
+                  {myStatus.checkedAt ? <>Checked {sinceShort(myStatus.checkedAt)}</> : 'First check running'}
+                  {' · '}{myStatus.newTotal} new since yesterday
+                  {myStatus.pending > 0 && <> · {myStatus.pending} {myStatus.pending === 1 ? 'search' : 'searches'} still running</>}
+                </p>
+              )}
               {myFeedOn && myExact.length > 0 && myRough.length > 0 && (
                 <p className="match-note">
                   <b>{myExact.length} match your searches exactly.</b> Below those,
@@ -2094,6 +2125,9 @@ export default function HomePage() {
         .ulj .match-note { margin: 0 0 14px; padding: 11px 14px; border-radius: 10px;
           background: var(--surface-2); font-size: 13px; line-height: 1.55; color: var(--ink-2); }
         .ulj .match-note b { color: var(--ink); font-weight: 600; }
+        .ulj .match-status { margin: 0 0 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); }
+        .ulj .match-status .ms-dot { width: 7px; height: 7px; border-radius: 50%; background: #0A7A3D; }
+        .ulj .match-status a { color: var(--ink-2); }
         .ulj .feed-tabs { display: inline-flex; gap: 2px; background: var(--surface-2);
           border-radius: 9px; padding: 2px; margin-left: auto; align-self: center; }
         /* the tabs claim the gap; the dropdown sits straight after them */

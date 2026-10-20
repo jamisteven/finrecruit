@@ -134,24 +134,7 @@ function Onboarding() {
     </Frame>
   )
 
-  if (stage === 'done') return (
-    <Frame step={0}>
-      <span className="ok-badge">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-      </span>
-      <h1>You&apos;re all set. We&apos;re watching.</h1>
-      <p className="lede">
-        We&apos;re searching now. Give us about five minutes, then check your feed — new
-        matches land there as we find them, and we sweep again eight times a day.
-      </p>
-      <div className="pills">
-        {filledRoles.map((r) => <span className="pill" key={r}>{r}</span>)}
-        {locations.map((l) => <span className="pill" key={l}>{l}</span>)}
-        <a className="pill pill-link" href="/targets">Edit</a>
-      </div>
-      <a className="btn" href="/">Go to the feed</a>
-    </Frame>
-  )
+  if (stage === 'done') return <Frame step={0}><Progress roles={filledRoles} locations={locations} /></Frame>
 
   if (stage === 'roles') return (
     <Frame step={1} roles={filledRoles} locations={locations}>
@@ -269,6 +252,85 @@ function Onboarding() {
         </button>
       </div>
     </Frame>
+  )
+}
+
+type StatusRow = { keyword: string; location: string | null; ranSinceSave: boolean; exact: number; nearby: number }
+type Status = { targets: StatusRow[]; pending: number; exactTotal: number; checkedAt: string | null }
+
+/**
+ * The first minutes after paying are when a member decides whether this works, so
+ * instead of "check back in five minutes" the page stays while the searches run:
+ * each target ticks from "searching" to "N found" as its query completes.
+ */
+function Progress({ roles, locations }: { roles: string[]; locations: string[] }) {
+  const [status, setStatus] = useState<Status | null>(null)
+  const [polls, setPolls] = useState(0)
+  const [timedOut, setTimedOut] = useState(false)
+  const settled = !!status && status.pending === 0 && polls >= 2
+
+  useEffect(() => {
+    if (settled || timedOut) return
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const r = await fetch('/api/targets/status', { cache: 'no-store' })
+        if (r.ok && !cancelled) { setStatus(await r.json()); setPolls((n) => n + 1) }
+      } catch { /* try again next tick */ }
+    }
+    tick()
+    const id = setInterval(tick, 6000)
+    const stop = setTimeout(() => { if (!cancelled) setTimedOut(true) }, 4 * 60_000)
+    return () => { cancelled = true; clearInterval(id); clearTimeout(stop) }
+  }, [settled, timedOut])
+
+  const total = status?.exactTotal ?? 0
+  const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1)
+  const rows = status?.targets ?? roles.flatMap((k) => (locations.length ? locations : ['']).map((l) => ({ keyword: k, location: l || null, ranSinceSave: false, exact: 0, nearby: 0 })))
+
+  return (
+    <>
+      {settled || timedOut ? (
+        <span className="ok-badge" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </span>
+      ) : <span className="ob-spin" aria-hidden="true" />}
+      <h1>{settled ? (total > 0 ? `${total} ${total === 1 ? 'role matches' : 'roles match'} your searches.` : 'Your searches are set up.')
+          : timedOut ? 'Still searching in the background.' : 'Searching recruiter posts for you…'}</h1>
+      <p className="lede">
+        {settled
+          ? (total > 0 ? 'These are live now. From here on, new matches land in your feed on their own.' : 'Nothing has matched in the first pass, which happens with specific titles. Your searches keep running and the feed fills as posts appear.')
+          : 'Each search takes about a minute. You can wait here or go to the feed; either way they finish.'}
+      </p>
+
+      <ul className="ob-progress" aria-live="polite">
+        {rows.map((t, i) => (
+          <li key={`${t.keyword}|${t.location ?? ''}|${i}`} className={t.ranSinceSave ? 'done' : ''}>
+            <span className="ob-pt">{cap(t.keyword)} <em>· {t.location ? cap(t.location) : 'anywhere'}</em></span>
+            <span className="ob-pn">
+              {t.ranSinceSave
+                ? (t.exact > 0 ? `${t.exact} found` : t.nearby > 0 ? `0 here · ${t.nearby} elsewhere` : 'nothing yet')
+                : <><span className="ob-dot" /> searching</>}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {(settled || timedOut) && (
+        <div className="ob-next">
+          <b>What happens from here</b>
+          <p>New recruiter posts that match your searches appear in your feed automatically, as we find them, around the clock. Each search is checked at least twice a day, and exact matches sit first, then the same roles nearby.</p>
+          <p>A quiet search for a few days means we checked and nothing new was posted, not that anything stopped.</p>
+        </div>
+      )}
+
+      <div className="pills">
+        {roles.map((r) => <span className="pill" key={r}>{r}</span>)}
+        {locations.map((l) => <span className="pill" key={l}>{l}</span>)}
+        <a className="pill pill-link" href="/targets">Edit</a>
+      </div>
+      <a className="btn" href="/?mine=1">{settled && total > 0 ? 'See your matches' : 'Go to the feed'}</a>
+    </>
   )
 }
 
@@ -414,6 +476,19 @@ function Frame({ step, roles = [], locations = [], children }: {
 
         .ok-badge { display: inline-flex; align-items: center; justify-content: center;
           width: 46px; height: 46px; border-radius: 14px; background: #E3F2E8; color: #1E7A4C; }
+        .ob-spin { display: inline-block; width: 36px; height: 36px; border-radius: 50%; border: 3px solid #E4DED1; border-top-color: #24468f; animation: obspin .9s linear infinite; margin-bottom: 14px; }
+        @keyframes obspin { to { transform: rotate(360deg) } }
+        .ob-progress { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 6px; }
+        .ob-progress li { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 9px 12px; border: 1px solid #E4DED1; border-radius: 10px; background: #FDFCFA; font-size: 14px; }
+        .ob-progress li.done { border-color: #C7D4F5; }
+        .ob-pt em { font-style: normal; color: #5C574D; }
+        .ob-pn { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; color: #191713; display: inline-flex; align-items: center; gap: 6px; }
+        .ob-progress li:not(.done) .ob-pn { color: #8A8378; font-weight: 500; }
+        .ob-dot { width: 8px; height: 8px; border-radius: 50%; background: #24468f; animation: obpulse 1s ease-in-out infinite; }
+        @keyframes obpulse { 0%, 100% { opacity: .25 } 50% { opacity: 1 } }
+        .ob-next { margin: 0 0 18px; padding: 14px 16px; border-radius: 12px; background: #EFEBE1; font-size: 14px; line-height: 1.5; }
+        .ob-next b { display: block; margin-bottom: 6px; font-weight: 600; }
+        .ob-next p { margin: 0 0 8px; color: #191713; } .ob-next p:last-child { margin: 0; }
         .pills { display: flex; flex-wrap: wrap; gap: 8px; }
         .pill { display: inline-flex; align-items: center; height: 32px; padding: 0 13px;
           border-radius: 999px; background: #fff; border: 1px solid #E6DFD3; font-size: 14px; }
