@@ -254,7 +254,7 @@ export default function OfferPage() {
               <h1>Skip the job board black hole. <em>Apply directly to hiring managers and internal teams.</em></h1>
             )}
             
-            <p className="sub">Most high-value roles are shared directly by hiring managers, internal recruiters, and staff—and never make it to traditional job boards. Backchannel indexes these unlisted posts in real time so you can pitch decision-makers first.</p>            
+            <p className="sub">Most high-value roles are shared directly by hiring managers, internal recruiters, and staff, they never make it to traditional job boards. Backchannel indexes these unlisted posts in real time so you can pitch decision-makers first.</p>            
             
             {hasPass && <p className="pp-have">✨ You already have active Premium access. <a href="/">Go to today&apos;s feed &rarr;</a></p>}
 
