@@ -2,51 +2,64 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { DATASETS } from '@/lib/analyticsDatasets'
+import { Chart, ChartCard, CHART_CSS, COLORS, Funnel, Heatmap, HBars, Tile, fmtUsd, weekOverWeek, type ChartRow, type Series } from './charts'
+import { WEEKDAYS, WEEKDAYS_LONG, clock, hh, rebase, summarise, timingOf, tzOffsetHours } from './timing'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Data = any
+type Tab = 'members' | 'growth' | 'demand' | 'engagement' | 'supply'
 
 const fmtDay = (d: string) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+const dayTip = (d: string) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 const ago = (iso: string | null) => {
   if (!iso) return '—'
   const h = Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000)
   return h < 1 ? 'just now' : h < 48 ? `${h}h ago` : `${Math.round(h / 24)}d ago`
 }
 const secs = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`)
+const dur = (min: number) => (min < 1 ? 'under a minute' : min < 60 ? `${min} min` : min < 1440 ? `${(min / 60).toFixed(1)} h` : `${(min / 1440).toFixed(1)} days`)
 
-function Bars({ rows, value, label, max }: { rows: Record<string, number | string>[]; value: string; label: string; max?: number }) {
-  const m = max ?? Math.max(1, ...rows.map((r) => Number(r[value]) || 0))
-  return (
-    <div className="bars" role="img" aria-label={`${label} by day`}>
-      {rows.map((r) => (
-        <div key={String(r.day)} className="bar" title={`${fmtDay(String(r.day))}: ${r[value]} ${label}`}>
-          <i style={{ height: `${Math.max(2, (100 * (Number(r[value]) || 0)) / m)}%` }} />
-        </div>
-      ))}
-    </div>
-  )
+/** daily rows -> chart rows (numbers only; anything missing is 0) */
+const dayRows = (days: Data[], keys: string[]): ChartRow[] =>
+  days.map((r) => ({ x: fmtDay(r.day), tip: dayTip(r.day), v: Object.fromEntries(keys.map((k) => [k, Number(r[k]) || 0])) }))
+const one = (key: string, label: string, color: string): Series[] => [{ key, label, color }]
+
+const getJson = async (url: string) => {
+  const r = await fetch(url)
+  if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || `HTTP ${r.status}`)
+  return r.json()
 }
 
 export default function Dashboard() {
   const [data, setData] = useState<Data | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const [tab, setTab] = useState<'members' | 'demand' | 'engagement' | 'supply'>('members')
+  const [growth, setGrowth] = useState<Data | null>(null)
+  const [gErr, setGErr] = useState<string | null>(null)
+  const [gBusy, setGBusy] = useState(false)
+  const [tab, setTab] = useState<Tab>('members')
   const [win, setWin] = useState<'d7' | 'd30' | 'd90'>('d30')
   const [seg, setSeg] = useState<'all' | 'members' | 'free'>('all')
 
   useEffect(() => {
-    fetch('/api/analytics').then(async (r) => {
-      if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || `HTTP ${r.status}`)
-      return r.json()
-    }).then(setData).catch((e) => setErr(e.message))
+    getJson('/api/analytics').then(setData).catch((e) => setErr(e.message))
   }, [])
+
+  // growth reads 90 days of visits, so it loads the first time its tab opens
+  const open = (t: Tab) => {
+    setTab(t)
+    if (t === 'growth' && !growth && !gBusy) {
+      setGBusy(true)
+      getJson('/api/analytics?panel=growth').then((j) => setGrowth(j.growth)).catch((e) => setGErr(e.message)).finally(() => setGBusy(false))
+    }
+  }
 
   const M = data?.members, D = data?.demand, E = data?.engagement, S = data?.supply
   const d = D?.[win]?.[seg]
 
   return (
     <div className="an-page">
-      <style>{CSS}</style>
+      <style>{CSS}{CHART_CSS}</style>
       <div className="an-mast">
         <div className="an-mast-in">
           <Link className="an-wordmark" href="/" aria-label="backchannel.jobs home"><span className="an-mark">B</span><span>backchannel<em>.jobs</em></span></Link>
@@ -60,11 +73,21 @@ export default function Dashboard() {
           <h1>Analytics</h1>
           <p className="an-sub">{data ? `Generated ${ago(data.generatedAt)} · reload for fresh numbers` : err ? `Couldn't load: ${err}` : 'Loading…'}</p>
         </div>
-        <nav className="an-tabs" aria-label="Panels">
-          {(['members', 'demand', 'engagement', 'supply'] as const).map((t) => (
-            <button key={t} type="button" className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
-          ))}
-        </nav>
+        <div className="an-tools">
+          <nav className="an-tabs" aria-label="Panels">
+            {(['members', 'growth', 'demand', 'engagement', 'supply'] as const).map((t) => (
+              <button key={t} type="button" className={tab === t ? 'on' : ''} onClick={() => open(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
+            ))}
+          </nav>
+          <details className="an-export">
+            <summary className="an-btn primary">Export data ▾</summary>
+            <div className="an-export-menu">
+              <a href="/api/analytics/export?dataset=all" download>Everything (.zip)<span>All {Object.keys(DATASETS).length} files below plus a README. Times are UTC.</span></a>
+              <hr />
+              {Object.entries(DATASETS).map(([k, desc]) => <a key={k} href={`/api/analytics/export?dataset=${k}`} download>{k}.csv<span>{desc}</span></a>)}
+            </div>
+          </details>
+        </div>
       </header>
 
       {!data && !err && <div className="an-card an-muted">Pulling the last 30 to 90 days from the database…</div>}
@@ -82,6 +105,16 @@ export default function Dashboard() {
               <b>Expiring soon:</b> {M.expiring7.map((m: Data) => `${m.email} (${m.daysLeft}d)`).join(' · ')}
             </div>
           )}
+          <div className="an-cols">
+            <ChartCard title="Time left on each pass" sub="Days until access ends. Orange = a week or less." csv="members-days-left"
+              rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ member: m.email, plan: m.plan, days_left: m.daysLeft }))}>
+              <HBars rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ label: m.email, value: m.daysLeft, color: m.daysLeft <= 7 ? COLORS.orange : COLORS.blue }))} format={(n) => `${n}d`} empty="No active members" />
+            </ChartCard>
+            <ChartCard title="Exact matches, last 7 days" sub="Roles that fit each member’s targets and location. A short bar is a member at risk of cancelling." csv="members-exact-matches"
+              rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ member: m.email, exact_matches_7d: m.exact7, target_problems: m.flags }))}>
+              <HBars rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ label: m.email, value: m.exact7, color: m.exact7 < 5 ? COLORS.orange : COLORS.blue }))} empty="No active members" />
+            </ChartCard>
+          </div>
           {M.members.map((m: Data) => (
             <article key={m.email} className={`an-card an-member ${m.active ? '' : 'lapsed'}`}>
               <div className="an-member-head">
@@ -120,6 +153,10 @@ export default function Dashboard() {
         </section>
       )}
 
+      {/* ------------------------------------------------ growth */}
+      {tab === 'growth' && !growth && <div className="an-card an-muted">{gErr ? `Couldn't load growth: ${gErr}` : 'Reading 90 days of visits, accounts and checkouts…'}</div>}
+      {tab === 'growth' && growth && data && <Growth G={growth} generatedAt={data.generatedAt} />}
+
       {/* ------------------------------------------------ demand */}
       {tab === 'demand' && D && (
         <section className="an-grid">
@@ -128,14 +165,26 @@ export default function Dashboard() {
             <div className="an-seg">{(['all', 'members', 'free'] as const).map((s) => <button key={s} type="button" className={seg === s ? 'on' : ''} onClick={() => setSeg(s)}>{s}</button>)}</div>
           </div>
           <div className="an-tiles">
-            <div className="an-tile"><b>{d.searches}</b><span>searches</span></div>
-            <div className="an-tile"><b>{d.visitors}</b><span>people searching</span></div>
-            <div className="an-tile"><b>{d.zeroShare}%</b><span>returned nothing</span></div>
+            <Tile value={d.searches} label="searches" spark={d.days.map((r: Data) => r.searches)} />
+            <Tile value={d.visitors} label="people searching" spark={d.days.map((r: Data) => r.people)} />
+            <Tile value={`${d.zeroShare}%`} label="returned nothing" spark={d.days.map((r: Data) => r.zero)} />
           </div>
+          <ChartCard title="Searches per day" sub="Blue found something; orange returned nothing. A tall orange bar is demand the feed doesn’t cover." csv={`searches-per-day-${win}-${seg}`}
+            rows={d.days.map((r: Data) => ({ day: r.day, searches: r.searches, no_results: r.zero, people: r.people }))}
+            legend={[{ key: 'found', label: 'Found something', color: COLORS.blue }, { key: 'zero', label: 'Returned nothing', color: COLORS.orange }]}>
+            <Chart kind="stacked" label="Searches per day" rows={d.days.map((r: Data) => ({ x: fmtDay(r.day), tip: dayTip(r.day), v: { found: r.searches - r.zero, zero: r.zero } }))}
+              series={[{ key: 'found', label: 'Found something', color: COLORS.blue }, { key: 'zero', label: 'Returned nothing', color: COLORS.orange }]} />
+          </ChartCard>
           <div className="an-cols">
-            <div className="an-card"><h2>Roles searched</h2><ol className="an-list">{d.terms.map((t: Data) => <li key={t.key}><span>{t.key}</span><b>{t.count}</b></li>)}</ol></div>
-            <div className="an-card"><h2>Locations filtered</h2><ol className="an-list">{d.locations.map((t: Data) => <li key={t.key}><span>{t.key}</span><b>{t.count}</b></li>)}</ol></div>
-            <div className="an-card"><h2>Searches with no results</h2><ol className="an-list">{d.zeroResult.length ? d.zeroResult.map((t: Data) => <li key={t.key}><span>{t.key}</span><b>{t.count}</b></li>) : <li className="an-muted">none</li>}</ol></div>
+            <ChartCard title="Roles searched" csv={`roles-searched-${win}-${seg}`} rows={d.terms.map((t: Data) => ({ term: t.key, people: t.count }))}>
+              <HBars rows={d.terms.map((t: Data) => ({ label: t.key, value: t.count }))} />
+            </ChartCard>
+            <ChartCard title="Locations filtered" csv={`locations-filtered-${win}-${seg}`} rows={d.locations.map((t: Data) => ({ location: t.key, searches: t.count }))}>
+              <HBars rows={d.locations.map((t: Data) => ({ label: t.key, value: t.count }))} color={COLORS.aqua} />
+            </ChartCard>
+            <ChartCard title="Searches with no results" csv={`no-results-${win}-${seg}`} rows={d.zeroResult.map((t: Data) => ({ term: t.key, searches: t.count }))}>
+              <HBars rows={d.zeroResult.map((t: Data) => ({ label: t.key, value: t.count }))} color={COLORS.orange} empty="None" />
+            </ChartCard>
           </div>
         </section>
       )}
@@ -144,26 +193,25 @@ export default function Dashboard() {
       {tab === 'engagement' && E && (
         <section className="an-grid">
           <div className="an-tiles">
-            <div className="an-tile"><b>{E.visitors}</b><span>visitors, 30d</span></div>
-            <div className="an-tile"><b>{E.returningShare}%</b><span>came back on another day</span></div>
-            <div className="an-tile"><b>{secs(E.time.all.medianSec)}</b><span>median active time · mean {secs(E.time.all.meanSec)}</span></div>
-            <div className="an-tile"><b>{secs(E.time.members.medianSec)}</b><span>members&apos; median · free {secs(E.time.free.medianSec)}</span></div>
+            <Tile value={E.visitors} label="visitors, 30d" spark={E.days.map((r: Data) => r.visitors)} delta={weekOverWeek(E.days.map((r: Data) => r.visitors))} />
+            <Tile value={`${E.returningShare}%`} label="came back on another day" />
+            <Tile value={secs(E.time.all.medianSec)} label={`median active time · mean ${secs(E.time.all.meanSec)}`} />
+            <Tile value={secs(E.time.members.medianSec)} label={`members’ median · free ${secs(E.time.free.medianSec)}`} />
           </div>
-          <div className="an-card">
-            <h2>Visitors by day</h2>
-            <Bars rows={E.days} value="visitors" label="visitors" />
-            <p className="an-muted">Active time is first to last recorded event in a visit (page loads, searches, job clicks); a single page load counts as 0s, which is {E.time.all.bounced}% of visits.</p>
-          </div>
+          <ChartCard title="Visitors, searchers and job-clickers per day" csv="engagement-daily" rows={E.days}
+            sub={`Active time is first to last recorded event in a visit (page loads, searches, job clicks); a single page load counts as 0s, which is ${E.time.all.bounced}% of visits.`}
+            legend={[{ key: 'visitors', label: 'Visitors', color: COLORS.blue }, { key: 'searched', label: 'Searched', color: COLORS.orange }, { key: 'clicked', label: 'Clicked a job', color: COLORS.aqua }]}>
+            <Chart kind="line" area label="Visitors, searchers and job-clickers per day" rows={dayRows(E.days, ['visitors', 'searched', 'clicked'])}
+              series={[{ key: 'visitors', label: 'Visitors', color: COLORS.blue }, { key: 'searched', label: 'Searched', color: COLORS.orange }, { key: 'clicked', label: 'Clicked a job', color: COLORS.aqua }]} />
+          </ChartCard>
           <div className="an-cols">
-            <div className="an-card">
-              <h2>Funnel, 30 days</h2>
-              <ol className="an-funnel">
-                {[['Visitors', E.funnel.visitors], ['Searched', E.funnel.searched], ['Clicked a job', E.funnel.clickedJob], ['Started checkout', E.funnel.checkoutStarted], ['Paid', E.funnel.paid]].map(([k, v], i, arr) => (
-                  <li key={String(k)}><span>{k}</span><b>{v as number}</b><small>{i ? `${Math.round(100 * (v as number) / Math.max(1, arr[i - 1][1] as number))}% of previous` : ''}</small></li>
-                ))}
-              </ol>
-            </div>
-            <div className="an-card"><h2>Where visits came from</h2><ol className="an-list">{E.referrers.map((t: Data) => <li key={t.key}><span>{t.key}</span><b>{t.count}</b></li>)}</ol></div>
+            <ChartCard title="Funnel, 30 days" csv="funnel-30d"
+              rows={[['Visitors', E.funnel.visitors], ['Searched', E.funnel.searched], ['Clicked a job', E.funnel.clickedJob], ['Started checkout', E.funnel.checkoutStarted], ['Paid', E.funnel.paid]].map(([step, people]) => ({ step, people }))}>
+              <Funnel steps={[{ label: 'Visitors', value: E.funnel.visitors }, { label: 'Searched', value: E.funnel.searched }, { label: 'Clicked a job', value: E.funnel.clickedJob }, { label: 'Started checkout', value: E.funnel.checkoutStarted }, { label: 'Paid', value: E.funnel.paid }]} />
+            </ChartCard>
+            <ChartCard title="Where visits came from" csv="referrers-30d" rows={E.referrers.map((t: Data) => ({ referrer: t.key, visits: t.count }))}>
+              <HBars rows={E.referrers.map((t: Data) => ({ label: t.key, value: t.count }))} />
+            </ChartCard>
           </div>
         </section>
       )}
@@ -176,23 +224,194 @@ export default function Dashboard() {
             <div className="an-tile"><b>{S.budget.mode}</b><span>governor mode · pace ${S.budget.paceUsd.toFixed(2)}</span></div>
             <div className="an-tile"><b>{S.haikuDays.at(-1)?.calls ?? 0}</b><span>classifier calls yesterday/today · ≈${S.haikuDays.at(-1)?.usd ?? 0}</span></div>
           </div>
-          <div className="an-card">
-            <h2>Posts bought per day, 30 days</h2>
-            <Bars rows={S.days} value="posts" label="posts" />
+          <ChartCard title="Posts bought per day, 30 days" csv="supply-daily" rows={S.days}
+            sub="Each bar is one day’s purchase. The blue part became roles; grey was already seen; orange was rejected by the classifier."
+            legend={[{ key: 'kept', label: 'Kept', color: COLORS.blue }, { key: 'dup', label: 'Repeats', color: COLORS.grey }, { key: 'rejected', label: 'Rejected', color: COLORS.orange }, { key: 'other', label: 'Other', color: COLORS.pale }]}>
+            <Chart kind="stacked" label="Posts bought per day" rows={S.days.map((r: Data) => ({ x: fmtDay(r.day), tip: dayTip(r.day), v: { kept: r.kept, dup: r.dup, rejected: r.rejected, other: Math.max(0, r.posts - r.kept - r.dup - r.rejected) } }))}
+              series={[{ key: 'kept', label: 'Kept', color: COLORS.blue }, { key: 'dup', label: 'Repeats', color: COLORS.grey }, { key: 'rejected', label: 'Rejected', color: COLORS.orange }, { key: 'other', label: 'Other', color: COLORS.pale }]} />
             <table className="an-compact">
               <thead><tr><th>Day</th><th className="num">Posts</th><th className="num">Kept</th><th className="num">Repeats</th><th className="num">Rejected</th><th className="num">$</th></tr></thead>
               <tbody>{[...S.days].reverse().slice(0, 10).map((r: Data) => <tr key={r.day}><td>{fmtDay(r.day)}</td><td className="num">{r.posts}</td><td className="num">{r.kept}</td><td className="num">{r.dup}</td><td className="num">{r.rejected}</td><td className="num">{r.usd.toFixed(2)}</td></tr>)}</tbody>
             </table>
+          </ChartCard>
+          <div className="an-cols">
+            <ChartCard title="Apify spend per day" sub="Posts bought × cost per post." csv="apify-spend-daily" rows={S.days.map((r: Data) => ({ day: r.day, usd: r.usd, posts: r.posts }))}>
+              <Chart label="Apify spend per day" rows={dayRows(S.days, ['usd'])} series={one('usd', 'Spend', COLORS.blue)} avg valueFmt={(n) => `$${n.toFixed(2)}`} />
+            </ChartCard>
+            <ChartCard title="Classifier calls per day" sub="Model calls only; the prefilter and gate are free." csv="classifier-calls-daily" rows={S.haikuDays}>
+              <Chart label="Classifier calls per day" rows={S.haikuDays.map((r: Data) => ({ x: fmtDay(r.day), tip: dayTip(r.day), v: { calls: r.calls } }))} series={one('calls', 'Calls', COLORS.blue)} avg />
+            </ChartCard>
+          </div>
+          <div className="an-cols">
+            <ChartCard title="Roles added per day: direct vs agency" csv="job-mix-daily" rows={S.jobDays}
+              legend={[{ key: 'direct', label: 'Direct employer', color: COLORS.blue }, { key: 'agency', label: 'Agency', color: COLORS.orange }]}>
+              <Chart kind="stacked" label="Roles added per day, direct and agency" rows={dayRows(S.jobDays, ['direct', 'agency'])}
+                series={[{ key: 'direct', label: 'Direct employer', color: COLORS.blue }, { key: 'agency', label: 'Agency', color: COLORS.orange }]} />
+            </ChartCard>
+            <ChartCard title="Roles added by sector, 30 days" csv="roles-by-sector" rows={S.sectors.map((t: Data) => ({ sector: t.key, roles: t.count }))}>
+              <HBars rows={S.sectors.map((t: Data) => ({ label: t.key, value: t.count }))} />
+            </ChartCard>
           </div>
           <div className="an-cols">
             <div className="an-card"><h2>Worst-yielding queries, 14d</h2><YieldTable rows={S.worst} /></div>
             <div className="an-card"><h2>Best-yielding queries, 14d</h2><YieldTable rows={S.best} /></div>
           </div>
-          <div className="an-card"><h2>What happened to posts, 14d</h2><ol className="an-list">{S.classifier.map((t: Data) => <li key={t.key}><span className="mono">{t.key}</span><b>{t.count}</b></li>)}</ol></div>
+          <ChartCard title="What happened to posts, 14d" csv="classifier-outcomes" rows={S.classifier.map((t: Data) => ({ outcome: t.key, count: t.count }))}>
+            <HBars rows={S.classifier.map((t: Data) => ({ label: t.key, value: t.count }))} color={COLORS.grey} />
+          </ChartCard>
         </section>
       )}
     </div>
     </div>
+  )
+}
+
+// ------------------------------------------------------------------ growth tab
+
+const TZS = ['UTC', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin']
+
+function Growth({ G, generatedAt }: { G: Data; generatedAt: string }) {
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  const [range, setRange] = useState<14 | 30 | 90>(30)
+  const [tz, setTz] = useState(browserTz)
+  const [basis, setBasis] = useState<'paid' | 'created' | 'createdPaying'>('paid')
+  const zones = [browserTz, ...TZS.filter((z) => z !== browserTz)]
+
+  const all: Data[] = G.days
+  const days: Data[] = all.slice(-range)
+  const col = (k: string) => all.map((r) => r[k] as number)
+
+  // ---- when people sign up
+  const events: string[] = basis === 'paid' ? G.payments.map((p: Data) => p.at)
+    : basis === 'created' ? G.signups.map((s: Data) => s.at)
+    : G.signups.filter((s: Data) => s.paying).map((s: Data) => s.at)
+  const T = timingOf(events, tz)
+  const basisText = basis === 'paid' ? 'first payments' : basis === 'created' ? 'new accounts' : 'new accounts that went on to pay'
+  const winTxt = `${hh(T.windowStart)}–${hh(T.windowStart + 3)}`
+  const hourRows: ChartRow[] = T.hours.map((n, h) => ({ x: String(h).padStart(2, '0'), tip: `${hh(h)}–${hh(h + 1)}`, v: { n } }))
+  const windowHours = [0, 1, 2].map((k) => (T.windowStart + k) % 24)
+  const weekRows: ChartRow[] = T.days.map((n, i) => ({ x: WEEKDAYS[i], tip: WEEKDAYS_LONG[i], v: { n } }))
+
+  // ---- when visitors are on the site (UTC counts shifted into the chosen zone)
+  const off = tzOffsetHours(tz, new Date(generatedAt))
+  const V = summarise(rebase(G.visitMatrix, off))
+  const vHourRows: ChartRow[] = V.hours.map((n, h) => ({ x: String(h).padStart(2, '0'), tip: `${hh(h)}–${hh(h + 1)}`, v: { n } }))
+  const vWindow = [0, 1, 2].map((k) => (V.windowStart + k) % 24)
+
+  const wow = (k: string) => weekOverWeek(col(k))
+  const revRange = days.reduce((s, r) => s + r.revenueUsd, 0)
+  const tp = G.timeToPay
+
+  return (
+    <section className="an-grid">
+      <div className="an-controls">
+        <div className="an-seg" role="group" aria-label="Range">{([14, 30, 90] as const).map((r) => <button key={r} type="button" className={range === r ? 'on' : ''} onClick={() => setRange(r)}>{r} days</button>)}</div>
+        <label className="an-tools"><span className="an-muted-inline">Time zone</span>
+          <select className="an-select" value={tz} onChange={(e) => setTz(e.target.value)}>
+            {zones.map((z) => <option key={z} value={z}>{z === browserTz ? `Your time · ${z}` : z}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <div className="an-tiles">
+        <Tile value={wow('visitors').now} label="visitors, last 7 days" spark={col('visitors').slice(-30)} delta={wow('visitors')} />
+        <Tile value={wow('signups').now} label="new accounts, last 7 days" spark={col('signups').slice(-30)} delta={wow('signups')} />
+        <Tile value={wow('paid').now} label="new paying members, last 7 days" spark={col('paid').slice(-30)} delta={wow('paid')} />
+        <Tile value={fmtUsd(revRange)} label={`first-payment revenue, ${range} days (estimate; renewals not counted)`} spark={col('revenueUsd').slice(-range)} />
+        <Tile value={G.totals.paying} label={`paying members ever · ${G.totals.payingPct}% of ${G.totals.profiles} accounts`} spark={col('payingMembers').slice(-30)} />
+        <Tile value={tp.n ? dur(tp.medianMin) : '—'} label={tp.n ? `median time from account to first payment · ${tp.within1h}% pay within the hour` : 'time from account to first payment'} />
+      </div>
+
+      <div className="an-cols">
+        <ChartCard title="Visitors per day" csv="visitors-daily" rows={days.map((r) => ({ day: r.day, visitors: r.visitors }))}>
+          <Chart label="Visitors per day" rows={dayRows(days, ['visitors'])} series={one('visitors', 'Visitors', COLORS.blue)} avg />
+        </ChartCard>
+        <ChartCard title="Offer page and checkout" sub="People who saw /offer, and checkouts started. The gap between the lines is where the decision is lost." csv="offer-and-checkout-daily"
+          rows={days.map((r) => ({ day: r.day, offer_viewers: r.offerViewers, checkouts_started: r.checkouts, first_payments: r.paid }))}
+          legend={[{ key: 'offerViewers', label: 'Saw /offer', color: COLORS.blue }, { key: 'checkouts', label: 'Started checkout', color: COLORS.orange }, { key: 'paid', label: 'Paid', color: COLORS.aqua }]}>
+          <Chart kind="line" label="Offer viewers, checkouts and payments per day" rows={dayRows(days, ['offerViewers', 'checkouts', 'paid'])}
+            series={[{ key: 'offerViewers', label: 'Saw /offer', color: COLORS.blue }, { key: 'checkouts', label: 'Started checkout', color: COLORS.orange }, { key: 'paid', label: 'Paid', color: COLORS.aqua }]} />
+        </ChartCard>
+        <ChartCard title="New accounts per day" csv="new-accounts-daily" rows={days.map((r) => ({ day: r.day, new_accounts: r.signups }))}>
+          <Chart label="New accounts per day" rows={dayRows(days, ['signups'])} series={one('signups', 'New accounts', COLORS.blue)} avg />
+        </ChartCard>
+        <ChartCard title="Paying members, cumulative" sub="Everyone who has ever paid, adding up over time." csv="paying-members-cumulative" rows={days.map((r) => ({ day: r.day, new_paying: r.paid, paying_members_total: r.payingMembers }))}>
+          <Chart kind="line" area label="Paying members, cumulative" rows={dayRows(days, ['payingMembers'])} series={one('payingMembers', 'Paying members', COLORS.blue)} />
+        </ChartCard>
+        <ChartCard title="First-payment revenue per day" sub="Estimated from plan prices ($9 first month, $39 for 90 days). Renewals are not recorded here, so this undercounts." csv="revenue-daily" rows={days.map((r) => ({ day: r.day, est_usd: r.revenueUsd, new_paying: r.paid }))}>
+          <Chart label="First-payment revenue per day" rows={dayRows(days, ['revenueUsd'])} series={one('revenueUsd', 'Revenue', COLORS.aqua)} valueFmt={fmtUsd} />
+        </ChartCard>
+        <ChartCard title="Plans and devices" csv="plans-devices" rows={[...G.plans.map((p: Data) => ({ kind: 'plan', name: p.plan, payments: p.payments, est_usd: p.estUsd })), ...G.devices.map((p: Data) => ({ kind: 'device', name: p.key, payments: p.count, est_usd: '' }))]}>
+          <p className="an-sub2">Paid checkouts by plan</p>
+          <HBars rows={G.plans.map((p: Data) => ({ label: p.plan, value: p.payments, note: fmtUsd(p.estUsd) }))} />
+          <p className="an-sub2" style={{ marginTop: 14 }}>Paying members by first device</p>
+          <HBars rows={G.devices.map((p: Data) => ({ label: p.key, value: p.count }))} color={COLORS.aqua} />
+        </ChartCard>
+      </div>
+
+      <h2 className="an-section">When people sign up</h2>
+      <div className="an-controls">
+        <div className="an-seg" role="group" aria-label="What to count">
+          <button type="button" className={basis === 'paid' ? 'on' : ''} onClick={() => setBasis('paid')}>First payment</button>
+          <button type="button" className={basis === 'createdPaying' ? 'on' : ''} onClick={() => setBasis('createdPaying')}>Account created · paying</button>
+          <button type="button" className={basis === 'created' ? 'on' : ''} onClick={() => setBasis('created')}>Account created · everyone</button>
+        </div>
+      </div>
+      {T.n === 0 ? <div className="an-card an-muted">Nothing to show for {basisText} yet.</div> : (
+        <>
+          <div className="an-tiles">
+            <Tile value={T.avgMin === null || T.spread < 0.2 ? '—' : clock(T.avgMin)} label={T.spread < 0.2 ? 'average time of day · no clear pattern (spread across the clock)' : `average time of day (${tz.split('/').pop()?.replace('_', ' ')}) · ${T.spread >= 0.6 ? 'tight cluster' : 'loose cluster'}`} />
+            <Tile value={winTxt} label={`busiest 3 hours · ${T.windowCount} of ${T.n} ${basisText} (${Math.round((100 * T.windowCount) / T.n)}%)`} />
+            <Tile value={WEEKDAYS_LONG[T.topDay]} label={`most common day · ${T.days[T.topDay]} of ${T.n}`} />
+            <Tile value={T.n} label={`${basisText} counted${T.n < 30 ? ' · small sample, a hint not a pattern' : ''}`} />
+          </div>
+          <p className="an-insight">
+            Of <b>{T.n}</b> {basisText}, <b>{T.windowCount}</b> ({Math.round((100 * T.windowCount) / T.n)}%) landed between <b>{winTxt}</b>, and <b>{WEEKDAYS_LONG[T.topDay]}</b> was the most common day (all times in {tz.replace('_', ' ')}).
+            {T.avgMin !== null && T.spread >= 0.2 && <> The average is <b>{clock(T.avgMin)}</b>, calculated as a circular mean so that 23:30 and 00:30 average to midnight, not noon.</>}
+          </p>
+          <div className="an-cols">
+            <ChartCard title="By hour of day" sub="Darker bars are the busiest three hours in a row." csv={`signup-hours-${basis}`} rows={T.hours.map((n, h) => ({ hour: hh(h), count: n }))}>
+              <Chart label={`${basisText} by hour of day`} rows={hourRows} series={one('n', 'Signups', COLORS.blue)} hl={windowHours} height={190} />
+            </ChartCard>
+            <ChartCard title="By day of week" csv={`signup-weekdays-${basis}`} rows={T.days.map((n, i) => ({ weekday: WEEKDAYS_LONG[i], count: n }))}>
+              <Chart label={`${basisText} by day of week`} rows={weekRows} series={one('n', 'Signups', COLORS.blue)} hl={[T.topDay]} height={190} />
+            </ChartCard>
+          </div>
+          <ChartCard title="Day and hour together" csv={`signup-heatmap-${basis}`} rows={T.matrix.flatMap((r, d) => r.map((n, h) => ({ weekday: WEEKDAYS_LONG[d], hour: hh(h), count: n })))}>
+            <Heatmap matrix={T.matrix} rowLabels={WEEKDAYS} unit={basisText} />
+          </ChartCard>
+        </>
+      )}
+
+      <h2 className="an-section">When visitors are on the site</h2>
+      <div className="an-cols">
+        <ChartCard title="Page loads by hour" sub={`Last 90 days, in ${tz.replace('_', ' ')} time. Useful for timing the daily digest and the priority scrape. Busiest three hours: ${hh(V.windowStart)}–${hh(V.windowStart + 3)}.`}
+          csv="visits-by-hour" rows={V.hours.map((n, h) => ({ hour: hh(h), page_loads: n }))}>
+          <Chart label="Page loads by hour" rows={vHourRows} series={one('n', 'Page loads', COLORS.blue)} hl={vWindow} height={190} />
+        </ChartCard>
+        <ChartCard title="Page loads by day and hour" csv="visits-heatmap" rows={V.matrix.flatMap((r, d) => r.map((n, h) => ({ weekday: WEEKDAYS_LONG[d], hour: hh(h), page_loads: n })))}>
+          <Heatmap matrix={V.matrix} rowLabels={WEEKDAYS} unit="page loads" />
+        </ChartCard>
+      </div>
+
+      <h2 className="an-section">What sends people to the offer page</h2>
+      <ChartCard title="Entry points, 30 days" sub="People who saw /offer from each link, and how many of them started checkout. ‘(none)’ is a direct visit or an older link without a source." csv="offer-entry-points" rows={G.offerSources.map((r: Data) => ({ source: r.src, views: r.views, people: r.people, checkouts_started: r.started, paid: r.paid, started_pct_of_people: r.startPct }))}>
+        {G.offerSources.length === 0 ? <p className="an-muted">No offer-page views recorded yet.</p> : (
+          <div className="an-tablewrap" style={{ maxHeight: 'none' }}>
+            <table className="an-compact">
+              <thead><tr><th>Source</th><th style={{ width: '34%' }}>People</th><th className="num">People</th><th className="num">Started checkout</th><th className="num">Paid</th><th className="num">Started %</th></tr></thead>
+              <tbody>{G.offerSources.map((r: Data) => (
+                <tr key={r.src}>
+                  <td className="mono">{r.src}</td>
+                  <td><span className="an-bar-in"><i style={{ width: `${Math.max(2, (100 * r.people) / Math.max(1, G.offerSources[0].people))}%` }} /></span></td>
+                  <td className="num">{r.people}</td><td className="num">{r.started}</td><td className="num">{r.paid}</td><td className="num">{r.startPct}%</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </ChartCard>
+    </section>
   )
 }
 
@@ -258,6 +477,7 @@ const CSS = `
 .an-funnel { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .an-funnel li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid #EEE9DD; }
 .an-funnel b { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 20px; } .an-funnel small { color: var(--ink-3); min-width: 110px; text-align: right; }
+.an-section { margin: 14px 2px 0; font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 20px; }
 .bars { display: flex; align-items: flex-end; gap: 3px; height: 90px; margin: 6px 0 10px; }
 .bar { flex: 1; display: flex; align-items: flex-end; height: 100%; }
 .bar i { display: block; width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; opacity: .85; }
