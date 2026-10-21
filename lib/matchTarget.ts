@@ -10,7 +10,8 @@ import { regionsOf, canonPlace } from './widenLocation'
 const ROLE_FAMILIES: string[][] = [
   ['engineer', 'developer', 'dev', 'programmer', 'swe'],
   ['manager', 'lead', 'head'],
-  ['analyst', 'specialist'],
+  ['analyst'],
+  ['specialist'],
   ['designer', 'design'],
   ['architect'],
   ['consultant', 'advisor'],
@@ -86,29 +87,30 @@ export function keywordMatches(keyword: string, title: string, summary?: string 
   const kt = tokens(keyword)
   if (kt.length === 0) return false
 
-  const hay = tokens(`${title} ${summary ?? ''}`)
-  const haySet = new Set(hay)
-  const hayText = hay.join(' ')
-
   const roleWords = kt.filter((t) => familyOf(t))
   const distinctive = kt.filter((t) => !familyOf(t) && !FILLER.has(t))
 
-  // every distinctive token has to show up somewhere
-  const distinctiveOk = distinctive.every((t) => tokenPresent(t, haySet, hayText))
-
-  if (!distinctiveOk) return false
+  const titleToks = tokens(title)
+  const titleSet = new Set(titleToks)
+  const titleText = titleToks.join(' ')
 
   if (roleWords.length === 0) {
-    // keyword was all distinctive ("fixed income") — the check above is enough,
-    // but insist on at least one token so a single filler word can't match all
-    return distinctive.length > 0
+    // A topic keyword ("fixed income", "grc", "private equity") names a subject, not a job, so the
+    // summary counts too; insist on at least one token so a single filler word can't match all.
+    if (distinctive.length === 0) return false
+    const hay = tokens(`${title} ${summary ?? ''}`)
+    const haySet = new Set(hay)
+    const hayText = hay.join(' ')
+    return distinctive.every((t) => tokenPresent(t, haySet, hayText))
   }
 
-  // the role word matches if any sibling in its family appears
-  return roleWords.some((rw) => {
-    const fam = familyOf(rw)!
-    return fam.some((sib) => tokenPresent(sib, haySet, hayText))
-  })
+  // A role keyword ("business analyst", ".net developer") is matched on the TITLE only. Matching the
+  // summary turned "business analyst" into every specialist whose blurb mentioned the business, and
+  // members cancel on noise faster than on gaps. The role word may be any sibling in its family
+  // (developer for engineer); the distinctive words must all be there.
+  const distinctiveOk = distinctive.every((t) => tokenPresent(t, titleSet, titleText))
+  if (!distinctiveOk) return false
+  return roleWords.some((rw) => familyOf(rw)!.some((sib) => tokenPresent(sib, titleSet, titleText)))
 }
 
 /**

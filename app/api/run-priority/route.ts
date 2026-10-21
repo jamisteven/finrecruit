@@ -1,3 +1,5 @@
+import { employerType } from '@/lib/employer'
+import { normalizeSector } from '@/lib/sectors'
 import { NextRequest, NextResponse } from 'next/server'
 import { inferWorkType } from '@/lib/workType'
 import { normalisePost, ApifyPost } from '@/lib/apify'
@@ -40,6 +42,9 @@ export async function POST(req: NextRequest) {
 
   const db = createServerClient()
   let batch: string[] = []
+  // Posts being classified right now, across both lanes. A city query and its widened regional
+  // query often return the same post at the same moment; without this both paid to classify it.
+  const inFlight = new Set<string>()
 
   // Housekeeping first: stop paying for members whose pass ended a few days ago
   if (isCron) { try { await releaseLapsedMembers(db) } catch (e) { console.error('[run-priority] lapse release failed', e) } }
@@ -132,6 +137,8 @@ export async function POST(req: NextRequest) {
             if (!post.postUrl || !post.text || post.text.length < 20) return
 
             // Known job OR already-discarded post: either way, no classifier call
+            if (inFlight.has(post.postUrl)) { result.duplicates_skipped++; queryDuplicates++; return }
+            inFlight.add(post.postUrl)
             if (await alreadySeen(db, post.postUrl)) { result.duplicates_skipped++; queryDuplicates++; return }
 
             // Same cheap gate the hashtag sweep uses: no hiring language, no classifier call
@@ -181,8 +188,7 @@ export async function POST(req: NextRequest) {
               return
             }
 
-            const jobSector = ['finance', 'tech', 'legal', 'marketing', 'realestate']
-              .includes(classified.sector) ? classified.sector : 'other'
+            const jobSector = normalizeSector(classified.sector)
 
             const offMarket = offMarketReason(classified)
             if (offMarket) {
@@ -213,6 +219,7 @@ export async function POST(req: NextRequest) {
               extracted_at: new Date().toISOString(),
               work_type: inferWorkType(classified.location, classified.tags, classified.title),
               is_verified_job: true,
+              employer_type: employerType(classified.employer, post.text, post.authorHeadline, classified.company, jobSector, classified.apply_method),
             })
             if (!error) { result.inserted++; queryInserted++ }
             else if (error.code === '23505') { result.duplicates_skipped++; queryDuplicates++ }

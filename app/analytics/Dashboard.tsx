@@ -95,12 +95,12 @@ export default function Dashboard() {
               </div>
               {m.targets.length === 0 ? <p className="an-muted">No targets saved.</p> : (
                 <table>
-                  <thead><tr><th>Role</th><th>Location</th><th className="num">Exact 7d</th><th className="num">Exact 14d</th><th className="num">Anywhere 14d</th><th>Query</th><th>Last run</th></tr></thead>
+                  <thead><tr><th>Role</th><th>Location</th><th className="num">Exact 7d</th><th className="num">Exact 14d</th><th className="num">Agency 14d</th><th className="num">Anywhere 14d</th><th>Query</th><th>Last run</th></tr></thead>
                   <tbody>
                     {m.targets.map((t: Data, i: number) => (
                       <tr key={i} className={t.flag ? 'flag' : ''}>
                         <td>{t.keyword}</td><td>{t.location || 'anywhere'}</td>
-                        <td className="num">{t.exact7}</td><td className="num">{t.exact14}</td><td className="num">{t.anywhere14}</td>
+                        <td className="num">{t.exact7}</td><td className="num">{t.exact14}</td><td className="num">{t.agency14}</td><td className="num">{t.anywhere14}</td>
                         <td className="mono">{t.query ?? '—'}</td>
                         <td>{t.flag ? <span className="an-flag">{t.flag}</span> : <>{ago(t.lastRunAt)}{t.slowLane && <span className="an-lane" title="Last two runs kept at most one job; runs every 4 days instead of every 12 hours">slow lane</span>}</>}</td>
                       </tr>

@@ -16,7 +16,8 @@ export type TargetStatus = {
   query: string
   lastRunAt: string | null
   ranSinceSave: boolean
-  exact: number        // roles in the last 14 days matching role + place
+  exact: number        // roles in the last 14 days matching role + place (direct employers)
+  agency: number       // the same, posted by agencies / staffing firms
   nearby: number       // same role, anywhere (the fallback)
   newSinceYesterday: number
   widened: { query: string; lastRunAt: string | null } | null
@@ -44,7 +45,7 @@ export async function memberStatus(db: Db, userId: string): Promise<MemberStatus
 
   const [{ data: queries }, { data: jobs }] = await Promise.all([
     db.from('priority_queries').select('query, last_run_at, active'),
-    db.from('jobs').select('title, location, work_type, extracted_at')
+    db.from('jobs').select('title, location, work_type, extracted_at, employer_type')
       .gte('extracted_at', new Date(Date.now() - 14 * DAY).toISOString())
       .or('quality.is.null,quality.neq.low').limit(5000),
   ])
@@ -55,17 +56,20 @@ export async function memberStatus(db: Db, userId: string): Promise<MemberStatus
   const rows: TargetStatus[] = targets.map((t) => {
     const q = primaryQuery(t); const qi = byText.get(q.toLowerCase())
     const w = widenedQueryFor(t); const wi = w ? byText.get(w.toLowerCase()) : undefined
-    let exact = 0, nearby = 0, fresh = 0
+    let exact = 0, agency = 0, nearby = 0, fresh = 0
     for (const j of jobs ?? []) {
       if (!keywordMatches(t.keyword, j.title ?? '', null)) continue
       nearby++
-      if (locationMatches(t.location, j.location, j.work_type)) { exact++; if (j.extracted_at >= since) fresh++ }
+      if (locationMatches(t.location, j.location, j.work_type)) {
+        if (j.employer_type === 'agency') agency++
+        else { exact++; if (j.extracted_at >= since) fresh++ }
+      }
     }
     return {
       keyword: t.keyword, location: t.location, query: q,
       lastRunAt: qi?.last_run_at ?? null,
       ranSinceSave: !!qi?.last_run_at && qi.last_run_at >= savedAt,
-      exact, nearby, newSinceYesterday: fresh,
+      exact, agency, nearby, newSinceYesterday: fresh,
       widened: w ? { query: w, lastRunAt: wi?.last_run_at ?? null } : null,
     }
   })

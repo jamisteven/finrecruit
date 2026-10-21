@@ -1,3 +1,4 @@
+import { employerType } from '@/lib/employer'
 import { NextRequest, NextResponse } from 'next/server'
 import { inferWorkType } from '@/lib/workType'
 import { normalisePost, ApifyPost } from '@/lib/apify'
@@ -216,6 +217,7 @@ export async function POST(req: NextRequest) {
           extracted_at: new Date().toISOString(),
           work_type: inferWorkType(classified.location, classified.tags, classified.title),
           is_verified_job: true,
+          employer_type: employerType(classified.employer, post.text, post.authorHeadline, classified.company, sector, classified.apply_method),
         })
 
         recordDecision(ctx, !error ? 'kept' : error.code === '23505' ? 'duplicate' : 'error')

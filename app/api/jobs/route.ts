@@ -1,3 +1,4 @@
+import { JOB_SECTORS } from '@/lib/sectors'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
@@ -38,6 +39,9 @@ const SEARCH_SYNONYMS: Record<string, string[]> = {
   sdr: ['sales development'],
   bdr: ['business development'],
   csm: ['customer success'],
+  biotech: ['biotech', 'pharma', 'life science', 'clinical', 'cell therapy', 'gene therapy', 'drug discovery', 'drug development', 'regulatory affairs', 'cro'],
+  pharma: ['pharma', 'biotech', 'life science', 'clinical', 'drug'],
+  msl: ['medical science liaison', 'msl'],
   cfo: ['chief financial', 'cfo'],
   coo: ['chief operating', 'coo'],
   cto: ['chief technology', 'cto'],
@@ -52,7 +56,7 @@ const SEARCH_SYNONYMS: Record<string, string[]> = {
 // server instance, then every request (search, filters, free/pass tiers) is answered from
 // memory. Before this, every page load pulled the full table (~17 MB) from Supabase.
 // ---------------------------------------------------------------------------
-const COLUMNS = 'id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, author_avatar, posted_at, extracted_at, is_verified_job, quality, work_type'
+const COLUMNS = 'id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, author_avatar, posted_at, extracted_at, is_verified_job, quality, work_type, employer_type'
 const HISTORY_DAYS = 30                 // longest window the page can ask for
 const CORE_DAYS = 14                    // sent by default; older roles (CORE_DAYS..HISTORY_DAYS) only on request (?archive=1)
 const OLD_TTL_MS = 4 * 3600_000         // roles older than 48h barely change: refresh every 4h
@@ -116,7 +120,7 @@ const loadRecent = () => load('recent', RECENT_TTL_MS, (q) => q
 
 // Counting the older roles costs Supabase almost nothing (no rows are sent), so the page can show
 // the full total without downloading them.
-const SECTORS = ['finance', 'tech', 'legal', 'marketing', 'realestate', 'sales', 'hr']
+const SECTORS = [...JOB_SECTORS]
 let countsCache: { v: Record<string, number>; at: number } | undefined
 async function loadArchiveCounts(): Promise<Record<string, number> | undefined> {
   if (countsCache && Date.now() - countsCache.at < ARCHIVE_TTL_MS / 2) return countsCache.v

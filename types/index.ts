@@ -1,5 +1,5 @@
 export type Seniority = 'Intern' | 'Junior' | 'Mid' | 'Senior' | 'VP' | 'Director' | 'MD' | 'Partner' | 'C-Suite' | 'Unknown'
-export type Sector = 'all' | 'finance' | 'tech' | 'legal' | 'marketing' | 'realestate' | 'sales' | 'hr'
+export type Sector = 'all' | 'finance' | 'tech' | 'legal' | 'marketing' | 'realestate' | 'sales' | 'hr' | 'biotech'
 export type WorkType = 'Remote' | 'On-site' | 'Hybrid'
 
 export type JobPost = {
@@ -20,6 +20,7 @@ export type JobPost = {
   author_avatar?: string | null
   author_linkedin_url: string | null
   gated?: boolean         // free tier: recruiter and post link withheld server-side
+  employer_type?: 'direct' | 'agency' | null   // who is hiring: the company itself, or an agency/staffing firm placing at a client
   raw_text: string
   posted_at: string | null
   extracted_at: string

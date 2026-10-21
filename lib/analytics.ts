@@ -45,7 +45,7 @@ export async function membersPanel(db: Db) {
     fetchAll(db, 'user_targets', 'user_id, keyword, location, created_at', () => undefined),
     fetchAll(db, 'priority_queries', 'query, keyword, location, active, last_run_at, user_count', () => undefined),
     fetchAll(db, 'checkout_events', '*', (q: Q) => q.not('paid_at', 'is', null)),
-    fetchAll(db, 'jobs', 'id, title, location, work_type, extracted_at, quality', (q: Q) => q.gte('extracted_at', ago(14)).or('quality.is.null,quality.neq.low')),
+    fetchAll(db, 'jobs', 'id, title, location, work_type, extracted_at, quality, employer_type', (q: Q) => q.gte('extracted_at', ago(14)).or('quality.is.null,quality.neq.low')),
     fetchAll(db, 'visits', 'user_id, visited_at', (q: Q) => q.not('user_id', 'is', null).gte('visited_at', ago(30))),
     fetchAll(db, 'ingest_runs', 'query, run_at, posts_returned, jobs_inserted', (q: Q) => q.eq('pipeline', 'priority').gte('run_at', ago(30)).order('run_at', { ascending: false })),
   ])
@@ -67,11 +67,14 @@ export async function membersPanel(db: Db) {
       const mine = targets.filter((t) => t.user_id === p.id)
       const rows = mine.map((t) => {
         const q = qByKey.get(`${String(t.keyword).toLowerCase()}|${String(t.location ?? '').toLowerCase()}`)
-        let exact7 = 0, exact14 = 0, anywhere14 = 0
+        let exact7 = 0, exact14 = 0, agency14 = 0, anywhere14 = 0
         for (const j of jobs) {
           if (!keywordMatches(t.keyword, j.title ?? '', null)) continue
           anywhere14++
-          if (locationMatches(t.location, j.location, j.work_type)) { exact14++; if (j.extracted_at >= ago(7)) exact7++ }
+          if (locationMatches(t.location, j.location, j.work_type)) {
+            if (j.employer_type === 'agency') { agency14++; continue }
+            exact14++; if (j.extracted_at >= ago(7)) exact7++
+          }
         }
         const lastRun = q?.last_run_at ? new Date(q.last_run_at).getTime() : null
         const dud = q ? isDud(String(q.query)) : false
@@ -80,7 +83,7 @@ export async function membersPanel(db: Db) {
         const flag = !q ? 'no query' : !q.active ? 'inactive' : lastRun === null ? 'never ran'
           : dud ? (ageDays! > 5 ? 'stale' : null) : (ageDays! > 2 ? 'stale' : null)
         return {
-          keyword: t.keyword, location: t.location, exact7, exact14, anywhere14,
+          keyword: t.keyword, location: t.location, exact7, exact14, agency14, anywhere14,
           query: q?.query ?? null, active: q?.active ?? null, lastRunAt: q?.last_run_at ?? null,
           slowLane: dud, flag,
         }

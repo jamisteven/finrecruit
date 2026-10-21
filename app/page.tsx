@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase-browser'
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, Fragment } from 'react'
 import { JobPost, FilterState, Sector, WorkType } from '@/types'
 import { keywordMatches, locationMatches } from '@/lib/matchTarget'
 import { nearness } from '@/lib/widenLocation'
@@ -21,6 +21,7 @@ const SECTORS: { id: Sector; label: string }[] = [
   { id: 'realestate', label: 'Real Estate' },
   { id: 'sales',     label: 'Sales' },
   { id: 'hr',        label: 'HR & Talent' },
+  { id: 'biotech',   label: 'Biotech & Pharma' },
 ]
 
 const WORK_TYPES: WorkType[] = ['Remote', 'Hybrid', 'On-site']
@@ -50,7 +51,7 @@ const sectorLabel = (s: string) =>
   (s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Other')
 
 // ── Drop schedule (UTC) — mirrors the crons in vercel.json ──
-const DROP_SECTORS_FULL = ['finance', 'tech', 'legal', 'marketing', 'realestate', 'sales', 'hr']
+const DROP_SECTORS_FULL = ['finance', 'tech', 'legal', 'marketing', 'realestate', 'sales', 'hr', 'biotech']
 type DropBatch = { days: number[]; utcHour: number; utcMin: number; sectors: string[] }
 // Fallback only — the live schedule comes from /api/schedule, derived from vercel.json
 const DROP_BATCHES_FALLBACK: DropBatch[] = [
@@ -696,7 +697,11 @@ export default function HomePage() {
     })
   }, [myTargets])
 
-  const myExact = useMemo(() => allJobs.filter((j) => matchesTargets(j, true)), [allJobs, matchesTargets])
+  const myExactAll = useMemo(() => allJobs.filter((j) => matchesTargets(j, true)), [allJobs, matchesTargets])
+  // Direct employers lead. Agency and staffing posts (contract placements at a client) are real
+  // openings but a different kind, so they form their own group under the direct ones.
+  const myExact = useMemo(() => myExactAll.filter((j) => j.employer_type !== 'agency'), [myExactAll])
+  const myAgency = useMemo(() => myExactAll.filter((j) => j.employer_type === 'agency'), [myExactAll])
   // How near a fallback job is to the member's own places: same state, same country, elsewhere.
   const roughTier = useCallback((j: JobPost): 1 | 2 | 3 => {
     let best: 1 | 2 | 3 = 3
@@ -722,7 +727,7 @@ export default function HomePage() {
         const d = toTime(b.posted_at) - toTime(a.posted_at)
         return filters.sortBy === 'newest' ? d : -d
       }
-      return [...[...myExact].sort(byDate), ...myRough]
+      return [...[...myExact].sort(byDate), ...[...myAgency].sort(byDate), ...myRough]
     }
     const list = allJobs.filter((job) => {
       if (filters.sector !== 'all' && job.sector !== filters.sector) return false
@@ -759,7 +764,10 @@ export default function HomePage() {
       const d = toTime(b.posted_at) - toTime(a.posted_at)
       return filters.sortBy === 'newest' ? d : -d
     })
-  }, [allJobs, filters.sector, filters.locations, filters.workTypes, filters.sortBy, myFeedOn, myExact, myRough])
+  }, [allJobs, filters.sector, filters.locations, filters.workTypes, filters.sortBy, myFeedOn, myExact, myAgency, myRough])
+  // where the agency group and the nearby group begin in the matches feed (section labels go there)
+  const firstAgencyId = myFeedOn && myAgency.length > 0 ? [...myAgency].sort((a, b) => toTime(b.posted_at) - toTime(a.posted_at))[filters.sortBy === 'newest' ? 0 : myAgency.length - 1]?.id ?? null : null
+  const firstRoughId = myFeedOn && myRough.length > 0 ? myRough[0].id : null
 
   // When a search comes back thin, work out what relaxing each filter would give.
   // allJobs is already search-filtered server-side, so these are cheap recounts.
@@ -843,6 +851,7 @@ export default function HomePage() {
       realestate: allJobs.filter((j) => j.sector === 'realestate').length + plus('realestate'),
       sales: allJobs.filter((j) => j.sector === 'sales').length + plus('sales'),
       hr: allJobs.filter((j) => j.sector === 'hr').length + plus('hr'),
+      biotech: allJobs.filter((j) => j.sector === 'biotech').length + plus('biotech'),
     }
   }, [allJobs, olderPending])
 
@@ -1646,7 +1655,7 @@ export default function HomePage() {
               )}
               {myFeedOn && myExact.length > 0 && myRough.length > 0 && (
                 <p className="match-note">
-                  <b>{myExact.length} match your searches exactly.</b> Below those,
+                  <b>{myExact.length} match your searches exactly.</b>{myAgency.length > 0 && <> {myAgency.length} more via agencies.</>} Below those,
                   {' '}{myRough.length} more with the same job titles{myNearby > 0 ? <> — {myNearby} nearby (same state or country), then the rest</> : ' in other places'}.
                 </p>
               )}
@@ -1659,7 +1668,14 @@ export default function HomePage() {
               {earlierJobs.slice(0, visibleCount).map((job, jobIndex) => {
                 const wt = inferWorkType(job)
                 return (
-                  <article key={job.id} id={`job-${job.id}`} className={`card${highlightId === job.id ? ' flash' : ''}`} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
+                  <Fragment key={job.id}>
+                  {job.id === firstAgencyId && (
+                    <div className="sec-head group-head"><span>Via agencies</span><i /><em className="sec-note">contract and placement roles · {myAgency.length}</em></div>
+                  )}
+                  {job.id === firstRoughId && (
+                    <div className="sec-head group-head"><span>Same roles, other places</span><i /><em className="sec-note">{myNearby > 0 ? `${myNearby} nearby, then the rest` : `${myRough.length}`}</em></div>
+                  )}
+                  <article id={`job-${job.id}`} className={`card${highlightId === job.id ? ' flash' : ''}`} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
                     <div className="card-top">
                       <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}</span>
                       {job.is_verified_job && (
@@ -1673,6 +1689,7 @@ export default function HomePage() {
                           Posted {job.repost_count + 1}×
                         </span>
                       )}
+                      {job.employer_type === 'agency' && <span className="agency-tag" title="Posted by a recruitment agency or staffing firm placing at a client">Agency</span>}
                       {job.posted_at && <span className={`ago${isFresh(job.posted_at) ? ' fresh' : ''}`}>{timeAgo(job.posted_at)}</span>}
                     </div>
 
@@ -1742,6 +1759,7 @@ export default function HomePage() {
                     </div>
                     )}
                   </article>
+                  </Fragment>
                 )
               })}
             </div>
@@ -1803,6 +1821,7 @@ export default function HomePage() {
           --sec-realestate:#4a3aa7;
           --sec-sales:#a8571c;
           --sec-hr:#1f7a6b;
+          --sec-biotech:#0E7C9B;
           --link:      #1B4F82;
           --accent:    #24468f;
           --accent-soft:#E4EAF6;
@@ -1831,6 +1850,7 @@ export default function HomePage() {
           --sec-realestate:#b3a7f2;
           --sec-sales:#e8a86a;
           --sec-hr:#6fc9b8;
+          --sec-biotech:#4FB3D1;
           --link:      #7FB3E3;
           --accent:    #6F97EE;
           --accent-soft:#212B45;
@@ -2248,6 +2268,8 @@ export default function HomePage() {
         .ulj .locked-sub { font-size: 13px; color: var(--ink-2); margin: 6px 0 14px; }
         .ulj .sec-tag { display: inline-flex; align-items: center; gap: 7px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); }
         .ulj .sec-tag .dot { width: 8px; height: 8px; border-radius: 3px; background: var(--sec); }
+        .ulj .agency-tag { font: 500 10.5px var(--font-spline-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--hairline-2); padding: 1px 7px; border-radius: 6px; }
+        .ulj .sec-head.group-head { padding-top: 14px; }
         .ulj .verified { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-3); }
         .ulj .verified svg { color: var(--live); }
         .ulj .reposts { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }

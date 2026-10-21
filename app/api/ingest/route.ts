@@ -1,3 +1,5 @@
+import { employerType } from '@/lib/employer'
+import { normalizeSector } from '@/lib/sectors'
 import { NextRequest, NextResponse } from 'next/server'
 import { inferWorkType } from '@/lib/workType'
 import { runApifyScraperForSector, normalisePost, Sector, SECTOR_QUERIES, PRIORITY_QUERIES, dayIndex } from '@/lib/apify'
@@ -152,7 +154,7 @@ export async function POST(req: NextRequest) {
         // A finance query that surfaces a tech job files it under tech. Real jobs outside
         // our verticals are kept as 'other' (we've already paid to classify them, and
         // paying users search for roles like GRC, enablement and customer experience).
-        const jobSector: string = SECTORS.includes(classified.sector as Sector) ? classified.sector : 'other'
+        const jobSector: string = normalizeSector(classified.sector)
         if (jobSector === 'other') result.skipped_off_sector++  // now counts 'other' roles kept, not dropped
 
         result.classified_as_jobs++
@@ -178,6 +180,7 @@ export async function POST(req: NextRequest) {
           extracted_at: new Date().toISOString(),
           work_type: inferWorkType(classified.location, classified.tags, classified.title),
           is_verified_job: true,
+          employer_type: employerType(classified.employer, post.text, post.authorHeadline, classified.company, jobSector, classified.apply_method),
         })
 
         recordDecision(ctx, !error ? 'kept' : error.code === '23505' ? 'duplicate' : 'error')

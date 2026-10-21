@@ -1,3 +1,5 @@
+import { employerType } from '@/lib/employer'
+import { normalizeSector } from '@/lib/sectors'
 import { NextRequest, NextResponse } from 'next/server'
 import { inferWorkType } from '@/lib/workType'
 import { normalisePost, ApifyPost, dayIndex } from '@/lib/apify'
@@ -270,8 +272,7 @@ export async function POST(req: NextRequest) {
 
             // Trust the classifier's sector over the regex hint. Real jobs outside our
             // verticals are kept as 'other' rather than dropped (already paid to classify).
-            const jobSector = ['finance','tech','legal','marketing','realestate']
-              .includes(classified.sector) ? classified.sector : 'other'
+            const jobSector = normalizeSector(classified.sector)
 
             const offMarket = offMarketReason(classified)
             if (offMarket) {
@@ -305,6 +306,7 @@ export async function POST(req: NextRequest) {
               extracted_at: new Date().toISOString(),
               work_type: inferWorkType(classified.location, classified.tags, classified.title),
               is_verified_job: true,
+              employer_type: employerType(classified.employer, post.text, post.authorHeadline, classified.company, jobSector, classified.apply_method),
             })
 
             recordDecision(ctx, !error ? 'kept' : error.code === '23505' ? 'duplicate' : 'error')

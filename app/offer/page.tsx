@@ -10,7 +10,7 @@ const PRICE = { intro: 9, monthly: 15, quarter: 39 }
 
 const SECTOR_LABELS: Record<string, string> = {
   finance: 'Finance', tech: 'Tech', legal: 'Legal', marketing: 'Marketing',
-  realestate: 'Real Estate', sales: 'Sales', hr: 'HR & Talent',
+  realestate: 'Real Estate', sales: 'Sales', hr: 'HR & Talent', biotech: 'Biotech & Pharma',
 }
 const sectorLabel = (s?: string | null) => (s && SECTOR_LABELS[s]) || 'Other'
 
