@@ -300,6 +300,14 @@ const HeroPromises = () => (
   </ul>
 )
 
+// Module-level so they stay out of render (the React Compiler flags Date.now inside the component).
+function ageDaysOf(iso: string | null | undefined) {
+  return iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : null
+}
+function stashGatedJob(job: { title: string; company: string | null; location: string | null; posted_at: string | null }) {
+  try { sessionStorage.setItem('bcj_gate_job', JSON.stringify({ title: job.title, company: job.company, location: job.location, posted_at: job.posted_at, at: Date.now() })) } catch {}
+}
+
 export default function HomePage() {
   const [dark, setDark] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -1013,6 +1021,13 @@ export default function HomePage() {
     } catch { /* never block the click */ }
   }
 
+  // A gated card (free tier, role under 48h old) sends the visitor to /offer. /offer opens with this
+  // role by name (title, company, location only), so remember it first.
+  const openGated = (job: JobPost, where: 'recruiter_line' | 'recruiter_title') => {
+    track('cta_click', { where, age_days: ageDaysOf(job.posted_at) })
+    stashGatedJob(job)
+  }
+
   const trackJobClick = (job: JobPost, index: number) => {
     const ageDays = job.posted_at
       ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000)
@@ -1694,7 +1709,8 @@ export default function HomePage() {
                     </div>
 
                     {job.gated
-                      ? <h3 className="gated-h">{job.title}</h3>
+                      // the title is the thing people tap first; it goes where the recruiter line goes
+                      ? <h3 className="gated-h"><a href="/offer?src=recruiter_title" onClick={() => openGated(job, 'recruiter_title')}>{job.title}</a></h3>
                       : <h3><a href={job.post_url} target="_blank" rel="noopener noreferrer" onClick={() => trackJobClick(job, jobIndex)}>{job.title}</a></h3>}
                     <p className="meta">
                       <b>{job.company ?? 'Company not disclosed'}</b>
@@ -1717,11 +1733,7 @@ export default function HomePage() {
                         <span className="avatar silhouette" aria-hidden="true">
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" /></svg>
                         </span>
-                        <a className="author gated-author" href="/offer?src=recruiter_line" onClick={() => {
-                          track('cta_click', { where: 'recruiter_line', age_days: job.posted_at ? Math.floor((Date.now() - new Date(job.posted_at).getTime()) / 86400000) : null })
-                          // so /offer can open with this role by name (title, company, location only)
-                          try { sessionStorage.setItem('bcj_gate_job', JSON.stringify({ title: job.title, company: job.company, location: job.location, posted_at: job.posted_at, at: Date.now() })) } catch {}
-                        }}>
+                        <a className="author gated-author" href="/offer?src=recruiter_line" onClick={() => openGated(job, 'recruiter_line')}>
                           Posted by <span className="blur-name" aria-hidden="true">{standInName(job.id)}</span>
                           {job.author_headline && <> · {job.author_headline}</>}
                           <span className="named">Unlock Name &amp; Profile Link &rarr;</span>
@@ -2521,6 +2533,8 @@ export default function HomePage() {
 
         /* ── Gated cards: the role in full, the person withheld ── */
         .ulj .card h3.gated-h { color: var(--ink); }
+        .ulj .card h3.gated-h a { color: inherit; text-decoration: none; }
+        .ulj .card h3.gated-h a:hover { text-decoration: underline; text-underline-offset: 3px; }
         .ulj .avatar.silhouette { color: var(--ink-3); }
         .ulj .author.gated-author { text-decoration: none; color: var(--ink-2); }
         .ulj .author.gated-author:hover .named { text-decoration: underline; text-underline-offset: 3px; }
