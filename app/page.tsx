@@ -2569,7 +2569,13 @@ export default function HomePage() {
         .ulj.dark .inline-cta { background: #0E1830; }
         .ulj .inline-cta h3 { font-family: var(--font-fraunces), Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.15; margin-bottom: 4px; }
         .ulj .inline-cta p { font-size: 14px; color: #A9B4CC; }
-        @media (max-width: 640px) { .ulj .inline-cta { grid-template-columns: 1fr; } }
+        .ulj .inline-cta > * { min-width: 0; }
+        @media (max-width: 640px) {
+          .ulj .inline-cta { grid-template-columns: minmax(0, 1fr); padding: 20px 18px; }
+          .ulj .inline-cta h3 { font-size: 24px; }
+          /* the label is too long for one line on a phone: fill the card, centre it, and wrap if it must */
+          .ulj .inline-cta .btn-primary { width: 100%; height: auto; min-height: 48px; padding: 12px 16px; white-space: normal; text-align: center; line-height: 1.25; }
+        }
 
         /* ── How it works bar (sits where the stat band was) ── */
         .ulj #feed { scroll-margin-top: 76px; }
