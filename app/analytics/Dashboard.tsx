@@ -110,9 +110,9 @@ export default function Dashboard() {
               rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ member: m.email, plan: m.plan, days_left: m.daysLeft }))}>
               <HBars rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ label: m.email, value: m.daysLeft, color: m.daysLeft <= 7 ? COLORS.orange : COLORS.blue }))} format={(n) => `${n}d`} empty="No active members" />
             </ChartCard>
-            <ChartCard title="Exact matches, last 7 days" sub="Roles that fit each member’s targets and location. A short bar is a member at risk of cancelling." csv="members-exact-matches"
-              rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ member: m.email, exact_matches_7d: m.exact7, target_problems: m.flags }))}>
-              <HBars rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ label: m.email, value: m.exact7, color: m.exact7 < 5 ? COLORS.orange : COLORS.blue }))} empty="No active members" />
+            <ChartCard title="Roles in each member’s feed, last 14 days" sub="Direct-employer roles that fit a target’s role and place, each counted once, the same way the member’s own feed counts them. Agency roles and same-role-elsewhere are in the table view. A short bar is a member at risk of cancelling." csv="members-feed-14d"
+              rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ member: m.email, direct_exact: m.feed.exact, via_agencies: m.feed.agency, same_role_elsewhere: m.feed.rough, different_roles_7d: m.exact7, target_problems: m.flags }))}>
+              <HBars rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ label: m.email, value: m.feed.exact, note: `+${m.feed.agency} agency, +${m.feed.rough} elsewhere`, color: m.feed.exact < 10 ? COLORS.orange : COLORS.blue }))} empty="No active members" />
             </ChartCard>
           </div>
           {M.members.map((m: Data) => (
@@ -124,7 +124,7 @@ export default function Dashboard() {
                     {m.plan ?? 'no payment'} · {m.payments} payment{m.payments === 1 ? '' : 's'} · {m.active ? `${m.daysLeft} days left` : `lapsed ${-m.daysLeft}d ago`} · last visit {ago(m.lastVisit)}{m.device ? ` · ${m.device}` : ''}
                   </span>
                 </div>
-                <div className="an-member-sum"><b>{m.exact7}</b><span>exact matches, 7d</span></div>
+                <div className="an-member-sum"><b>{m.feed.exact}</b><span>in their feed, 14d · +{m.feed.agency} via agencies · +{m.feed.rough} same role elsewhere</span></div>
               </div>
               {m.targets.length === 0 ? <p className="an-muted">No targets saved.</p> : (
                 <table>
@@ -142,10 +142,10 @@ export default function Dashboard() {
                 </table>
               )}
               {m.widened?.length > 0 ? (
-                <p className="an-widened"><b>Also running for them (wider areas):</b> {m.widened.map((w: Data, i: number) => (
+                <p className="an-widened"><b>Also running for their regions:</b> {m.widened.map((w: Data, i: number) => (
                   <span key={w.query}>{i > 0 && ' · '}<span className="mono">{w.query}</span> <span className={w.stale ? 'an-flag' : 'an-muted-inline'}>{w.active ? ago(w.lastRunAt) : 'inactive'}</span></span>
                 ))}</p>
-              ) : m.targets.some((t: Data) => t.location && t.location !== 'remote') ? (
+              ) : m.widenedMissing ? (
                 <p className="an-widened an-warn-text">No wider-area queries behind this member&apos;s cities — their fallback matches rely on the shared sweep only.</p>
               ) : null}
             </article>

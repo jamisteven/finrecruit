@@ -50,6 +50,24 @@ const CITY_TO_REGION: Record<string, string> = {
   'richmond': 'Virginia', 'arlington': 'Virginia', 'alexandria': 'Virginia',
   'new jersey': 'New Jersey', 'newark': 'New Jersey', 'jersey city': 'New Jersey',
   'indianapolis': 'Indiana', 'milwaukee': 'Wisconsin', 'madison': 'Wisconsin',
+  // More US cities and suburbs (states the table did not cover yet, and the towns a job post names)
+  'tallahassee': 'Florida', 'st petersburg': 'Florida', 'fort myers': 'Florida', 'boca raton': 'Florida',
+  'hoffman estates': 'Illinois', 'north chicago': 'Illinois', 'schaumburg': 'Illinois', 'oak brook': 'Illinois',
+  'rosemont': 'Illinois', 'skokie': 'Illinois', 'lake forest': 'Illinois', 'deerfield': 'Illinois',
+  'east canton': 'Ohio', 'akron': 'Ohio', 'dayton': 'Ohio', 'toledo': 'Ohio',
+  'huntsville': 'Alabama', 'louisville': 'Kentucky', 'lexington': 'Kentucky',
+  'oklahoma city': 'Oklahoma', 'tulsa': 'Oklahoma', 'omaha': 'Nebraska', 'lincoln': 'Nebraska',
+  'boise': 'Idaho', 'albuquerque': 'New Mexico', 'santa fe': 'New Mexico', 'honolulu': 'Hawaii',
+  'anchorage': 'Alaska', 'des moines': 'Iowa', 'little rock': 'Arkansas', 'new orleans': 'Louisiana',
+  'baton rouge': 'Louisiana', 'charleston': 'South Carolina', 'greenville': 'South Carolina',
+  'hartford': 'Connecticut', 'stamford': 'Connecticut', 'greenwich': 'Connecticut', 'new haven': 'Connecticut',
+  'providence': 'Rhode Island', 'burlington': 'Vermont', 'wilmington': 'Delaware',
+  'mclean': 'Virginia', 'reston': 'Virginia', 'herndon': 'Virginia', 'tysons': 'Virginia', 'chantilly': 'Virginia',
+  'bethesda': 'Maryland', 'rockville': 'Maryland',
+  'princeton': 'New Jersey', 'hoboken': 'New Jersey', 'morristown': 'New Jersey',
+  'frisco': 'Texas', 'mckinney': 'Texas', 'the woodlands': 'Texas',
+  'fresno': 'California', 'long beach': 'California', 'menlo park': 'California', 'redwood city': 'California',
+  'cupertino': 'California', 'fremont': 'California',
   // UK
   'london': 'United Kingdom', 'manchester': 'United Kingdom',
   'birmingham': 'United Kingdom', 'edinburgh': 'United Kingdom',
@@ -75,7 +93,9 @@ const US_REGIONS = new Set([
   'Colorado', 'Georgia', 'Florida', 'North Carolina', 'Arizona', 'Pennsylvania',
   'Michigan', 'Minnesota', 'Tennessee', 'Oregon', 'Utah', 'Nevada', 'Ohio',
   'Missouri', 'Maryland', 'Washington DC', 'Virginia', 'New Jersey', 'Indiana',
-  'Wisconsin',
+  'Wisconsin', 'Alabama', 'Kentucky', 'Oklahoma', 'Nebraska', 'Idaho', 'New Mexico', 'Hawaii', 'Alaska', 'Iowa',
+  'Arkansas', 'Louisiana', 'South Carolina', 'Connecticut', 'Rhode Island', 'Vermont', 'Delaware', 'Kansas',
+  'Mississippi', 'Montana', 'Wyoming', 'North Dakota', 'South Dakota', 'West Virginia', 'New Hampshire', 'Maine',
 ])
 
 export type WidenStep = { label: string; location: string | null }
@@ -117,7 +137,8 @@ const PLACE_ALIASES: Record<string, string> = {
 
 /** A place name as we compare it: trimmed, lower-case, aliases folded ("UK" → "united kingdom"). */
 export const canonPlace = (s: string) => {
-  const k = s.trim().toLowerCase()
+  // fold accents so "San José" is "san jose"
+  const k = s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   return PLACE_ALIASES[k] ?? k
 }
 const canon = canonPlace
@@ -136,6 +157,8 @@ export function regionsOf(location: string | null): string[] {
   out.add(whole)
   // "Dubai, UAE" / "Zürich, Switzerland": each comma part is a place in its own right
   const parts = location.split(/[,/|·]/).map(canon).filter(Boolean)
+  // "Multiple US Cities", "Remote (U.S.)": the country is named in the text
+  if (/\bU\.?S\.?A?\b|united states/.test(location)) out.add('united states')
   for (const part of parts) {
     out.add(part)
     const region = CITY_TO_REGION[part]

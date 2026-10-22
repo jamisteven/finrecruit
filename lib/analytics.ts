@@ -4,6 +4,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { keywordMatches, locationMatches } from './matchTarget'
 import { apifyBudget, budgetMode, USD_PER_POST } from './apifyBudget'
+import { widenedQueryFor } from './targetQueries'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, any, any>
@@ -70,6 +71,7 @@ export async function membersPanel(db: Db) {
       const exp = new Date(p.pass_expires_at).getTime()
       const paid = (paidBy.get(p.id) ?? []).sort((a, b) => String(b.paid_at).localeCompare(String(a.paid_at)))
       const mine = targets.filter((t) => t.user_id === p.id)
+      const unique7 = new Set<string>()   // each role once, however many of their targets it fits (what the feed counts)
       const rows = mine.map((t) => {
         const q = qByKey.get(`${String(t.keyword).toLowerCase()}|${String(t.location ?? '').toLowerCase()}`)
         let exact7 = 0, exact14 = 0, agency14 = 0, anywhere14 = 0
@@ -78,7 +80,7 @@ export async function membersPanel(db: Db) {
           anywhere14++
           if (locationMatches(t.location, j.location, j.work_type)) {
             if (j.employer_type === 'agency') { agency14++; continue }
-            exact14++; if (j.extracted_at >= ago(7)) exact7++
+            exact14++; if (j.extracted_at >= ago(7)) { exact7++; unique7.add(String(j.id)) }
           }
         }
         const lastRun = q?.last_run_at ? new Date(q.last_run_at).getTime() : null
@@ -93,19 +95,30 @@ export async function membersPanel(db: Db) {
           slowLane: dud, flag,
         }
       })
-      // the regional / national queries claimed for this member's cities (not shown per target)
-      const myKeywords = new Set(mine.map((t) => String(t.keyword).toLowerCase()))
-      const myLocations = new Set(mine.map((t) => String(t.location ?? '').toLowerCase()))
-      const widened = queries
-        .filter((q) => myKeywords.has(String(q.keyword).toLowerCase()) && !myLocations.has(String(q.location ?? '').toLowerCase()))
-        .map((q) => ({ query: q.query, active: q.active, lastRunAt: q.last_run_at ?? null,
-          stale: !q.active || !q.last_run_at || now - new Date(q.last_run_at).getTime() > 2 * DAY }))
+      // what their feed shows, counted the way the feed counts it (app/page.tsx): roles that fit a target's
+      // keyword AND place (direct, then via agencies), then same-keyword roles in other places. 14 days.
+      const feed = { exact: 0, agency: 0, rough: 0 }
+      for (const j of jobs) {
+        const kw = mine.filter((t) => keywordMatches(t.keyword, j.title ?? '', null))
+        if (!kw.length) continue
+        if (kw.some((t) => locationMatches(t.location, j.location, j.work_type))) { if (j.employer_type === 'agency') feed.agency++; else feed.exact++ }
+        else feed.rough++
+      }
+      // the region-level query each of their cities earns (San Antonio / Austin -> Texas), and whether it exists
+      const wanted = [...new Set(mine.map((t) => widenedQueryFor({ keyword: t.keyword, location: t.location })).filter((q): q is string => !!q).map((q) => q.toLowerCase()))]
+      const byText = new Map(queries.map((q) => [String(q.query).toLowerCase(), q]))
+      const widened = wanted.filter((w) => byText.has(w)).map((w) => {
+        const q = byText.get(w)!
+        return { query: q.query, active: q.active, lastRunAt: q.last_run_at ?? null,
+          stale: !q.active || !q.last_run_at || now - new Date(q.last_run_at).getTime() > 2 * DAY }
+      })
+      const widenedMissing = wanted.some((w) => !byText.has(w))
       return {
-        widened,
+        widened, widenedMissing, feed,
         email: p.email, plan: paid[0]?.plan ?? null, paidAt: paid[0]?.paid_at ?? null, payments: paid.length,
         expiresAt: p.pass_expires_at, daysLeft: Math.ceil((exp - now) / DAY), active: exp > now,
         device: p.signup_device ?? null, lastVisit: lastVisit.get(p.id) ?? null,
-        targets: rows, exact7: rows.reduce((s, r) => s + r.exact7, 0), flags: rows.filter((r) => r.flag).length,
+        targets: rows, exact7: unique7.size, flags: rows.filter((r) => r.flag).length,
       }
     })
     .sort((a, b) => Number(b.active) - Number(a.active) || b.daysLeft - a.daysLeft)

@@ -22,7 +22,7 @@ export async function buildDataset(db: Db, name: string, cache: Cache = {}): Pro
   switch (name) {
     case 'members': {
       const m = await members()
-      return m.members.map((x) => ({ email: x.email, active: x.active, plan: x.plan, last_paid_at: x.paidAt, payments: x.payments, expires_at: x.expiresAt, days_left: x.daysLeft, device: x.device, last_visit: x.lastVisit, targets: x.targets.length, exact_matches_7d: x.exact7, target_problems: x.flags }))
+      return m.members.map((x) => ({ email: x.email, active: x.active, plan: x.plan, last_paid_at: x.paidAt, payments: x.payments, expires_at: x.expiresAt, days_left: x.daysLeft, device: x.device, last_visit: x.lastVisit, targets: x.targets.length, exact_matches_7d_unique: x.exact7, feed_direct_14d: x.feed.exact, feed_agency_14d: x.feed.agency, feed_same_role_elsewhere_14d: x.feed.rough, target_problems: x.flags }))
     }
     case 'member_targets': {
       const m = await members()
