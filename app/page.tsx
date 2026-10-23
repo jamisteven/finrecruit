@@ -654,18 +654,13 @@ export default function HomePage() {
     if (remaining < 10 * 60_000) {
       return {
         cls: ' imminent', barW, label: 'Next drop',
-        detail: `${startsLocal} · starting with ${sectorLabel(next.sectors[0])}`,
+        detail: `${startsLocal}`,
         clock: [{ v: m, u: 'm' }, { v: s, u: 's' }],
       }
     }
-    const names = next.sectors.map(sectorLabel)
-    const lineup =
-      names.length === 1 ? names[0]
-      : names.length === 2 ? `${names[0]} then ${names[1]}`
-      : `${names[0]} first, then ${names.slice(1).join(', ')}`
     return {
       cls: '', barW, label: 'Next drop',
-      detail: `${startsLocal} · ${lineup}`,
+      detail: `${startsLocal}`,
       clock: h > 0 ? [{ v: h, u: 'h' }, { v: m, u: 'm' }] : [{ v: m, u: 'm' }],
     }
   }, [nowTs, dropBatches])
@@ -1040,9 +1035,17 @@ export default function HomePage() {
 
   // A gated card (free tier, role under 48h old) sends the visitor to /offer. /offer opens with this
   // role by name (title, company, location only), so remember it first.
-  const openGated = (job: JobPost, where: 'recruiter_line' | 'recruiter_title') => {
+  const openGated = (job: JobPost, where: 'recruiter_line' | 'recruiter_title' | 'recruiter_card') => {
     track('cta_click', { where, age_days: ageDaysOf(job.posted_at) })
     stashGatedJob(job)
+  }
+
+  // Tapping the body of a paywalled card (the blurred summary, the empty space) goes where its recruiter line goes.
+  // Links, buttons and a text selection keep doing their own thing.
+  const tapCard = (e: { target: EventTarget }, go: () => void) => {
+    if ((e.target as HTMLElement).closest('a, button, input, select, textarea')) return
+    if (window.getSelection()?.toString()) return
+    go()
   }
 
   const trackJobClick = (job: JobPost, index: number) => {
@@ -1127,12 +1130,12 @@ export default function HomePage() {
     ? lockedJobs.filter((l) => filters.sector === 'all' || l.sector === filters.sector)
     : []
   const renderLocked = (l: LockedJob, i: number) => (
-    <article key={`locked-${i}`} className="card locked-title" style={{ ['--sec' as string]: `var(--sec-${l.sector}, var(--ink-3))` }}>
+    <article key={`locked-${i}`} className="card locked-title tap" onClick={(e) => tapCard(e, () => { track('cta_click', { where: 'locked_card' }); window.location.assign('/offer?src=locked_card') })} style={{ ['--sec' as string]: `var(--sec-${l.sector}, var(--ink-3))` }}>
       <div className="card-top">
         <span className="sec-tag"><span className="dot" />{sectorLabel(l.sector)}</span>
         {l.posted_at && <span className="ago fresh">{timeAgo(l.posted_at)}</span>}
       </div>
-      <h3 className="locked-h">{l.title}</h3>
+      <h3 className="locked-h"><a href="/offer?src=locked_title" onClick={() => track('cta_click', { where: 'locked_title' })}>{l.title}</a></h3>
       <div className="locked-blur" aria-hidden="true">
         <p className="meta"><b>Company name hidden</b><span className="sep">·</span>Senior</p>
         <p className="summary">The details of this role are available with Premium. Unlock it to read the full post and reach the recruiter.</p>
@@ -1709,7 +1712,7 @@ export default function HomePage() {
                   {job.id === firstRoughId && (
                     <div className="sec-head group-head"><span>Same roles, other places</span><i /><em className="sec-note">{myNearby > 0 ? `${myNearby} nearby, then the rest` : `${myRough.length}`}</em></div>
                   )}
-                  <article id={`job-${job.id}`} className={`card${highlightId === job.id ? ' flash' : ''}`} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
+                  <article id={`job-${job.id}`} className={`card${job.gated ? ' tap' : ''}${highlightId === job.id ? ' flash' : ''}`} onClick={job.gated ? (e) => tapCard(e, () => { openGated(job, 'recruiter_card'); window.location.assign('/offer?src=recruiter_card') }) : undefined} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
                     <div className="card-top">
                       <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}</span>
                       {job.is_verified_job && (
@@ -2545,6 +2548,9 @@ export default function HomePage() {
         .ulj .feed-top:hover { border-color: var(--cta); }
 
         /* ── Gated cards: the role in full, the person withheld ── */
+        .ulj .card.tap { cursor: pointer; }
+        .ulj .card h3.locked-h a { color: inherit; text-decoration: none; }
+        .ulj .card h3.locked-h a:hover { text-decoration: underline; text-underline-offset: 3px; }
         .ulj .card h3.gated-h { color: var(--ink); }
         .ulj .card h3.gated-h a { color: inherit; text-decoration: none; }
         .ulj .card h3.gated-h a:hover { text-decoration: underline; text-underline-offset: 3px; }
