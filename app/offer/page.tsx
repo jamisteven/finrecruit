@@ -321,7 +321,7 @@ export default function OfferPage() {
                     <div className="pp-jobcard-foot">
                       <span className="pp-jobcard-avatar" aria-hidden="true"><Silhouette /></span>
                       <span className="pp-jobcard-who">Posted by <span className="pp-blur" aria-hidden="true">Firstname Lastname</span> · Direct LinkedIn profile & post</span>
-                      <span className="pp-jobcard-btn">Unlock Now <OutIcon /></span>
+                      <button type="button" className="pp-jobcard-btn" onClick={() => checkout('monthly', 'offer_jobcard')} disabled={busy !== null}>{busy === 'monthly' ? 'Opening…' : <>Unlock Now <OutIcon /></>}</button>
                     </div>
                   </article>
                   <p className="pp-thing-note">💡 Unlocking reveals the exact decision-maker&apos;s profile link so you can pitch them directly instead of entering the black hole of an online portal.</p>
@@ -453,7 +453,8 @@ export default function OfferPage() {
         .pp-jobcard-avatar { width: 34px; height: 34px; border-radius: 50%; flex: none; background: #F0ECE2; color: #97907E; border: 1px solid var(--hair); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
         .pp-jobcard-who { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .pp-blur { display: inline-block; filter: blur(4px); color: var(--ink); font-weight: 600; user-select: none; }
-        .pp-jobcard-btn { flex: none; height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; color: #fff; background: var(--accent); border-radius: 6px; font-size: 12px; font-weight: 600; }
+        .pp-jobcard-btn { flex: none; height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; color: #fff; background: var(--accent); border-radius: 6px; font-size: 12px; font-weight: 600; font-family: inherit; border: 0; cursor: pointer; }
+        .pp-jobcard-btn:disabled { opacity: .7; cursor: wait; }
         .pp-thing-note { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); max-width: 54ch; line-height: 1.5; background: var(--surface); padding: 10px 14px; border-radius: 8px; border: 1px solid var(--hair); }
 
         /* The optimized price card */
