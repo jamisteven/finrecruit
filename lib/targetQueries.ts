@@ -90,11 +90,14 @@ export async function releaseTargets(db: Db, targets: Target[]): Promise<void> {
 }
 
 /**
- * Members whose pass ended more than GRACE_DAYS ago still holding targets: release
- * their queries (stop paying for them) and remove the targets. Called from the
- * priority cron. A member who comes back inside the grace keeps everything.
+ * Members whose pass ended more than LAPSE_GRACE_DAYS ago still holding targets: release
+ * their queries and remove the targets. Called from the priority cron.
+ *
+ * This is housekeeping, not what stops the spending: queries stop running the moment a
+ * pass ends (see activeMemberQueries). The grace only decides how long a returning member
+ * finds their searches still set up, and keeping the rows costs nothing.
  */
-export const LAPSE_GRACE_DAYS = 3
+export const LAPSE_GRACE_DAYS = 30
 
 export async function releaseLapsedMembers(db: Db): Promise<number> {
   const cutoff = new Date(Date.now() - LAPSE_GRACE_DAYS * 86_400_000).toISOString()
@@ -112,4 +115,48 @@ export async function releaseLapsedMembers(db: Db): Promise<number> {
     released++
   }
   return released
+}
+
+/**
+ * A member is active when their pass is valid and they have opened the site in the last
+ * ACTIVE_DAYS. Only active members' searches run on the schedule; a quiet member's targets
+ * are kept, and their searches catch up the next time they visit (see staleQueriesFor).
+ */
+export const ACTIVE_DAYS = 3
+
+/** Query texts, lower-cased, that an active member wants right now. */
+export async function activeMemberQueries(db: Db): Promise<Set<string>> {
+  const out = new Set<string>()
+  const { data: members } = await db.from('profiles').select('id').gt('pass_expires_at', new Date().toISOString())
+  const ids = (members ?? []).map((m) => m.id as string)
+  if (!ids.length) return out
+  const since = new Date(Date.now() - ACTIVE_DAYS * 86_400_000).toISOString()
+  // One cheap lookup per member rather than reading every visit row (PostgREST caps a read at 1,000 rows)
+  const seen = await Promise.all(ids.map(async (id) => {
+    const { data } = await db.from('visits').select('user_id').eq('user_id', id).gte('visited_at', since).limit(1)
+    return data?.length ? id : null
+  }))
+  const activeIds = seen.filter((x): x is string => !!x)
+  if (!activeIds.length) return out
+  const { data: targets } = await db.from('user_targets').select('keyword, location').in('user_id', activeIds)
+  for (const t of targets ?? []) for (const q of queriesForTarget(t as Target)) out.add(q.toLowerCase())
+  return out
+}
+
+/** This member's queries that have never run, or not within maxAgeMs. Uses each row's stored text. */
+export async function staleQueriesFor(db: Db, userId: string, maxAgeMs = 12 * 3600_000): Promise<string[]> {
+  const { data: targets } = await db.from('user_targets').select('keyword, location').eq('user_id', userId)
+  if (!targets?.length) return []
+  const texts = new Set<string>()
+  for (const t of targets) for (const q of queriesForTarget(t as Target)) texts.add(q)
+  const cutoff = Date.now() - maxAgeMs
+  const rows = await Promise.all([...texts].map(async (q) => {
+    const { data } = await db.from('priority_queries')
+      .select('query, last_run_at').ilike('query', exact(q)).limit(1).maybeSingle()
+    return data
+  }))
+  return rows
+    .filter((r): r is { query: string; last_run_at: string | null } => !!r)
+    .filter((r) => !r.last_run_at || Date.parse(r.last_run_at) < cutoff)
+    .map((r) => String(r.query))
 }

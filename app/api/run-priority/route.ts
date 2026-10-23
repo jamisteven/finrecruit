@@ -10,7 +10,7 @@ import { offMarketReason } from '@/lib/market'
 import { logPrefilter, logGateDiscard, recordDecision, type ClassifyContext } from '@/lib/classifierLog'
 import { runGate } from '@/lib/gate'
 import { batchSizeFor, findDuds, DUD_COOLDOWN_DAYS } from '@/lib/sweepBudget'
-import { releaseLapsedMembers } from '@/lib/targetQueries'
+import { releaseLapsedMembers, activeMemberQueries } from '@/lib/targetQueries'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
@@ -58,13 +58,21 @@ export async function POST(req: NextRequest) {
     // the 12h cooldown; the shared sweep is what flexes with the budget. Queries that
     // LinkedIn barely has posts for (two runs in a row with <=1 kept) wait
     // DUD_COOLDOWN_DAYS instead — their widened regional query still runs.
+    // A query that members want only runs while one of them is active: a valid pass and a visit in the
+    // last few days. Quiet members' searches wait, and catch up when they next open the site
+    // (/api/targets/wake). The filter is applied before the cut to 30, so paused rows can't crowd out live ones.
     const { data } = await db.from('priority_queries')
-      .select('query, last_run_at')
+      .select('query, last_run_at, user_count')
       .eq('active', true)
       .or(`last_run_at.is.null,last_run_at.lt.${new Date(Date.now() - 12 * 3600_000).toISOString()}`)
       .order('last_run_at', { ascending: true, nullsFirst: true })
-      .limit(30)
-    const candidates = (data ?? []).map((r) => ({ query: String(r.query), last: r.last_run_at ? Date.parse(String(r.last_run_at)) : 0 }))
+      .limit(500)
+    let wanted: Set<string> | null = null
+    try { wanted = await activeMemberQueries(db) } catch (e) { console.error('[run-priority] active-member lookup failed, running everything', e) }
+    const live = (data ?? []).filter((r) => !wanted || !(Number(r.user_count) > 0) || wanted.has(String(r.query).toLowerCase()))
+    const paused = (data ?? []).length - live.length
+    if (paused) console.log(`[run-priority] ${paused} quer${paused === 1 ? 'y' : 'ies'} paused (no active member)`)
+    const candidates = live.slice(0, 30).map((r) => ({ query: String(r.query), last: r.last_run_at ? Date.parse(String(r.last_run_at)) : 0 }))
     const duds = await findDuds(db, 'priority', candidates.map((c) => c.query))
     const dudCutoff = Date.now() - DUD_COOLDOWN_DAYS * 86_400_000
     const skipped = new Set(candidates.filter((c) => duds.has(c.query) && c.last > dudCutoff).map((c) => c.query))

@@ -342,6 +342,9 @@ export default function HomePage() {
   const [archiveJobs, setArchiveJobs] = useState<JobPost[]>([])
   const archiveRequested = useRef(false)
   const [archiveDone, setArchiveDone] = useState(false)
+  // true once the full 14-day list has arrived (or failed). A member's matches are worked out from the list,
+  // so they are held back until then rather than shown a few at a time.
+  const [fullLoaded, setFullLoaded] = useState(false)
   // How many older roles exist per sector (counted by the server, not downloaded), so the totals show the full month
   const [archiveCounts, setArchiveCounts] = useState<Record<string, number> | null>(null)
   const rawJobs = useMemo(() => {
@@ -446,7 +449,19 @@ export default function HomePage() {
       params.set('sortBy', filters.sortBy)
       params.set('limit', '20000')
 
-      // Stage 1: a small page so the feed and stats paint immediately.
+      // The full list starts downloading straight away, alongside the quick page (the server shares the work),
+      // instead of waiting for the quick page to finish first.
+      let fullLanded = false
+      fetch(`/api/jobs?${params}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((full) => {
+          if (seq !== fetchSeq.current) return
+          if (full?.jobs?.length) { fullLanded = true; setAllJobs(full.jobs) }
+          setFullLoaded(true)
+        })
+        .catch(() => { if (seq === fetchSeq.current) setFullLoaded(true) })
+
+      // Quick page: a small page so the feed and stats paint immediately.
       const fast = new URLSearchParams(params)
       fast.set('limit', '400')
       const res = await fetch(`/api/jobs?${fast}`)
@@ -454,7 +469,9 @@ export default function HomePage() {
       const data = await res.json()
       if (seq !== fetchSeq.current) return
 
-      setAllJobs(data.jobs ?? [])
+      // The quick page only fills an empty list. Once roles are showing, the full list replaces them,
+      // so a refresh or re-sort never swaps a member's matches for a thinner set.
+      if (!fullLanded) setAllJobs((prev) => (prev.length ? prev : (data.jobs ?? [])))
       setHasPass(!!data.hasPass)
       setPassExpires(data.passExpiresAt ?? null)
       setFirstLoad(true)
@@ -467,13 +484,6 @@ export default function HomePage() {
       if (Array.isArray(data.topCompanies)) setTopCompanies(data.topCompanies)
       setLastUpdated(new Date())
       setLoading(false)
-
-      // Stage 2: the rest, in the background, so the sidebar facet counts
-      // reflect the whole dataset. Replaces the array once it lands.
-      fetch(`/api/jobs?${params}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((full) => { if (seq === fetchSeq.current && full?.jobs?.length) setAllJobs(full.jobs) })
-        .catch(() => {})
     } catch {
       setLoading(false)
     } finally { setLoading(false) }
@@ -618,17 +628,9 @@ export default function HomePage() {
   type ClockPart = { v: string | number; u?: string }
   const press = useMemo((): { cls: string; barW: number | null; label: string; detail: string; clock: ClockPart[] } | null => {
     if (nowTs == null) return null
-    const { prev, next, current } = dropsAround(nowTs, dropBatches)
-
-    if (current) {
-      const idx = Math.min(Math.floor((nowTs - current.start) / SLOT_MS), current.sectors.length - 1)
-      const togo = current.sectors.length - 1 - idx
-      return {
-        cls: ' ingesting', barW: null, label: 'Fresh roles landing',
-        detail: `${sectorLabel(current.sectors[idx])} is in · ${togo > 0 ? `${togo} more to come` : 'wrapping up'}`,
-        clock: [{ v: 'ingesting…' }],
-      }
-    }
+    // This banner only says when the next drop is. While a drop is landing it keeps counting to the one after,
+    // because a "roles landing" state looked like something to tap and said nothing a visitor could act on.
+    const { prev, next } = dropsAround(nowTs, dropBatches)
     if (!next) return null
 
     const remaining = next.start - nowTs
@@ -671,6 +673,8 @@ export default function HomePage() {
   // Roles the member asked us to watch for, set during onboarding
   const [myTargets, setMyTargets] = useState<{ keyword: string; location: string | null }[]>([])
   const [myFeedOn, setMyFeedOn] = useState(false)
+  const [waking, setWaking] = useState(0)   // searches just restarted because the member had been away
+  const [targetsChecked, setTargetsChecked] = useState(false)   // the saved-searches lookup has answered (yes or no)
   // Recognisable employers in the feed right now, for the strip under the hero
   const [topCompanies, setTopCompanies] = useState<StripCompany[]>([])
   // What the member's searches are doing: last check, pending runs, new since yesterday
@@ -681,16 +685,29 @@ export default function HomePage() {
       .then((d) => {
         const targets = d?.targets ?? []
         setMyTargets(targets)
+        setTargetsChecked(true)
         // A member's home view is their matches. ?mine=1 (from onboarding and email) forces it.
         if (targets.length > 0 && (new URLSearchParams(window.location.search).get('mine') === '1' || !sessionStorage.getItem('bcj_tab_touched'))) setMyFeedOn(true)
         if (targets.length > 0) {
-          fetch('/api/targets/status', { cache: 'no-store' })
+          // A member who has been away has had their searches paused to save credit. Opening the site catches
+          // them up straight away (at most once every 30 minutes per browser).
+          let wake: Promise<unknown> = Promise.resolve()
+          try {
+            if (Date.now() - Number(localStorage.getItem('bcj_wake_at') || 0) > 30 * 60_000) {
+              localStorage.setItem('bcj_wake_at', String(Date.now()))
+              wake = fetch('/api/targets/wake', { method: 'POST' })
+                .then((r) => (r.ok ? r.json() : null))
+                .then((w) => { if (w?.running > 0) setWaking(w.running) })
+                .catch(() => {})
+            }
+          } catch { /* storage blocked: skip the catch-up, the schedule still runs for active members */ }
+          wake.then(() => fetch('/api/targets/status', { cache: 'no-store' }))
             .then((r) => (r.ok ? r.json() : null))
             .then((st) => { if (st) setMyStatus({ checkedAt: st.checkedAt ?? null, pending: st.pending ?? 0, newTotal: st.newTotal ?? 0 }) })
             .catch(() => {})
         }
       })
-      .catch(() => {})
+      .catch(() => setTargetsChecked(true))
   }, [])
 
   // exact = the keyword in the title and the location matches.
@@ -1540,7 +1557,6 @@ export default function HomePage() {
           {press && (
             <div className={`press${press.cls}`}>
               {press.barW !== null && <div className="bar" style={{ width: `${press.barW}%` }} />}
-              {press.cls === ' ingesting' && <div className="bar shimmer" />}
               <span className="pdot" />
               <span className="plabel">{press.label}</span>
               <span className="pdetail">{press.detail}</span>
@@ -1550,8 +1566,10 @@ export default function HomePage() {
             </div>
           )}
 
-          {loading ? (
+          {loading || !targetsChecked || (myFeedOn && !fullLoaded) ? (
             <div className="cards">
+              {/* a member's matches are worked out from the full list, so wait for it rather than show a few at a time */}
+              {myFeedOn && !loading && <p className="match-status" aria-live="polite"><span className="ms-dot" aria-hidden="true" />Finding your matches&hellip;</p>}
               {[...Array(5)].map((_, i) => <div key={i} className="skeleton" />)}
             </div>
           ) : displayJobs.length === 0 ? (
@@ -1666,6 +1684,7 @@ export default function HomePage() {
                   {myStatus.checkedAt ? <>Checked {sinceShort(myStatus.checkedAt)}</> : 'First check running'}
                   {' · '}{myStatus.newTotal} new since yesterday
                   {myStatus.pending > 0 && <> · {myStatus.pending} {myStatus.pending === 1 ? 'search' : 'searches'} still running</>}
+                  {waking > 0 && <> · catching up {waking} {waking === 1 ? 'search' : 'searches'} since your last visit, new roles in a few minutes</>}
                 </p>
               )}
               {myFeedOn && myExact.length > 0 && myRough.length > 0 && (
@@ -2174,11 +2193,6 @@ export default function HomePage() {
           position: absolute; left: 0; top: 0; bottom: 0;
           background: var(--surface-2); border-right: 1px solid var(--hairline-2);
         }
-        .ulj .press .bar.shimmer {
-          width: 100%; border-right: none;
-          background: linear-gradient(100deg, var(--surface-2) 40%, var(--surface) 50%, var(--surface-2) 60%);
-          background-size: 200% 100%; animation: ulj-shimmer 1.6s infinite;
-        }
         .ulj .press > *:not(.bar) { position: relative; z-index: 1; }
         .ulj .press .pdot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); animation: ulj-pulse 2.2s infinite; flex-shrink: 0; }
         .ulj .press.far .pdot { animation: none; opacity: .5; }
@@ -2187,7 +2201,6 @@ export default function HomePage() {
         .ulj .press .pclock { margin-left: auto; font: 600 13px var(--font-spline-mono), monospace; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
         .ulj .press .pclock .unit { font-weight: 400; color: var(--ink-3); font-size: 11px; margin: 0 5px 0 1px; }
         .ulj .press.imminent .pclock { color: var(--live); }
-        .ulj .press.ingesting .pclock { color: var(--live); font-size: 12px; }
         .ulj .press.far .pclock { font-size: 12px; }
 
         .ulj .cards { display: flex; flex-direction: column; gap: 14px; }
