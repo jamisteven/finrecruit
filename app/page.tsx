@@ -1144,9 +1144,9 @@ export default function HomePage() {
       <div className="card-foot lock-foot">
         <span className="lock-when">
           {l.posted_at && <>Posted {timeAgo(l.posted_at)}</>}
-          {unlockLabel(l.posted_at) && <> · <b>Free feed from {unlockLabel(l.posted_at)}</b></>}
+          {unlockLabel(l.posted_at) && <> · <b>Free to read {unlockLabel(l.posted_at)}</b>, recruiter contact stays Premium</>}
         </span>
-        <a className="lock-now" href="/offer?src=locked_title" onClick={() => track('cta_click', { where: 'locked_title' })}>Unlock Recruiter Contact &rarr;</a>
+        <a className="lock-now" href="/offer?src=locked_title" onClick={() => track('cta_click', { where: 'locked_title' })}>Unlock this role now &rarr;</a>
       </div>
     </article>
   )
@@ -1164,7 +1164,7 @@ export default function HomePage() {
           document.getElementById('feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }}
       >
-        <b>Browse free<ArrowRight className="down" /></b>Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.
+        <b>Browse free<ArrowRight className="down" /></b>Read roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh samples a day. Recruiter contact is Premium.
       </a>
       <a className="plan plan-pro" href="/offer?src=hero_plan" onClick={() => track('cta_click', { where: 'hero_plan' })}>
         <b><span>Unlock Priority Pass</span><ArrowRight /></b>Recruiter names and direct links the second a role is shared. $9 first month, then $15/month, cancel anytime.
@@ -1380,7 +1380,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="member-bar free">
-              <div className="mb-copy"><b>Delayed free feed</b><span className="mb-sub">Roles older than {FREE_DELAY_HOURS} hours, plus {previewCount || 3} fresh roles a day.</span></div>
+              <div className="mb-copy"><b>Free feed</b><span className="mb-sub">Roles older than {FREE_DELAY_HOURS} hours are free to read, plus {previewCount || 3} fresh samples a day. Recruiter names and links are Premium.</span></div>
               <a className="btn-primary" href="/offer?src=member_bar" onClick={() => track('cta_click', { where: 'member_bar' })}><BoltIcon />{CTA_LABEL}</a>
             </div>
           )}
@@ -1610,7 +1610,7 @@ export default function HomePage() {
             <>
             {!hasPass && withheld > 0 && (
               <a className="feed-top" href="/offer?src=feed_top" onClick={() => track('cta_click', { where: 'feed_top', n: withheld })}>
-                <span><b>{withheld} priority {withheld === 1 ? 'role' : 'roles'}</b> from the last {FREE_DELAY_HOURS} hours {withheld === 1 ? 'is' : 'are'} hidden from this feed.</span>
+                <span><b>{withheld} fresh {withheld === 1 ? 'role' : 'roles'}</b> from the last {FREE_DELAY_HOURS} hours {withheld === 1 ? 'is' : 'are'} Premium.</span>
                 <em>Unlock Today&apos;s Roles &rarr;</em>
               </a>
             )}
@@ -1671,14 +1671,14 @@ export default function HomePage() {
             {!hasPass && (
               <div className="inline-cta">
                 <div>
-                  <h3>{withheld > 0 ? `${withheld} priority roles are hidden in your track.` : 'Priority roles are hidden in your track.'}</h3>
-                  <p>Get instant access to recruiter names and direct application links the second they are shared. Discounted to $9 for your first month.</p>
+                  <h3>{withheld > 0 ? `${withheld} fresh roles from the last ${FREE_DELAY_HOURS} hours are Premium.` : `Roles from the last ${FREE_DELAY_HOURS} hours are Premium.`}</h3>
+                  <p>Get recruiter names and direct application links the second roles are shared. Everything older than {FREE_DELAY_HOURS} hours is free to read, with the recruiter contact kept Premium. $9 for your first month.</p>
                 </div>
                 <a className="btn-primary lg" href="/offer?src=inline" onClick={() => track('cta_click', { where: 'inline' })}><BoltIcon />{CTA_LABEL}</a>
               </div>
             )}
 
-            {splitFeed && <div className="sec-head"><span>{hasPass ? 'Earlier roles' : 'Delayed free feed'}</span><i />{!hasPass && <em className="sec-note">Older than {FREE_DELAY_HOURS} hours</em>}</div>}
+            {splitFeed && <div className="sec-head"><span>{hasPass ? 'Earlier roles' : 'Older roles · free to read'}</span><i />{!hasPass && <em className="sec-note">Recruiter names &amp; links are Premium</em>}</div>}
             <div className="cards">
               {!splitFeed && lockedShown.map(renderLocked)}
               {myFeedOn && myStatus && (
@@ -2557,6 +2557,7 @@ export default function HomePage() {
         .ulj .avatar.silhouette { color: var(--ink-3); }
         .ulj .author.gated-author { text-decoration: none; color: var(--ink-2); }
         .ulj .author.gated-author:hover .named { text-decoration: underline; text-underline-offset: 3px; }
+        .ulj .gated-author, .ulj .gated-author * { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
         .ulj .blur-name { display: inline-block; filter: blur(4px); color: var(--ink); font-weight: 600; user-select: none; }
         .ulj .author .named { margin-left: 8px; color: var(--accent); font-weight: 600; }
         @media (max-width: 640px) {
