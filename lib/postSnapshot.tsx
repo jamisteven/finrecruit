@@ -9,6 +9,7 @@ const HEAD_H = 190
 export function renderPostSnapshot(
   job: { raw_text: string; author_name: string | null; author_headline: string | null; posted_at: string | null },
   now = Date.now(),
+  avatar: string | null = null,   // a heavily blurred data: URI of the poster's photo, if we could fetch one
 ): ImageResponse | null {
   // Emoji would be fetched from a CDN on every render, so they are left out; the words are what matters.
   const plain = (v: string) => v.replace(/[\p{Extended_Pictographic}\uFE0F\u200D\u20E3]/gu, '').replace(/[ \t]{2,}/g, ' ')
@@ -32,7 +33,10 @@ export function renderPostSnapshot(
     (
       <div style={{ width: W, height: '100%', display: 'flex', flexDirection: 'column', background: '#ffffff', border: '2px solid #D8D2C2', borderRadius: 24, overflow: 'hidden', fontSize: 28, color: '#1d1d1d' }}>
         <div style={{ display: 'flex', padding: '28px 32px 8px', alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', width: 92, height: 92, borderRadius: 46, background: 'linear-gradient(135deg, #c3cbdb, #7d8aa3)', marginRight: 22, flexShrink: 0 }} />
+          <div style={{ display: 'flex', width: 92, height: 92, borderRadius: 46, background: 'linear-gradient(135deg, #c3cbdb, #7d8aa3)', marginRight: 22, flexShrink: 0, overflow: 'hidden' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {avatar ? <img src={avatar} width={92} height={92} alt="" style={{ width: 92, height: 92, borderRadius: 46 }} /> : null}
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             <div style={{ display: 'flex', width: 300, height: 30, borderRadius: 15, background: '#d4d7de', marginTop: 4 }} />
             <div style={{ display: 'flex', flexWrap: 'wrap', fontSize: 25, color: '#5b5b5b', marginTop: 10, maxHeight: 64, overflow: 'hidden' }}>
@@ -45,7 +49,10 @@ export function renderPostSnapshot(
           <div style={{ display: 'flex', flexDirection: 'column', width: '100%', lineHeight: 1.45 }}>
             {lines.map((runs, li) => runs.length === 0 || !runs.some((r) => r.t.trim())
               ? <div key={li} style={{ display: 'flex', height: 20 }} />
-              : <div key={li} style={{ display: 'flex', flexWrap: 'wrap' }}>{renderRuns(runs, `l${li}`)}</div>)}
+              : runs.every((r) => !r.r)
+                // no redaction on this line: one text node is far cheaper to lay out than one per word
+                ? <div key={li} style={{ display: 'flex' }}>{runs.map((r) => r.t).join('')}</div>
+                : <div key={li} style={{ display: 'flex', flexWrap: 'wrap' }}>{renderRuns(runs, `l${li}`)}</div>)}
           </div>
           <div style={{ display: 'flex', position: 'absolute', left: 0, right: 0, bottom: 0, height: 300, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1) 70%)', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 26 }}>
             <div style={{ display: 'flex', fontSize: 24, color: '#5b5b5b', background: '#fff', border: '2px solid #D8D2C2', borderRadius: 40, padding: '10px 26px' }}>

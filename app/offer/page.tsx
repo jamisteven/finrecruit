@@ -241,7 +241,7 @@ export default function OfferPage() {
       </header>
 
       <main className="pp-main">
-        <section className={`pp-hero${snap === 'ok' ? ' has-snap' : ''}`}>
+        <section className={`pp-hero${gateJob?.id && snap !== 'fail' ? ' has-snap' : ''}`}>
           <div className="pp-hook">
             {variant === 'search' && (
               <span className="pp-eyebrow">🎯 Exact Match Found for: {q || sectorLabel(lastSearch?.sector)}{lastSearch?.locations?.length ? ` in ${lastSearch.locations.join(', ')}` : ''}</span>
@@ -312,18 +312,22 @@ export default function OfferPage() {
           {!hasPass && (
             <div className="pp-thing">
               {variant === 'recruiter' && gateJob?.id && snap !== 'fail' && (
-                <div className="pp-snap" hidden={snap !== 'ok'}>
+                <div className="pp-snap">
                   <div className="pp-snap-label"><i />The original post, as captured</div>
-                  {/* a picture, not text: nothing to select or copy, and the hidden details never reach the page */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    className="pp-snap-img"
-                    src={`/api/post-snapshot?id=${encodeURIComponent(gateJob.id)}`}
-                    alt="The recruiter's original post, with their name and contact details hidden"
-                    draggable={false}
-                    onLoad={() => { setSnap('ok'); track('snapshot_view', { src: srcRef.current }) }}
-                    onError={() => setSnap('fail')}
-                  />
+                  {/* a picture, not text: nothing to select or copy, and the hidden details never reach the page.
+                      The frame keeps its shape while the picture is drawn, so the page does not jump. */}
+                  <div className={`pp-snap-frame${snap === 'ok' ? ' ready' : ''}`}>
+                    {snap !== 'ok' && <span className="pp-snap-wait">Pulling up the original post…</span>}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="pp-snap-img"
+                      src={`/api/post-snapshot?id=${encodeURIComponent(gateJob.id)}`}
+                      alt="The recruiter's original post, with their name and contact details hidden"
+                      draggable={false}
+                      onLoad={() => { setSnap('ok'); track('snapshot_view', { src: srcRef.current }) }}
+                      onError={() => setSnap('fail')}
+                    />
+                  </div>
                   <div className="pp-snap-foot">
                     <span>Recruiter name, profile and the post link unlock with Premium</span>
                     <button type="button" className="pp-jobcard-btn" onClick={() => checkout('monthly', 'offer_snapshot')} disabled={busy !== null}>{busy === 'monthly' ? 'Opening…' : <>Unlock Now <OutIcon /></>}</button>
@@ -331,7 +335,7 @@ export default function OfferPage() {
                   <p className="pp-snap-cap">Captured from a public LinkedIn post. Names, email addresses and links are hidden.</p>
                 </div>
               )}
-              {variant === 'recruiter' && gateJob && snap !== 'ok' && (
+              {variant === 'recruiter' && gateJob && (snap === 'fail' || !gateJob.id) && (
                 <>
                   <article className="pp-jobcard">
                     <div className="pp-jobcard-top">
@@ -478,11 +482,16 @@ export default function OfferPage() {
         .pp-jobcard-btn { flex: none; height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; color: #fff; background: var(--accent); border-radius: 6px; font-size: 12px; font-weight: 600; font-family: inherit; border: 0; cursor: pointer; }
         .pp-jobcard-btn:disabled { opacity: .7; cursor: wait; }
         .pp-snap { display: flex; flex-direction: column; gap: 8px; max-width: 560px; }
-        .pp-snap[hidden] { display: none; }
         .pp-snap, .pp-snap * { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
         .pp-snap-label { display: flex; align-items: center; gap: 8px; font: 500 11px var(--font-spline-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
         .pp-snap-label i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); display: inline-block; }
-        .pp-snap-img { display: block; width: 100%; height: auto; border-radius: 12px; box-shadow: 0 1px 2px rgba(25,23,19,.05), 0 10px 28px -12px rgba(25,23,19,.18); pointer-events: none; -webkit-user-drag: none; }
+        .pp-snap-frame { position: relative; width: 100%; aspect-ratio: 1120 / 780; border-radius: 12px; background: linear-gradient(100deg, #ece8dc 30%, #f6f3ea 50%, #ece8dc 70%) 0 0 / 200% 100%; animation: pp-shim 1.4s linear infinite; display: grid; place-items: center; overflow: hidden; }
+        .pp-snap-frame.ready { animation: none; background: none; box-shadow: 0 1px 2px rgba(25,23,19,.05), 0 10px 28px -12px rgba(25,23,19,.18); }
+        .pp-snap-wait { font-size: 13px; color: var(--ink-3); }
+        .pp-snap-img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .2s; pointer-events: none; -webkit-user-drag: none; }
+        .pp-snap-frame.ready .pp-snap-img { opacity: 1; }
+        @keyframes pp-shim { to { background-position: -200% 0; } }
+        @media (prefers-reduced-motion: reduce) { .pp-snap-frame { animation: none; } }
         .pp-snap-foot { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--hair-2); border-radius: 10px; background: var(--surface); font-size: 12.5px; color: var(--ink-2); }
         .pp-snap-foot span { flex: 1; min-width: 0; }
         .pp-snap-cap { margin: 0; font-size: 12.5px; color: var(--ink-3); line-height: 1.45; }
