@@ -201,6 +201,8 @@ export default function OfferPage() {
     : searchMatched ? 'search'
     : (src === 'feed_top' || src === 'locked_title' || src === 'new_today' || src === 'inline') && hidden > 0 ? 'locked'
     : 'cold'
+  // a visitor who tapped a role sees the post itself under the headline, so the generic pitch steps aside
+  const snapMode = variant === 'recruiter' && !!gateJob?.id && snap !== 'fail'
   const lockedCount = variant === 'search' ? withheld!.matched : hidden
   const rows = variant === 'cold' ? lockedRows.slice(0, 3) : lockedRows.slice(0, 5)
   const more = Math.max(0, lockedCount - rows.length)
@@ -241,7 +243,7 @@ export default function OfferPage() {
       </header>
 
       <main className="pp-main">
-        <section className={`pp-hero${gateJob?.id && snap !== 'fail' ? ' has-snap' : ''}`}>
+        <section className={`pp-hero${snapMode ? ' has-snap' : ''}`}>
           <div className="pp-hook">
             {variant === 'search' && (
               <span className="pp-eyebrow">🎯 Exact Match Found for: {q || sectorLabel(lastSearch?.sector)}{lastSearch?.locations?.length ? ` in ${lastSearch.locations.join(', ')}` : ''}</span>
@@ -256,16 +258,16 @@ export default function OfferPage() {
               <h1>Skip the job board black hole. <em>Apply directly to hiring managers and internal teams.</em></h1>
             )}
             
-            <p className="sub">Most high-value roles are shared directly by hiring managers, internal recruiters, and staff, they never make it to traditional job boards. Backchannel indexes these unlisted posts in real time so you can pitch decision-makers first.</p>            
+            {!snapMode && <p className="sub">Most high-value roles are shared directly by hiring managers, internal recruiters, and staff, they never make it to traditional job boards. Backchannel indexes these unlisted posts in real time so you can pitch decision-makers first.</p>}
             
             {hasPass && <p className="pp-have">✨ You already have active Premium access. <a href="/">Go to today&apos;s feed &rarr;</a></p>}
 
             {/* Value proposition check strip */}
-            <div className="pp-value-strip">
+            {!snapMode && <div className="pp-value-strip">
               <div>⚡ <strong>Real-time alerts</strong> before public indexing</div>
               <div>🤝 <strong>Direct hiring manager</strong> identity & link</div>
               <div>🔒 <strong>Cancel anytime</strong> in 2 clicks</div>
-            </div>
+            </div>}
           </div>
 
           <div className="pp-price-col" ref={priceRef}>
