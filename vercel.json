@@ -43,6 +43,10 @@
     {
       "path": "/api/run-priority",
       "schedule": "25 5-22 * * *"
+    },
+    {
+      "path": "/api/warm-snapshots",
+      "schedule": "12,42 * * * *"
     }
   ]
 }
