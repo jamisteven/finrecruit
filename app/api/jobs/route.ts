@@ -207,7 +207,7 @@ export async function GET(req: NextRequest) {
       const fr = rows
         .filter((r) => { const t = ts(r.posted_at); return !isNaN(t) && t >= cut })
         .sort((a, b) => ts(b.posted_at) - ts(a.posted_at))
-        .slice(FREE_SAMPLE_COUNT)                       // the free samples are already visible
+        .slice(FREE_SAMPLE_COUNT + FREE_TITLE_ONLY_COUNT) // the samples and teasers are already visible
         .filter((r) => !sector || sector === 'all' || r.sector === sector)
       return out(fr.filter((r) => matchesSearch(r, tokenize(search))).length)
     } catch { return out(0) }
@@ -230,7 +230,7 @@ export async function GET(req: NextRequest) {
       const fresh = rows
         .filter((r) => { const t = ts(r.posted_at); return !isNaN(t) && t >= cut })
         .sort((a, b) => ts(b.posted_at) - ts(a.posted_at))
-      const samples = new Set(fresh.slice(0, FREE_SAMPLE_COUNT).map((r) => r.id as string))
+      const samples = new Set(fresh.slice(0, FREE_SAMPLE_COUNT + FREE_TITLE_ONLY_COUNT).map((r) => r.id as string))
       const pool = fresh.filter((r) => !samples.has(r.id as string))
       const q = (searchParams.get('q') ?? '').trim()
       const locs = (searchParams.get('loc') ?? '').split('|').map((l) => l.trim().toLowerCase()).filter(Boolean)
@@ -291,9 +291,11 @@ export async function GET(req: NextRequest) {
   }, null)
 
   // Free tier: everything older than FREE_DELAY_HOURS, plus FREE_SAMPLE_COUNT fresh roles in full.
-  // The next FREE_TITLE_ONLY_COUNT fresh roles go out as a title only (no id, company, link or summary).
+  // The next FREE_TITLE_ONLY_COUNT fresh roles go out like any older role: readable, but without the
+  // recruiter's name, photo, profile or post link (they are marked gated below).
   let previewIds: string[] = []
-  let lockedJobs: { title: string; sector: string; posted_at: string | null }[] = []
+  let teaserIds: string[] = []
+  const lockedJobs: { title: string; sector: string; posted_at: string | null }[] = []
   let withheld = 0
   let pool: Row[]
   if (hasPass) {
@@ -301,13 +303,9 @@ export async function GET(req: NextRequest) {
   } else {
     const top = fresh.slice(0, FREE_SAMPLE_COUNT + FREE_TITLE_ONLY_COUNT)
     previewIds = top.slice(0, FREE_SAMPLE_COUNT).map((r) => r.id as string)
-    lockedJobs = top.slice(FREE_SAMPLE_COUNT).map((r) => ({
-      title: r.title as string,
-      sector: r.sector as string,
-      posted_at: (r.posted_at as string | null) ?? null,
-    }))
-    withheld = Math.max(0, fresh.length - previewIds.length)
-    const pv = new Set(previewIds)
+    teaserIds = top.slice(FREE_SAMPLE_COUNT).map((r) => r.id as string)
+    withheld = Math.max(0, fresh.length - top.length)
+    const pv = new Set([...previewIds, ...teaserIds])
     pool = all.filter((r) => {
       if (pv.has(r.id)) return true
       const t = ts(r.posted_at)
@@ -369,6 +367,7 @@ export async function GET(req: NextRequest) {
     passExpiresAt: hasPass ? passExpiresAt : null,
     withheld,
     lockedJobs,
+    teaserIds,
     previewCount: previewIds.length,
     previewIds,
     addedToday,

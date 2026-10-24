@@ -405,6 +405,7 @@ export default function HomePage() {
   const [addedToday, setAddedToday] = useState(0)
   const [previewCount, setPreviewCount] = useState(0)
   const [previewIds, setPreviewIds] = useState<string[]>([])
+  const [teaserIds, setTeaserIds] = useState<string[]>([])
   const [lockedJobs, setLockedJobs] = useState<LockedJob[]>([])
   const [dropBatches, setDropBatches] = useState<DropBatch[]>(DROP_BATCHES_FALLBACK)
   useEffect(() => {
@@ -480,6 +481,7 @@ export default function HomePage() {
       setAddedToday(data.addedToday ?? 0)
       setPreviewCount(data.previewCount ?? 0)
       setPreviewIds(data.previewIds ?? [])
+      setTeaserIds(data.teaserIds ?? [])
       setLockedJobs(data.lockedJobs ?? [])
       if (Array.isArray(data.topCompanies)) setTopCompanies(data.topCompanies)
       setLastUpdated(new Date())
@@ -1083,13 +1085,13 @@ export default function HomePage() {
   const filtersActive = !!filters.search || filters.sector !== 'all'
     || filters.locations.length > 0 || filters.workTypes.length > 0
   const splitFeed = !hasPass && !filtersActive && previewIds.length > 0
-  const previewSet = useMemo(() => new Set(previewIds), [previewIds])
+  const todaySet = useMemo(() => new Set([...previewIds, ...teaserIds]), [previewIds, teaserIds])
   const todayJobs = useMemo(
-    () => (splitFeed ? displayJobs.filter((j) => previewSet.has(j.id)) : []),
-    [splitFeed, displayJobs, previewSet])
+    () => (splitFeed ? displayJobs.filter((j) => todaySet.has(j.id)) : []),
+    [splitFeed, displayJobs, todaySet])
   const earlierJobs = useMemo(
-    () => (splitFeed ? displayJobs.filter((j) => !previewSet.has(j.id)) : displayJobs),
-    [splitFeed, displayJobs, previewSet])
+    () => (splitFeed ? displayJobs.filter((j) => !todaySet.has(j.id)) : displayJobs),
+    [splitFeed, displayJobs, todaySet])
 
   const resetAll = () => setFilters(DEFAULT_FILTERS)
 
@@ -1147,6 +1149,43 @@ export default function HomePage() {
           {unlockLabel(l.posted_at) && <> · <b>Free to read {unlockLabel(l.posted_at)}</b>, recruiter contact stays Premium</>}
         </span>
         <a className="lock-now" href="/offer?src=locked_title" onClick={() => track('cta_click', { where: 'locked_title' })}>Unlock this role now &rarr;</a>
+      </div>
+    </article>
+  )
+
+  // A fresh role past the free samples: readable like any older role, recruiter and link withheld.
+  const renderTeaser = (job: JobPost) => (
+    <article key={job.id} id={`job-${job.id}`} className="card tap" onClick={(e) => tapCard(e, () => { openGated(job, 'recruiter_card'); window.location.assign('/offer?src=recruiter_card') })} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
+      <div className="card-top">
+        <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}{job.location && <> · {job.location}</>}</span>
+        {job.posted_at && <span className="ago fresh">{timeAgo(job.posted_at)}</span>}
+      </div>
+      <h3 className="gated-h"><a href="/offer?src=recruiter_title" onClick={() => openGated(job, 'recruiter_title')}>{job.title}</a></h3>
+      <p className="meta">
+        <b>{job.company ?? 'Company not disclosed'}</b>
+        {job.seniority && job.seniority !== 'Unknown' && <><span className="sep">·</span>{job.seniority}</>}
+      </p>
+      {job.summary && <p className="summary">{job.summary}</p>}
+      {(job.salary || job.apply_method) && (
+        <p className="salary">
+          {job.salary}
+          {job.apply_method && <span className="via">via: {job.apply_method}</span>}
+        </p>
+      )}
+      <div className="card-foot gated">
+        <span className="avatar silhouette" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" /></svg>
+        </span>
+        <a className="author gated-author" href="/offer?src=recruiter_line" onClick={() => openGated(job, 'recruiter_line')}>
+          Posted by <span className="blur-name" aria-hidden="true">{standInName(job.id)}</span>
+          {job.author_headline && <> · {job.author_headline}</>}
+          <span className="named">Unlock Name &amp; Profile Link &rarr;</span>
+        </a>
+        <div className="card-actions">
+          <button className={`ghost-btn${saved.has(job.id) ? ' saved' : ''}`} onClick={() => toggleSaved(job.id)}>
+            {saved.has(job.id) ? '★ Saved' : '☆ Save'}
+          </button>
+        </div>
       </div>
     </article>
   )
@@ -1618,7 +1657,7 @@ export default function HomePage() {
               <div className="today-wrap">
                 <div className="sec-head"><span>Today&apos;s priority roles</span><i /></div>
                 <div className="cards today-cards">
-                  {todayJobs.map((job, i) => (
+                  {todayJobs.map((job, i) => job.gated ? renderTeaser(job) : (
                     <article key={job.id} className="card" style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
                       <div className="card-top">
                         <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}{job.location && <> · {job.location}</>}</span>
@@ -2557,6 +2596,7 @@ export default function HomePage() {
         .ulj .avatar.silhouette { color: var(--ink-3); }
         .ulj .author.gated-author { text-decoration: none; color: var(--ink-2); }
         .ulj .author.gated-author:hover .named { text-decoration: underline; text-underline-offset: 3px; }
+        .ulj .card.tap, .ulj .card.tap * { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
         .ulj .gated-author, .ulj .gated-author * { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
         .ulj .blur-name { display: inline-block; filter: blur(4px); color: var(--ink); font-weight: 600; user-select: none; }
         .ulj .author .named { margin-left: 8px; color: var(--accent); font-weight: 600; }
