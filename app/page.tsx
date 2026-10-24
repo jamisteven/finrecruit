@@ -304,8 +304,8 @@ const HeroPromises = () => (
 function ageDaysOf(iso: string | null | undefined) {
   return iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : null
 }
-function stashGatedJob(job: { title: string; company: string | null; location: string | null; posted_at: string | null }) {
-  try { sessionStorage.setItem('bcj_gate_job', JSON.stringify({ title: job.title, company: job.company, location: job.location, posted_at: job.posted_at, at: Date.now() })) } catch {}
+function stashGatedJob(job: { id?: string; title: string; company: string | null; location: string | null; posted_at: string | null }) {
+  try { sessionStorage.setItem('bcj_gate_job', JSON.stringify({ id: job.id, title: job.title, company: job.company, location: job.location, posted_at: job.posted_at, at: Date.now() })) } catch {}
 }
 
 export default function HomePage() {

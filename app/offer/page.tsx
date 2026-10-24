@@ -19,7 +19,7 @@ type LockedRole = { title: string; location: string | null; sector: string | nul
 type Withheld = { roles: LockedRole[]; matched: number; total: number; fallback: LockedRole[] }
 type LastSearch = { q?: string; sector?: string; locations?: string[]; at?: number }
 type Live = { fresh: number; shown: number; hasPass: boolean; addedToday: number; latestAt: string | null }
-type GateJob = { title: string; company?: string | null; location?: string | null; posted_at?: string | null; at?: number }
+type GateJob = { id?: string; title: string; company?: string | null; location?: string | null; posted_at?: string | null; at?: number }
 
 function readLastSearch(): LastSearch | null {
   try {
@@ -89,6 +89,8 @@ export default function OfferPage() {
   const [withheld, setWithheld] = useState<Withheld | null>(null)
   const [lastSearch, setLastSearch] = useState<LastSearch | null>(null)
   const [gateJob, setGateJob] = useState<GateJob | null>(null)
+  // the tapped post as a picture; the plain role card stays until (and unless) it loads
+  const [snap, setSnap] = useState<'idle' | 'ok' | 'fail'>('idle')
   const priceRef = useRef<HTMLDivElement>(null)
   const srcRef = useRef<string | null>(null)
   const [src, setSrc] = useState<string | null>(null)
@@ -239,7 +241,7 @@ export default function OfferPage() {
       </header>
 
       <main className="pp-main">
-        <section className="pp-hero">
+        <section className={`pp-hero${snap === 'ok' ? ' has-snap' : ''}`}>
           <div className="pp-hook">
             {variant === 'search' && (
               <span className="pp-eyebrow">🎯 Exact Match Found for: {q || sectorLabel(lastSearch?.sector)}{lastSearch?.locations?.length ? ` in ${lastSearch.locations.join(', ')}` : ''}</span>
@@ -309,7 +311,27 @@ export default function OfferPage() {
           {/* the thing they came for */}
           {!hasPass && (
             <div className="pp-thing">
-              {variant === 'recruiter' && gateJob && (
+              {variant === 'recruiter' && gateJob?.id && snap !== 'fail' && (
+                <div className="pp-snap" hidden={snap !== 'ok'}>
+                  <div className="pp-snap-label"><i />The original post, as captured</div>
+                  {/* a picture, not text: nothing to select or copy, and the hidden details never reach the page */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="pp-snap-img"
+                    src={`/api/post-snapshot?id=${encodeURIComponent(gateJob.id)}`}
+                    alt="The recruiter's original post, with their name and contact details hidden"
+                    draggable={false}
+                    onLoad={() => { setSnap('ok'); track('snapshot_view', { src: srcRef.current }) }}
+                    onError={() => setSnap('fail')}
+                  />
+                  <div className="pp-snap-foot">
+                    <span>Recruiter name, profile and the post link unlock with Premium</span>
+                    <button type="button" className="pp-jobcard-btn" onClick={() => checkout('monthly', 'offer_snapshot')} disabled={busy !== null}>{busy === 'monthly' ? 'Opening…' : <>Unlock Now <OutIcon /></>}</button>
+                  </div>
+                  <p className="pp-snap-cap">Captured from a public LinkedIn post. Names, email addresses and links are hidden.</p>
+                </div>
+              )}
+              {variant === 'recruiter' && gateJob && snap !== 'ok' && (
                 <>
                   <article className="pp-jobcard">
                     <div className="pp-jobcard-top">
@@ -455,6 +477,15 @@ export default function OfferPage() {
         .pp-blur { display: inline-block; filter: blur(4px); color: var(--ink); font-weight: 600; user-select: none; }
         .pp-jobcard-btn { flex: none; height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; color: #fff; background: var(--accent); border-radius: 6px; font-size: 12px; font-weight: 600; font-family: inherit; border: 0; cursor: pointer; }
         .pp-jobcard-btn:disabled { opacity: .7; cursor: wait; }
+        .pp-snap { display: flex; flex-direction: column; gap: 8px; max-width: 560px; }
+        .pp-snap[hidden] { display: none; }
+        .pp-snap, .pp-snap * { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+        .pp-snap-label { display: flex; align-items: center; gap: 8px; font: 500 11px var(--font-spline-mono), monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+        .pp-snap-label i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); display: inline-block; }
+        .pp-snap-img { display: block; width: 100%; height: auto; border-radius: 12px; box-shadow: 0 1px 2px rgba(25,23,19,.05), 0 10px 28px -12px rgba(25,23,19,.18); pointer-events: none; -webkit-user-drag: none; }
+        .pp-snap-foot { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--hair-2); border-radius: 10px; background: var(--surface); font-size: 12.5px; color: var(--ink-2); }
+        .pp-snap-foot span { flex: 1; min-width: 0; }
+        .pp-snap-cap { margin: 0; font-size: 12.5px; color: var(--ink-3); line-height: 1.45; }
         .pp-thing-note { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); max-width: 54ch; line-height: 1.5; background: var(--surface); padding: 10px 14px; border-radius: 8px; border: 1px solid var(--hair); }
 
         /* The optimized price card */
@@ -507,6 +538,7 @@ export default function OfferPage() {
 
         @media (max-width: 900px) {
           .pp-main { padding: 28px 20px 40px; }
+          .pp-hero.has-snap { grid-template-areas: "hook" "thing" "price"; }
           .pp-hero { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hook" "price" "thing"; column-gap: 0; row-gap: 20px; margin-bottom: 40px; }
           .pp-sub { font-size: 15px; }
           .pp-card { padding: 20px; gap: 14px; }
