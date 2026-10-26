@@ -115,6 +115,13 @@ const METRO_GROUPS: string[][] = [
   ['denver', 'boulder', 'littleton'],
   ['phoenix', 'scottsdale', 'tempe', 'mesa', 'chandler', 'gilbert'],
   ['minneapolis', 'saint paul', 'st paul'],
+  // suburb names that also exist in other states (Malvern, Franklin, Wilmington, Brentwood...) are left out on purpose:
+  // job locations are stored as a bare city name, so they could not be told apart
+  ['philadelphia', 'king of prussia', 'conshohocken', 'plymouth meeting', 'bala cynwyd', 'blue bell', 'chesterbrook',
+    'norristown', 'cherry hill', 'mount laurel'],
+  ['miami', 'miami beach', 'miami springs', 'miami gardens', 'south miami', 'fort lauderdale', 'coral gables', 'doral',
+    'hialeah', 'aventura', 'pompano beach', 'boca raton', 'coral springs', 'pembroke pines', 'sunny isles', 'key biscayne'],
+  ['nashville', 'murfreesboro', 'gallatin', 'mount juliet', 'goodlettsville', 'la vergne'],
 ]
 const METRO_OF = new Map<string, number>()
 METRO_GROUPS.forEach((g, i) => g.forEach((c) => { if (!METRO_OF.has(c)) METRO_OF.set(c, i) }))

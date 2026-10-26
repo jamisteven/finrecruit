@@ -47,6 +47,7 @@ const OFF_MARKET_TEXT: Array<[RegExp, string]> = [
   [/\b(india|pakistan|bangladesh|sri lanka|nigeria|kenya|ghana|egypt|philippines|indonesia|vietnam)[- ]based\b/i, 'country-based'],
   [/\b(pan[- ]india|work from home.*\bfreshers?\b|\bfreshers?\b.*work from home)/i, 'freshers / pan-India'],
   [/\b(candidates?|applicants?)\s+(from|in|based in|located in)\s+(india|pakistan|nigeria|kenya|egypt|philippines)\b/i, 'residency rule'],
+  [/\blocation\s*:\s*(pakistan|india|bangladesh|sri lanka|nigeria|kenya|ghana|egypt|philippines|indonesia|vietnam)\b/i, 'location in an off-market country'],
   [/\b(c2c|corp[- ]to[- ]corp|bench sales|h1b transfer|opt\/cpt)\b/i, 'US contract-staffing (C2C)'],
 ]
 
@@ -54,8 +55,9 @@ const OFF_MARKET_TEXT: Array<[RegExp, string]> = [
 const AI_TRAINING_GIG = [
   /\b(train(ing)?|teach(ing)?|evaluat(e|ing))\b[^.]{0,60}\b(ai|llm)s?\b[^.]{0,40}\b(models?|systems?|outputs?)\b/i,
   /\bai training\b/i,
-  /\b(micro1|mercor|outlier\.ai|dataannotation)\b/i,
 ]
+// the marketplaces that run these gigs: a post naming one is a gig listing, not a job at a company
+const AI_TRAINING_PLATFORM = /\b(micro1|mercor|outlier\.ai|data ?annotation)\b/i
 const MANY_OPENINGS = /\b\d{2,}\s*openings?\b/i
 
 // Author slug from a profile URL (/in/x, /company/x) or from the post URL itself
@@ -73,7 +75,8 @@ export function prefilterPost(post: {
   authorName: string | null
   authorHeadline: string | null
 }): PrefilterVerdict | null {
-  const text = post.text || ''
+  // fancy bold letters (𝗟𝗼𝗰𝗮𝘁𝗶𝗼𝗻) become plain ones, so the patterns below can read them
+  const text = (post.text || '').normalize('NFKC')
   const slug = slugOf(post.authorLinkedinUrl) || slugOf(post.postUrl)
 
   if (slug && AGGREGATOR_SLUGS.some((r) => r.test(slug))) {
@@ -82,6 +85,7 @@ export function prefilterPost(post: {
   const tpl = AGGREGATOR_TEXT.find((r) => r.test(text))
   if (tpl) return { label: 'bad', reason: `prefilter: aggregator template (${tpl.source.slice(0, 40)})` }
 
+  if (AI_TRAINING_PLATFORM.test(text)) return { label: 'bad', reason: 'prefilter: ai-training platform' }
   if (AI_TRAINING_GIG.some((r) => r.test(text)) && (MANY_OPENINGS.test(text) || /\$\d+\s*[–-]\s*\$?\d+\s*\/\s*h(ou)?r/i.test(text))) {
     return { label: 'bad', reason: 'prefilter: ai-training gig' }
   }
