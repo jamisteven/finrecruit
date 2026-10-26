@@ -1766,6 +1766,7 @@ export default function HomePage() {
                         </span>
                       )}
                       {job.employer_type === 'agency' && <span className="agency-tag" title="Posted by a recruitment agency or staffing firm placing at a client">Agency</span>}
+                      {job.on_linkedin_jobs && <span className="agency-tag" title="The recruiter's post links a listing that is also on LinkedIn Jobs. The post itself is how you reach them directly.">Also on LinkedIn Jobs</span>}
                       {job.posted_at && <span className={`ago${isFresh(job.posted_at) ? ' fresh' : ''}`}>{timeAgo(job.posted_at)}</span>}
                     </div>
 

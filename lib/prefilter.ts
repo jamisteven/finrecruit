@@ -28,9 +28,15 @@ const AGGREGATOR_TEXT: RegExp[] = [
   /daily job alert/i,
   /caught in a linkedin hiring post/i,
   /repost to help a job ?seeker/i,
-  /job card details:\s*title:/i,                                      // careers-page syndication
+  /apply today or share this post with your network/i,               // LinkedIn's auto-post when a company lists a job on LinkedIn Jobs
   /^\s*(remote job alert!|work from anywhere!)\s/i,                   // remoteyeah template
 ]
+
+// A post with a LinkedIn job listing attached (normalisePost appends this line). The role is also on LinkedIn Jobs,
+// so the post is kept but labelled "Also on LinkedIn Jobs"; only the auto-generated template above is dropped.
+export function hasJobCard(text: string | null | undefined): boolean {
+  return /job card details:\s*title:/i.test(text || '')
+}
 
 // Market signals the location field misses: currency, hours, residency rules.
 const OFF_MARKET_TEXT: Array<[RegExp, string]> = [

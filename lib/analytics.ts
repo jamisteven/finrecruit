@@ -51,7 +51,9 @@ export async function membersPanel(db: Db) {
     fetchAll(db, 'user_targets', 'user_id, keyword, location, created_at', () => undefined),
     fetchAll(db, 'priority_queries', 'query, keyword, location, active, last_run_at, user_count', () => undefined),
     fetchAll(db, 'checkout_events', '*', (q: Q) => q.not('paid_at', 'is', null)),
-    fetchAll(db, 'jobs', 'id, title, location, work_type, extracted_at, quality, employer_type', (q: Q) => q.gte('extracted_at', ago(14)).or('quality.is.null,quality.neq.low')),
+    // the member feed's own window: posted in the last 14 days (saved-date only when a post has no date), not saved in
+    // the last 14 days — a backfill saves a month of older posts at once, and the default feed hides those
+    fetchAll(db, 'jobs', 'id, title, location, work_type, posted_at, extracted_at, quality, employer_type', (q: Q) => q.or(`posted_at.gte.${ago(14)},and(posted_at.is.null,extracted_at.gte.${ago(14)})`).or('quality.is.null,quality.neq.low')),
     fetchAll(db, 'visits', 'user_id, visited_at', (q: Q) => q.not('user_id', 'is', null).gte('visited_at', ago(30))),
     fetchAll(db, 'ingest_runs', 'query, run_at, posts_returned, jobs_inserted', (q: Q) => q.eq('pipeline', 'priority').gte('run_at', ago(30)).order('run_at', { ascending: false })),
   ])
@@ -80,7 +82,7 @@ export async function membersPanel(db: Db) {
           anywhere14++
           if (locationMatches(t.location, j.location, j.work_type)) {
             if (j.employer_type === 'agency') { agency14++; continue }
-            exact14++; if (j.extracted_at >= ago(7)) { exact7++; unique7.add(String(j.id)) }
+            exact14++; if ((j.posted_at ?? j.extracted_at) >= ago(7)) { exact7++; unique7.add(String(j.id)) }
           }
         }
         const lastRun = q?.last_run_at ? new Date(q.last_run_at).getTime() : null

@@ -13,7 +13,7 @@ export function renderPostSnapshot(
 ): ImageResponse | null {
   // Emoji would be fetched from a CDN on every render, so they are left out; the words are what matters.
   const plain = (v: string) => v.replace(/[\p{Extended_Pictographic}\uFE0F\u200D\u20E3]/gu, '').replace(/[ \t]{2,}/g, ' ')
-  const lines = redactPost(plain(job.raw_text), job.author_name)
+  const lines = redactPost(plain(job.raw_text).replace(/\n*Job card details:[^\n]*$/i, ''), job.author_name)
   if (!lines.length) return null
   const headline = redactPost(plain(job.author_headline ?? ''), job.author_name)[0] ?? []
   const age = shortAge(job.posted_at, now)

@@ -56,7 +56,7 @@ const SEARCH_SYNONYMS: Record<string, string[]> = {
 // server instance, then every request (search, filters, free/pass tiers) is answered from
 // memory. Before this, every page load pulled the full table (~17 MB) from Supabase.
 // ---------------------------------------------------------------------------
-const COLUMNS = 'id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, author_avatar, posted_at, extracted_at, is_verified_job, quality, work_type, employer_type'
+const COLUMNS = 'id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, author_avatar, posted_at, extracted_at, is_verified_job, quality, work_type, employer_type, on_linkedin_jobs'
 const HISTORY_DAYS = 30                 // longest window the page can ask for
 const CORE_DAYS = 14                    // sent by default; older roles (CORE_DAYS..HISTORY_DAYS) only on request (?archive=1)
 const OLD_TTL_MS = 4 * 3600_000         // roles older than 48h barely change: refresh every 4h

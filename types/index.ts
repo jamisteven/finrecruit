@@ -20,6 +20,7 @@ export type JobPost = {
   author_avatar?: string | null
   author_linkedin_url: string | null
   gated?: boolean         // free tier: recruiter and post link withheld server-side
+  on_linkedin_jobs?: boolean   // a LinkedIn job listing was attached to the post, so the role is also on LinkedIn Jobs
   employer_type?: 'direct' | 'agency' | null   // who is hiring: the company itself, or an agency/staffing firm placing at a client
   raw_text: string
   posted_at: string | null

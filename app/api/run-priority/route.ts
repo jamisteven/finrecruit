@@ -5,7 +5,7 @@ import { inferWorkType } from '@/lib/workType'
 import { normalisePost, ApifyPost } from '@/lib/apify'
 import { classifyPost } from '@/lib/classifier'
 import { alreadySeen, rememberDiscard } from '@/lib/seenPosts'
-import { prefilterPost } from '@/lib/prefilter'
+import { prefilterPost, hasJobCard } from '@/lib/prefilter'
 import { offMarketReason } from '@/lib/market'
 import { logPrefilter, logGateDiscard, recordDecision, type ClassifyContext } from '@/lib/classifierLog'
 import { runGate } from '@/lib/gate'
@@ -231,6 +231,7 @@ export async function POST(req: NextRequest) {
               work_type: inferWorkType(classified.location, classified.tags, classified.title),
               is_verified_job: true,
               employer_type: employerType(classified.employer, post.text, post.authorHeadline, classified.company, jobSector, classified.apply_method),
+              on_linkedin_jobs: hasJobCard(post.text),
             })
             if (!error) { result.inserted++; queryInserted++ }
             else if (error.code === '23505') { result.duplicates_skipped++; queryDuplicates++ }
