@@ -87,6 +87,49 @@ const CITY_TO_REGION: Record<string, string> = {
   'madrid': 'Spain', 'barcelona': 'Spain', 'milan': 'Italy', 'rome': 'Italy',
 }
 
+// Metro areas. Someone who asks for San Francisco wants the roles in Sunnyvale, Palo Alto and Fremont
+// too; recruiters name the suburb their office is in. Every city in a group counts as every other
+// city in it. Keep to places that really share a commute; anything ambiguous stays out.
+const METRO_GROUPS: string[][] = [
+  ['san francisco', 'sf', 'oakland', 'berkeley', 'san jose', 'palo alto', 'mountain view', 'sunnyvale', 'santa clara',
+    'san mateo', 'redwood city', 'menlo park', 'cupertino', 'fremont', 'milpitas', 'los gatos', 'foster city',
+    'south san francisco', 'hayward', 'walnut creek', 'pleasanton', 'emeryville', 'san rafael', 'los altos',
+    'campbell', 'burlingame', 'bay area', 'silicon valley'],
+  ['seattle', 'bellevue', 'redmond', 'kirkland', 'bothell', 'renton', 'everett', 'issaquah', 'sammamish',
+    'mercer island', 'woodinville'],
+  ['new york', 'nyc', 'brooklyn', 'manhattan', 'queens', 'bronx', 'staten island', 'long island city',
+    'jersey city', 'hoboken', 'white plains'],
+  ['boston', 'cambridge', 'somerville', 'waltham', 'quincy', 'watertown', 'woburn', 'framingham',
+    'needham', 'brookline'],
+  ['los angeles', 'santa monica', 'pasadena', 'long beach', 'glendale', 'burbank', 'culver city', 'el segundo',
+    'torrance', 'beverly hills'],
+  ['irvine', 'anaheim', 'costa mesa', 'newport beach', 'santa ana'],
+  ['washington dc', 'dc', 'arlington', 'alexandria', 'reston', 'mclean', 'herndon', 'tysons', 'chantilly',
+    'bethesda', 'rockville', 'fairfax', 'silver spring'],
+  ['chicago', 'evanston', 'naperville', 'schaumburg', 'oak brook', 'rosemont', 'skokie', 'deerfield',
+    'lake forest', 'hoffman estates'],
+  ['dallas', 'plano', 'irving', 'frisco', 'mckinney', 'fort worth', 'richardson', 'addison'],
+  ['houston', 'the woodlands', 'sugar land', 'katy'],
+  ['austin', 'round rock', 'cedar park'],
+  ['atlanta', 'alpharetta', 'marietta', 'sandy springs', 'smyrna'],
+  ['denver', 'boulder', 'littleton'],
+  ['phoenix', 'scottsdale', 'tempe', 'mesa', 'chandler', 'gilbert'],
+  ['minneapolis', 'saint paul', 'st paul'],
+]
+const METRO_OF = new Map<string, number>()
+METRO_GROUPS.forEach((g, i) => g.forEach((c) => { if (!METRO_OF.has(c)) METRO_OF.set(c, i) }))
+const metroRegex: (RegExp | undefined)[] = []
+
+/** Is the job's location in the same metro area as the place the member named? */
+export function sameMetro(target: string, jobLocation: string | null): boolean {
+  if (!jobLocation) return false
+  const gi = METRO_OF.get(canonPlace(target))
+  if (gi === undefined) return false
+  const re = (metroRegex[gi] ??= new RegExp(
+    `(?<![\\p{L}])(?:${METRO_GROUPS[gi].map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\p{L}])`, 'iu'))
+  return re.test(jobLocation.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+}
+
 /** Every US state maps up to the country; everything else is already national. */
 const US_REGIONS = new Set([
   'California', 'Texas', 'New York', 'Massachusetts', 'Washington', 'Illinois',

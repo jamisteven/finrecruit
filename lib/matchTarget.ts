@@ -1,4 +1,4 @@
-import { regionsOf, canonPlace } from './widenLocation'
+import { regionsOf, canonPlace, sameMetro } from './widenLocation'
 
 // Matching a member's saved target against a role.
 //
@@ -131,7 +131,9 @@ export function locationMatches(target: string | null, location: string | null, 
   // place the member named — never the other way round (a London target must
   // not match Manchester just because both are in the UK)
   const want = canonPlace(target)
-  return regionsOf(location).some((h) => h === want || h.includes(want))
+  if (regionsOf(location).some((h) => h === want || h.includes(want))) return true
+  // same metro area (target San Francisco, job in Sunnyvale)
+  return sameMetro(target, location)
 }
 
 
