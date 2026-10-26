@@ -9,6 +9,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 type Db = SupabaseClient<any, any, any>
 
 export const FULL_BATCH = 20
+// A query's very first visit reaches back through the month of posts, so a new member starts with a full
+// feed instead of only the newest 20. Later visits go back to the small top-ups below.
+export const FIRST_BATCH = 100
 const TINY_BATCH = 5
 
 type Run = { query: string; posts_returned: number | null; jobs_inserted: number | null; duplicates_skipped: number | null; run_at: string }
@@ -22,13 +25,13 @@ type Run = { query: string; posts_returned: number | null; jobs_inserted: number
  * gets the full batch. (The old rule used the share of repeats, which starved busy
  * queries: 10 new + 10 repeats read as "50% repeats" and asked for 5 next time.)
  */
-export async function batchSizeFor(db: Db, pipeline: string, query: string): Promise<{ maxPosts: number; why: string }> {
+export async function batchSizeFor(db: Db, pipeline: string, query: string, opts: { firstBatch?: number } = {}): Promise<{ maxPosts: number; why: string }> {
   const { data } = await db.from('ingest_runs')
     .select('query, posts_returned, jobs_inserted, duplicates_skipped, run_at')
     .eq('pipeline', pipeline).ilike('query', query)
     .order('run_at', { ascending: false }).limit(1)
   const last = (data as Run[] | null)?.[0]
-  if (!last || !last.posts_returned) return { maxPosts: FULL_BATCH, why: 'no history' }
+  if (!last || !last.posts_returned) return { maxPosts: opts.firstBatch ?? FULL_BATCH, why: 'no history' }
   const returned = last.posts_returned
   const fresh = Math.max(0, returned - (last.duplicates_skipped ?? 0))
   if (returned >= FULL_BATCH && fresh >= returned) return { maxPosts: FULL_BATCH, why: `all ${fresh} new last run — may have missed some` }

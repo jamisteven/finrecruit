@@ -9,7 +9,7 @@ import { prefilterPost } from '@/lib/prefilter'
 import { offMarketReason } from '@/lib/market'
 import { logPrefilter, logGateDiscard, recordDecision, type ClassifyContext } from '@/lib/classifierLog'
 import { runGate } from '@/lib/gate'
-import { batchSizeFor, findDuds, DUD_COOLDOWN_DAYS } from '@/lib/sweepBudget'
+import { batchSizeFor, findDuds, DUD_COOLDOWN_DAYS, FIRST_BATCH } from '@/lib/sweepBudget'
 import { releaseLapsedMembers, activeMemberQueries } from '@/lib/targetQueries'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
@@ -96,7 +96,10 @@ export async function POST(req: NextRequest) {
   const runOne = async (query: string) => {
     let queryInserted = 0, queryDuplicates = 0, queryRejected = 0, queryPosts = 0
     try {
-      const budget = await batchSizeFor(db, 'priority', query)
+      // body.deep re-reads a query's whole month once (for searches that only ever got the newest 20)
+      const budget = body.deep === true
+        ? { maxPosts: FIRST_BATCH, why: 'deep re-run requested' }
+        : await batchSizeFor(db, 'priority', query, { firstBatch: FIRST_BATCH })
       console.log(`[run-priority] "${query}" maxPosts=${budget.maxPosts} (${budget.why})`)
       const startRes = await fetch(
         `https://api.apify.com/v2/acts/harvestapi~linkedin-post-search/runs?token=${apiToken}`,
@@ -128,7 +131,7 @@ export async function POST(req: NextRequest) {
       let items: ApifyPost[] = []
       for (let attempt = 0; attempt < 3; attempt++) {
         items = await (await fetch(
-          `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=50`
+          `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiToken}&limit=${budget.maxPosts}`
         )).json()
         if (items.length > 0) break
         await new Promise((r) => setTimeout(r, 6000))
