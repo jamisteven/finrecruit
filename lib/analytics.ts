@@ -116,6 +116,8 @@ export async function membersPanel(db: Db) {
       return {
         widened, widenedMissing, feed,
         email: p.email, plan: paid[0]?.plan ?? null, paidAt: paid[0]?.paid_at ?? null, payments: paid.length,
+        // when they first became a member: their earliest payment (paid[] is newest-first)
+        joinedAt: paid.length ? paid[paid.length - 1].paid_at : null,
         expiresAt: p.pass_expires_at, daysLeft: Math.ceil((exp - now) / DAY), active: exp > now,
         device: p.signup_device ?? null, lastVisit: lastVisit.get(p.id) ?? null,
         targets: rows, exact7: unique7.size, flags: rows.filter((r) => r.flag).length,

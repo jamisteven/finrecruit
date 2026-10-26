@@ -40,6 +40,7 @@ export default function Dashboard() {
   const [tab, setTab] = useState<Tab>('members')
   const [win, setWin] = useState<'d7' | 'd30' | 'd90'>('d30')
   const [seg, setSeg] = useState<'all' | 'members' | 'free'>('all')
+  const [memberSort, setMemberSort] = useState<'time' | 'newest'>('time')
 
   useEffect(() => {
     getJson('/api/analytics').then(setData).catch((e) => setErr(e.message))
@@ -56,6 +57,10 @@ export default function Dashboard() {
 
   const M = data?.members, D = data?.demand, E = data?.engagement, S = data?.supply
   const d = D?.[win]?.[seg]
+  // 'time' = the server's order (active first, most time left); 'newest' = most recently joined first
+  const members: Data[] = M ? (memberSort === 'newest'
+    ? [...M.members].sort((a: Data, b: Data) => String(b.joinedAt ?? '').localeCompare(String(a.joinedAt ?? '')))
+    : M.members) : []
 
   return (
     <div className="an-page">
@@ -105,23 +110,28 @@ export default function Dashboard() {
               <b>Expiring soon:</b> {M.expiring7.map((m: Data) => `${m.email} (${m.daysLeft}d)`).join(' · ')}
             </div>
           )}
+          <div className="an-seg" role="group" aria-label="Sort members">
+            <span className="an-muted-inline" style={{ marginRight: 8 }}>Sort by</span>
+            <button type="button" className={memberSort === 'time' ? 'on' : ''} onClick={() => setMemberSort('time')}>time left</button>
+            <button type="button" className={memberSort === 'newest' ? 'on' : ''} onClick={() => setMemberSort('newest')}>newest member</button>
+          </div>
           <div className="an-cols">
             <ChartCard title="Time left on each pass" sub="Days until access ends. Orange = a week or less." csv="members-days-left"
-              rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ member: m.email, plan: m.plan, days_left: m.daysLeft }))}>
-              <HBars rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ label: m.email, value: m.daysLeft, color: m.daysLeft <= 7 ? COLORS.orange : COLORS.blue }))} format={(n) => `${n}d`} empty="No active members" />
+              rows={members.filter((m: Data) => m.active).map((m: Data) => ({ member: m.email, plan: m.plan, days_left: m.daysLeft }))}>
+              <HBars rows={members.filter((m: Data) => m.active).map((m: Data) => ({ label: m.email, value: m.daysLeft, color: m.daysLeft <= 7 ? COLORS.orange : COLORS.blue }))} format={(n) => `${n}d`} empty="No active members" />
             </ChartCard>
             <ChartCard title="Roles in each member’s feed, last 14 days" sub="Direct-employer roles that fit a target’s role and place, each counted once, the same way the member’s own feed counts them. Agency roles and same-role-elsewhere are in the table view. A short bar is a member at risk of cancelling." csv="members-feed-14d"
-              rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ member: m.email, direct_exact: m.feed.exact, via_agencies: m.feed.agency, same_role_elsewhere: m.feed.rough, different_roles_7d: m.exact7, target_problems: m.flags }))}>
-              <HBars rows={M.members.filter((m: Data) => m.active).map((m: Data) => ({ label: m.email, value: m.feed.exact, note: `+${m.feed.agency} agency, +${m.feed.rough} elsewhere`, color: m.feed.exact < 10 ? COLORS.orange : COLORS.blue }))} empty="No active members" />
+              rows={members.filter((m: Data) => m.active).map((m: Data) => ({ member: m.email, direct_exact: m.feed.exact, via_agencies: m.feed.agency, same_role_elsewhere: m.feed.rough, different_roles_7d: m.exact7, target_problems: m.flags }))}>
+              <HBars rows={members.filter((m: Data) => m.active).map((m: Data) => ({ label: m.email, value: m.feed.exact, note: `+${m.feed.agency} agency, +${m.feed.rough} elsewhere`, color: m.feed.exact < 10 ? COLORS.orange : COLORS.blue }))} empty="No active members" />
             </ChartCard>
           </div>
-          {M.members.map((m: Data) => (
+          {members.map((m: Data) => (
             <article key={m.email} className={`an-card an-member ${m.active ? '' : 'lapsed'}`}>
               <div className="an-member-head">
                 <div>
                   <b>{m.email}</b>
                   <span className="an-meta">
-                    {m.plan ?? 'no payment'} · {m.payments} payment{m.payments === 1 ? '' : 's'} · {m.active ? `${m.daysLeft} days left` : `lapsed ${-m.daysLeft}d ago`} · last visit {ago(m.lastVisit)}{m.device ? ` · ${m.device}` : ''}
+                    {m.joinedAt ? `joined ${ago(m.joinedAt)} · ` : ''}{m.plan ?? 'no payment'} · {m.payments} payment{m.payments === 1 ? '' : 's'} · {m.active ? `${m.daysLeft} days left` : `lapsed ${-m.daysLeft}d ago`} · last visit {ago(m.lastVisit)}{m.device ? ` · ${m.device}` : ''}
                   </span>
                 </div>
                 <div className="an-member-sum"><b>{m.feed.exact}</b><span>in their feed, 14d · +{m.feed.agency} via agencies · +{m.feed.rough} same role elsewhere</span></div>
