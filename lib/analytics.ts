@@ -223,11 +223,12 @@ export async function engagementPanel(db: Db) {
 // ---------------------------------------------------------------- supply
 
 export async function supplyPanel(db: Db) {
-  const [runs, logRows, budget, jobRows] = await Promise.all([
+  const [runs, logRows, budget, jobRows, pqRows] = await Promise.all([
     fetchAll(db, 'ingest_runs', 'pipeline, query, run_at, posts_returned, jobs_inserted, duplicates_skipped, rejected', (q: Q) => q.gte('run_at', ago(30))),
     fetchAll(db, 'classifier_log', 'created_at, model, decision, pipeline', (q: Q) => q.gte('created_at', ago(14)).not('model', 'like', '%backfill%')),
     apifyBudget(db),
     fetchAll(db, 'jobs', 'extracted_at, sector, employer_type', (q: Q) => q.gte('extracted_at', ago(30)).or('quality.is.null,quality.neq.low')),
+    fetchAll(db, 'priority_queries', 'query, active, user_count', () => undefined),
   ])
   // what the feed is made of: roles added per day split direct / agency, and by sector
   const mix = new Map<string, { direct: number; agency: number }>()
@@ -264,6 +265,25 @@ export async function supplyPanel(db: Db) {
   const yieldRows = [...perQuery.entries()].map(([k, a]) => ({ query: k.split('|')[1], ...a,
     keptPct: a.posts ? Math.round(100 * a.kept / a.posts) : 0, dupPct: a.posts ? Math.round(100 * a.dup / a.posts) : 0 }))
     .filter((r) => r.posts >= 20)
+  // Money view: what each search cost and who it is for. A member's search with a low kept % is a thin niche,
+  // not waste; a search nobody asked for, or a shared-sweep query that keeps almost nothing, is.
+  const pq = new Map(pqRows.map((q) => [String(q.query).toLowerCase(), q]))
+  const spend = yieldRows.map((r) => {
+    const q = pq.get(r.query)
+    const members = r.pipeline === 'priority' ? Number(q?.user_count ?? 0) : null
+    const usd = +(r.posts * USD_PER_POST).toFixed(2)
+    const verdict = r.pipeline === 'priority'
+      ? (q && q.active === false ? 'paused'
+        : !(members! > 0) ? (r.posts >= 40 && r.keptPct < 10 ? 'ditch: no member wants it' : 'no member, watch')
+        : r.keptPct < 5 && r.posts >= 60 ? `thin niche: ${members} member${members === 1 ? '' : 's'}` : `keep: ${members} member${members === 1 ? '' : 's'}`)
+      : (r.posts >= 60 && r.keptPct < 10 ? 'ditch: low yield' : r.keptPct >= 30 ? 'keep' : 'watch')
+    return { ...r, members, usd, perKept: r.kept ? +(usd / r.kept).toFixed(3) : null, verdict }
+  })
+  const pipelines = [...new Set(spend.map((r) => r.pipeline))].map((p) => {
+    const rs = spend.filter((r) => r.pipeline === p)
+    const posts = rs.reduce((s, r) => s + r.posts, 0), kept = rs.reduce((s, r) => s + r.kept, 0)
+    return { pipeline: p, queries: rs.length, posts, kept, usd: +(posts * USD_PER_POST).toFixed(2), perKept: kept ? +((posts * USD_PER_POST) / kept).toFixed(3) : null }
+  })
   const worst = [...yieldRows].sort((a, b) => a.keptPct - b.keptPct || b.posts - a.posts).slice(0, 12)
   const best = [...yieldRows].sort((a, b) => b.keptPct - a.keptPct || b.posts - a.posts).slice(0, 12)
 
@@ -275,7 +295,7 @@ export async function supplyPanel(db: Db) {
   }
   const haikuDays = [...haikuByDay.entries()].sort().map(([day, calls]) => ({ day, calls, usd: +(calls * 0.002).toFixed(2) }))
 
-  return { days, jobDays, sectors, best, worst, classifier: topN(classifier, 20), haikuDays, budget: { ...budget, mode: budgetMode(budget).mode } }
+  return { days, jobDays, sectors, best, worst, spend, pipelines, classifier: topN(classifier, 20), haikuDays, budget: { ...budget, mode: budgetMode(budget).mode } }
 }
 
 // ---------------------------------------------------------------- growth

@@ -40,6 +40,7 @@ export default function Dashboard() {
   const [tab, setTab] = useState<Tab>('members')
   const [win, setWin] = useState<'d7' | 'd30' | 'd90'>('d30')
   const [seg, setSeg] = useState<'all' | 'members' | 'free'>('all')
+  const [ySort, setYSort] = useState<'spend' | 'yield'>('spend')
   const [memberSort, setMemberSort] = useState<'time' | 'newest'>('time')
 
   useEffect(() => {
@@ -262,9 +263,14 @@ export default function Dashboard() {
               <HBars rows={S.sectors.map((t: Data) => ({ label: t.key, value: t.count }))} />
             </ChartCard>
           </div>
-          <div className="an-cols">
-            <div className="an-card"><h2>Worst-yielding queries, 14d</h2><YieldTable rows={S.worst} /></div>
-            <div className="an-card"><h2>Best-yielding queries, 14d</h2><YieldTable rows={S.best} /></div>
+          <div className="an-card">
+            <h2>Apify spend by query, 14d</h2>
+            <p className="an-sub2">Posts bought × $0.002. <b>priority</b> = searches for members, <b>hashtag</b> = the shared sweep. A low kept % on a member&apos;s search means a thin niche, not waste: widen it or slow it down, don&apos;t drop it. Ditch what no member wants or a sweep that keeps almost nothing.</p>
+            <div className="an-tiles">{S.pipelines.map((p: Data) => <div key={p.pipeline} className="an-tile"><b>${p.usd}</b><span>{p.pipeline}: {p.queries} queries, {p.posts} posts, {p.kept} kept{p.perKept != null ? `, $${p.perKept} per kept job` : ''}</span></div>)}</div>
+            <div className="an-seg" role="group" aria-label="Sort queries"><span className="an-muted-inline" style={{ marginRight: 8 }}>Sort by</span>
+              <button type="button" className={ySort === 'spend' ? 'on' : ''} onClick={() => setYSort('spend')}>most spend</button>
+              <button type="button" className={ySort === 'yield' ? 'on' : ''} onClick={() => setYSort('yield')}>lowest yield</button></div>
+            <SpendTable rows={[...S.spend].sort((a: Data, b: Data) => ySort === 'spend' ? b.usd - a.usd : a.keptPct - b.keptPct || b.posts - a.posts).slice(0, 40)} />
           </div>
           <ChartCard title="What happened to posts, 14d" csv="classifier-outcomes" rows={S.classifier.map((t: Data) => ({ outcome: t.key, count: t.count }))}>
             <HBars rows={S.classifier.map((t: Data) => ({ label: t.key, value: t.count }))} color={COLORS.grey} />
@@ -425,11 +431,18 @@ function Growth({ G, generatedAt }: { G: Data; generatedAt: string }) {
   )
 }
 
-function YieldTable({ rows }: { rows: Data[] }) {
+function SpendTable({ rows }: { rows: Data[] }) {
   return (
     <table className="an-compact">
-      <thead><tr><th>Query</th><th className="num">Posts</th><th className="num">Kept %</th><th className="num">Repeat %</th></tr></thead>
-      <tbody>{rows.map((r) => <tr key={`${r.pipeline}|${r.query}`}><td><span className="an-pill">{r.pipeline}</span> {r.query}</td><td className="num">{r.posts}</td><td className="num">{r.keptPct}</td><td className="num">{r.dupPct}</td></tr>)}</tbody>
+      <thead><tr><th>Query</th><th className="num">Runs</th><th className="num">Posts</th><th className="num">$</th><th className="num">Kept</th><th className="num">Kept %</th><th className="num">Repeat %</th><th className="num">$/kept</th><th>Verdict</th></tr></thead>
+      <tbody>{rows.map((r) => (
+        <tr key={`${r.pipeline}|${r.query}`}>
+          <td><span className="an-pill">{r.pipeline}</span> {r.query}</td>
+          <td className="num">{r.runs}</td><td className="num">{r.posts}</td><td className="num">{r.usd.toFixed(2)}</td><td className="num">{r.kept}</td>
+          <td className="num">{r.keptPct}</td><td className="num">{r.dupPct}</td><td className="num">{r.perKept ?? '—'}</td>
+          <td>{r.verdict.startsWith('ditch') ? <span className="an-flag">{r.verdict}</span> : r.verdict}</td>
+        </tr>
+      ))}</tbody>
     </table>
   )
 }

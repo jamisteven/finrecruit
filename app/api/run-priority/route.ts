@@ -95,6 +95,21 @@ export async function POST(req: NextRequest) {
   // lane costs no function time and doubles how many member queries a run covers.
   const runOne = async (query: string) => {
     let queryInserted = 0, queryDuplicates = 0, queryRejected = 0, queryPosts = 0
+    // Saving targets and a member's first visit both fire the same searches within seconds, and a search is only
+    // marked as run when it finishes, so each ran twice (and the second 100-post run bought only duplicates).
+    // Claim the search first: if it started in the last 5 minutes, someone else has it. A deep re-run skips this.
+    if (body.deep !== true) {
+      const like = query.replace(/[\\%_]/g, (c) => `\\${c}`)
+      const { data: rows } = await db.from('priority_queries').select('query').ilike('query', like).limit(1)
+      if (rows?.length) {
+        const { data: claimed } = await db.from('priority_queries')
+          .update({ last_run_at: new Date().toISOString() })
+          .ilike('query', like)
+          .or(`last_run_at.is.null,last_run_at.lt.${new Date(Date.now() - 5 * 60_000).toISOString()}`)
+          .select('query')
+        if (!claimed?.length) { console.log(`[run-priority] "${query}" already started in the last 5 minutes, skipped`); return }
+      }
+    }
     try {
       // body.deep re-reads a query's whole month once (for searches that only ever got the newest 20)
       const budget = body.deep === true
