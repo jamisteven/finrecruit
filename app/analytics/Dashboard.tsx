@@ -70,7 +70,8 @@ export default function Dashboard() {
         <div className="an-mast-in">
           <Link className="an-wordmark" href="/" aria-label="backchannel.jobs home"><span className="an-mark">B</span><span>backchannel<em>.jobs</em></span></Link>
           <span className="an-badge">Internal · Analytics</span>
-          <Link className="an-mast-link" href="/">Open the site &rarr;</Link>
+          <Link className="an-mast-link" href="/reddit-radar">Reddit radar</Link>
+          <Link className="an-mast-link" href="/" style={{ marginLeft: 16 }}>Open the site &rarr;</Link>
         </div>
       </div>
     <div className="an">
