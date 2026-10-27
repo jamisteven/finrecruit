@@ -170,7 +170,7 @@ export default function RadarClient() {
         <p className="rr-sub">Finds Reddit threads where people are stuck in a job search, ranks them, and leaves the replying to you. Nothing is posted anywhere.</p>
 
         <div className="rr-card">
-          <label className="rr-label" htmlFor="rr-q">Searches, one per line <span>(site:reddit.com is added for you)</span></label>
+          <label className="rr-label" htmlFor="rr-q">Searches, one per line <span>(site:reddit.com is added for you; lines starting with # are ignored)</span></label>
           <textarea id="rr-q" className="rr-ta" rows={8} value={queries} onChange={(e) => setQueries(e.target.value)} spellCheck={false} />
           <div className="rr-row">
             <div className="rr-seg" role="group" aria-label="How recent">
@@ -181,7 +181,7 @@ export default function RadarClient() {
             <button className="rr-run" onClick={run} disabled={phase !== 'idle'}>{phase === 'idle' ? 'Find threads' : 'Working…'}</button>
             <button className="rr-ghost" onClick={() => setQueries(DEFAULT_QUERIES.join('\n'))} disabled={phase !== 'idle'}>Reset searches</button>
           </div>
-          <p className="rr-muted">Each search uses one Serper credit ({queries.split('\n').filter((l) => l.trim()).length} per run). Scoring reads the title and Google snippet only, so open a thread to check it before replying.</p>
+          <p className="rr-muted">Each search uses one Serper credit ({queries.split('\n').filter((l) => l.trim() && !l.trim().startsWith('#')).length} per run, up to 40; lines starting with # are ignored). Scoring reads the title and Google snippet only, so open a thread to check it before replying.</p>
         </div>
 
         <details className="rr-card rr-prompt">

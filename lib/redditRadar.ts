@@ -70,7 +70,8 @@ export async function searchReddit(queries: string[], period: string): Promise<{
   const key = process.env.SERPER_API_KEY
   if (!key) throw new Error('SERPER_API_KEY is not set (add it in Vercel and .env.local)')
   const tbs = PERIODS[period] ?? null
-  const clean = queries.map((q) => q.trim()).filter(Boolean).slice(0, 20)
+  // blank lines and lines starting with # (headings the owner keeps in the box) are not searches
+  const clean = queries.map((q) => q.trim()).filter((q) => q && !q.startsWith('#')).slice(0, 40)
   const results = await Promise.all(clean.map((q) => serper(/\bsite:/i.test(q) ? q : `site:reddit.com ${q}`, tbs, key)))
 
   const byId = new Map<string, RadarPost>()
