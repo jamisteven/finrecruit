@@ -31,7 +31,7 @@ export const DEFAULT_QUERIES = [
   'inurl:comments "linkedin" "ghost jobs" OR "fake jobs" "applying"',
 ]
 
-const PERIODS: Record<string, string> = { d: 'qdr:d', w: 'qdr:w', m: 'qdr:m', y: 'qdr:y' }
+const PERIODS: Record<string, string> = { h: 'qdr:h', d: 'qdr:d', w: 'qdr:w', m: 'qdr:m', y: 'qdr:y' }
 
 const REDDIT_THREAD = /^https?:\/\/(?:www\.|old\.|np\.)?reddit\.com\/r\/([^/]+)\/comments\/([a-z0-9]+)/i
 
@@ -140,4 +140,45 @@ export async function scorePosts(posts: Pick<RadarPost, 'id' | 'subreddit' | 'ti
     })
   }
   return posts.map((p) => byId.get(p.id) ?? { id: p.id, kind: 'not-a-fit', score: 0 })
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Reply drafting. The owner pastes a thread's text; Claude writes a reply for the owner to edit and post by hand.
+
+export const DEFAULT_REPLY_PROMPT = `You write Reddit replies for the founder of backchannel.jobs, who is replying personally from their own account.
+
+About the product (mention only when it genuinely fits):
+backchannel.jobs collects jobs that recruiters and hiring managers post on LinkedIn as ordinary posts, many of which never appear in LinkedIn Jobs, so a jobseeker can message the poster directly. There is a free version that shows posts after a delay, and a paid version for current posts. The founder built it.
+
+How to write the reply:
+- Answer the person's actual question or situation first. Give specific, useful advice that stands on its own even if they never click anything: where to look, what to change, what is normal in this market.
+- Sound like a person on Reddit: plain, warm, direct. No headings, no bullet lists unless the thread uses them, no emojis, no marketing language, no "Great question!".
+- 80 to 160 words. Shorter is fine if the situation is simple.
+- Only use facts that are in the thread. Never invent details about the person, and never claim personal experiences the founder did not have.
+- If "Mention Backchannel" is yes AND it truly helps this person, add one short, low-key mention near the end, say that you built it, and do not use a link, a price or a call to action. If it does not fit, leave it out entirely.
+- If "Mention Backchannel" is no, do not mention it at all.
+- Never pretend to be a neutral third party. Never promise results.
+
+If the thread is not worth a reply (the person is not job hunting, the question is already answered well, it is a rant with nothing to answer, or a reply would read as an ad), reply with exactly "SKIP: " followed by a one-line reason instead.
+
+Output only the reply text, ready to paste.`
+
+export async function draftReply(opts: { prompt: string; subreddit: string; title: string; thread: string; mention: boolean }): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set')
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: process.env.RADAR_REPLY_MODEL || 'claude-sonnet-5-5',
+      max_tokens: 700,
+      system: opts.prompt.slice(0, 6000),
+      messages: [{ role: 'user', content: `Subreddit: r/${opts.subreddit}\nThread title: ${opts.title.slice(0, 300)}\nMention Backchannel: ${opts.mention ? 'yes' : 'no'}\n\nThread text (the original post and any comments the founder pasted):\n---\n${opts.thread.slice(0, 24000)}\n---` }],
+    }),
+  })
+  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 160)}`)
+  const data = await res.json()
+  const text: string = data.content?.find((b: { type: string }) => b.type === 'text')?.text ?? ''
+  if (!text.trim()) throw new Error('Empty reply from the model')
+  return text.trim()
 }
