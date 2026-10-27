@@ -66,6 +66,9 @@ export async function membersPanel(db: Db) {
   for (const v of visits) if (!lastVisit.has(v.user_id) || v.visited_at > lastVisit.get(v.user_id)!) lastVisit.set(v.user_id, v.visited_at)
   const paidBy = new Map<string, Row[]>()
   for (const c of checkouts) { const arr = paidBy.get(c.user_id) ?? []; arr.push(c); paidBy.set(c.user_id, arr) }
+  const postsByQuery = new Map<string, number>()
+  for (const r of priorityRuns) { const k = String(r.query).toLowerCase(); postsByQuery.set(k, (postsByQuery.get(k) ?? 0) + (r.posts_returned ?? 0)) }
+  const sharedBy = new Map(queries.map((q) => [String(q.query).toLowerCase(), Math.max(1, Number(q.user_count ?? 1))]))
   const qByKey = new Map(queries.map((q) => [`${String(q.keyword).toLowerCase()}|${String(q.location ?? '').toLowerCase()}`, q]))
 
   const members = profiles
@@ -87,10 +90,13 @@ export async function membersPanel(db: Db) {
         }
         const lastRun = q?.last_run_at ? new Date(q.last_run_at).getTime() : null
         const dud = q ? isDud(String(q.query)) : false
-        const ageDays = lastRun === null ? null : (now - lastRun) / DAY
+        // Member searches run when the member opens the site, so a search is only a problem if they visited well
+        // after its last run and it still did not catch up (a quiet member's old searches are by design)
+        const lv = lastVisit.get(p.id)
+        const visitedSince = lastRun !== null && lv ? Date.parse(lv) - lastRun : 0
         // a problem = something to fix; the slow lane is working as designed (4-day cooldown)
         const flag = !q ? 'no query' : !q.active ? 'inactive' : lastRun === null ? 'never ran'
-          : dud ? (ageDays! > 5 ? 'stale' : null) : (ageDays! > 2 ? 'stale' : null)
+          : (visitedSince > (dud ? 5 * DAY : 13 * 3600_000) ? 'stale' : null)
         return {
           keyword: t.keyword, location: t.location, exact7, exact14, agency14, anywhere14,
           query: q?.query ?? null, active: q?.active ?? null, lastRunAt: q?.last_run_at ?? null,
@@ -115,8 +121,12 @@ export async function membersPanel(db: Db) {
           stale: !q.active || !q.last_run_at || now - new Date(q.last_run_at).getTime() > 2 * DAY }
       })
       const widenedMissing = wanted.some((w) => !byText.has(w))
+      // what their searches cost in Apify over 30 days (posts bought x $0.002); a search shared by several members is split between them
+      const theirQueries = new Set<string>([...rows.map((r) => r.query), ...widened.map((w) => w.query)].filter(Boolean).map((q) => String(q).toLowerCase()))
+      let apifyUsd30 = 0
+      for (const q of theirQueries) apifyUsd30 += (postsByQuery.get(q) ?? 0) * USD_PER_POST / (sharedBy.get(q) ?? 1)
       return {
-        widened, widenedMissing, feed,
+        widened, widenedMissing, feed, apifyUsd30: +apifyUsd30.toFixed(2), queryCount: theirQueries.size,
         email: p.email, plan: paid[0]?.plan ?? null, paidAt: paid[0]?.paid_at ?? null, payments: paid.length,
         // when they first became a member: their earliest payment (paid[] is newest-first)
         joinedAt: paid.length ? paid[paid.length - 1].paid_at : null,
@@ -126,7 +136,9 @@ export async function membersPanel(db: Db) {
       }
     })
     .sort((a, b) => Number(b.active) - Number(a.active) || b.daysLeft - a.daysLeft)
-  return { members, active: members.filter((m) => m.active).length, expiring7: members.filter((m) => m.active && m.daysLeft <= 7) }
+  const activeM = members.filter((m) => m.active)
+  const avgApifyUsd30 = activeM.length ? +(activeM.reduce((s, m) => s + m.apifyUsd30, 0) / activeM.length).toFixed(2) : 0
+  return { members, avgApifyUsd30, active: members.filter((m) => m.active).length, expiring7: members.filter((m) => m.active && m.daysLeft <= 7) }
 }
 
 // ---------------------------------------------------------------- demand

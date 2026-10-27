@@ -53,14 +53,11 @@ export async function POST(req: NextRequest) {
   if (Array.isArray(body.queries) && body.queries.length) {
     batch = body.queries.slice(0, 12).map(String)   // same ceiling as the cron batch below
   } else {
-    // Cron path (hourly, 05–22 UTC): anything active that hasn't run in the last 12
-    // hours, oldest first, twelve per run in two lanes. Members' queries always run on
-    // the 12h cooldown; the shared sweep is what flexes with the budget. Queries that
-    // LinkedIn barely has posts for (two runs in a row with <=1 kept) wait
-    // DUD_COOLDOWN_DAYS instead — their widened regional query still runs.
-    // A query that members want only runs while one of them is active: a valid pass and a visit in the
-    // last few days. Quiet members' searches wait, and catch up when they next open the site
-    // (/api/targets/wake). The filter is applied before the cut to 30, so paused rows can't crowd out live ones.
+    // Cron path (hourly, 05–22 UTC): active queries that haven't run in the last 12 hours, oldest first,
+    // twelve per run in two lanes. Member searches are NOT re-run here any more (see the filter below):
+    // they run when the member opens the site. Queries that LinkedIn barely has posts for (two runs in a
+    // row with <=1 kept) wait DUD_COOLDOWN_DAYS instead.
+    // The filter is applied before the cut to 30, so paused rows can't crowd out live ones.
     const { data } = await db.from('priority_queries')
       .select('query, last_run_at, user_count')
       .eq('active', true)
@@ -69,7 +66,15 @@ export async function POST(req: NextRequest) {
       .limit(500)
     let wanted: Set<string> | null = null
     try { wanted = await activeMemberQueries(db) } catch (e) { console.error('[run-priority] active-member lookup failed, running everything', e) }
-    const live = (data ?? []).filter((r) => !wanted || !(Number(r.user_count) > 0) || wanted.has(String(r.query).toLowerCase()))
+    // Member searches no longer run on the schedule: a member's visit starts them (/api/targets/wake, stale after 12h),
+    // which is when the results are read. The schedule only picks up a member search that has never run. Searches with
+    // no member (user_count 0) still follow the schedule.
+    const live = (data ?? []).filter((r) => {
+      const memberQuery = Number(r.user_count) > 0
+      if (!memberQuery) return true
+      if (r.last_run_at) return false
+      return !wanted || wanted.has(String(r.query).toLowerCase())
+    })
     const paused = (data ?? []).length - live.length
     if (paused) console.log(`[run-priority] ${paused} quer${paused === 1 ? 'y' : 'ies'} paused (no active member)`)
     const candidates = live.slice(0, 30).map((r) => ({ query: String(r.query), last: r.last_run_at ? Date.parse(String(r.last_run_at)) : 0 }))
@@ -95,12 +100,14 @@ export async function POST(req: NextRequest) {
   // lane costs no function time and doubles how many member queries a run covers.
   const runOne = async (query: string) => {
     let queryInserted = 0, queryDuplicates = 0, queryRejected = 0, queryPosts = 0
+    let completed = false                       // the Apify run finished and its posts were read
+    let claimedFrom: string | null | undefined  // last_run_at before this run claimed it (undefined = no claim made)
     // Saving targets and a member's first visit both fire the same searches within seconds, and a search is only
     // marked as run when it finishes, so each ran twice (and the second 100-post run bought only duplicates).
     // Claim the search first: if it started in the last 5 minutes, someone else has it. A deep re-run skips this.
     if (body.deep !== true) {
       const like = query.replace(/[\\%_]/g, (c) => `\\${c}`)
-      const { data: rows } = await db.from('priority_queries').select('query').ilike('query', like).limit(1)
+      const { data: rows } = await db.from('priority_queries').select('query, last_run_at').ilike('query', like).limit(1)
       if (rows?.length) {
         const { data: claimed } = await db.from('priority_queries')
           .update({ last_run_at: new Date().toISOString() })
@@ -108,6 +115,7 @@ export async function POST(req: NextRequest) {
           .or(`last_run_at.is.null,last_run_at.lt.${new Date(Date.now() - 5 * 60_000).toISOString()}`)
           .select('query')
         if (!claimed?.length) { console.log(`[run-priority] "${query}" already started in the last 5 minutes, skipped`); return }
+        claimedFrom = (rows[0] as { last_run_at: string | null }).last_run_at ?? null
       }
     }
     try {
@@ -116,6 +124,7 @@ export async function POST(req: NextRequest) {
         ? { maxPosts: FIRST_BATCH, why: 'deep re-run requested' }
         : await batchSizeFor(db, 'priority', query, { firstBatch: FIRST_BATCH })
       console.log(`[run-priority] "${query}" maxPosts=${budget.maxPosts} (${budget.why})`)
+      const t0 = Date.now()
       const startRes = await fetch(
         `https://api.apify.com/v2/acts/harvestapi~linkedin-post-search/runs?token=${apiToken}`,
         {
@@ -135,8 +144,9 @@ export async function POST(req: NextRequest) {
       if (!runId || !datasetId) return
 
       let status = ''
-      for (let i = 0; i < 30; i++) {
-        await new Promise((r) => setTimeout(r, 6000))
+      // Runs finish in 3-15 seconds, so poll every 2s (it was 6s, which put a 6s floor under every search)
+      for (let i = 0; i < 90; i++) {
+        await new Promise((r) => setTimeout(r, 2000))
         const s = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${apiToken}`)
         status = (await s.json()).data?.status
         if (['SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) break
@@ -152,8 +162,10 @@ export async function POST(req: NextRequest) {
         await new Promise((r) => setTimeout(r, 6000))
       }
 
+      completed = true
       queryPosts = items.length
       result.total += items.length
+      const tApify = Date.now() - t0
 
       const CHUNK = 5
       for (let i = 0; i < items.length; i += CHUNK) {
@@ -255,12 +267,20 @@ export async function POST(req: NextRequest) {
           } catch { result.errors++ }
         }))
       }
+      console.log(`[run-priority] "${query}" timing: apify ${Math.round(tApify / 1000)}s, classify+save ${Math.round((Date.now() - t0 - tApify) / 1000)}s, ${queryPosts} posts`)
     } catch (err) {
       console.error(`[run-priority] "${query}":`, err)
     } finally {
+      const likeQ = query.replace(/[\\%_]/g, (c) => `\\${c}`)   // case-insensitive: "Remote" and "remote" are one search
+      if (!completed && claimedFrom !== undefined) {
+        // The Apify run never started or never finished (limit hit, error): hand the search back so the member's
+        // next visit retries it, instead of leaving it marked as run for 12 hours. Nothing was bought, so no ledger row.
+        await db.from('priority_queries').update({ last_run_at: claimedFrom }).ilike('query', likeQ)
+        return
+      }
       await db.from('priority_queries')
         .update({ last_run_at: new Date().toISOString() })
-        .ilike('query', query.replace(/[\\%_]/g, (c) => `\\${c}`))   // case-insensitive: "Remote" and "remote" are one search
+        .ilike('query', likeQ)
       await db.from('ingest_runs').insert({
         pipeline: 'priority',
         query,
@@ -282,7 +302,10 @@ export async function POST(req: NextRequest) {
       await runOne(query)
     }
   }
-  await Promise.all([lane(), lane()])
+  // A member's catch-up (body.queries, sent by /api/targets/wake) wants every search back quickly, so it uses more
+  // lanes; the schedule keeps two. Apify runs are small and finish in seconds.
+  const laneCount = Array.isArray(body.queries) ? Math.min(4, Math.max(2, batch.length)) : 2
+  await Promise.all(Array.from({ length: laneCount }, () => lane()))
 
   if (deferred.length) console.log(`[run-priority] out of time, left for next run: ${deferred.join(', ')}`)
   console.log('[run-priority] done:', result)

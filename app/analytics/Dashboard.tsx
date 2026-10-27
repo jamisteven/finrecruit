@@ -103,6 +103,7 @@ export default function Dashboard() {
         <section className="an-grid">
           <div className="an-tiles">
             <div className="an-tile"><b>{M.active}</b><span>active members</span></div>
+            <div className="an-tile"><b>${M.avgApifyUsd30}</b><span>average Apify cost per active member, last 30 days (their own searches, shared ones split)</span></div>
             <div className="an-tile"><b>{M.expiring7.length}</b><span>expire within 7 days</span></div>
             <div className="an-tile"><b>{M.members.reduce((s: number, m: Data) => s + m.flags, 0)}</b><span>target problems · stale = no run in 2 days (5 for slow-lane queries)</span></div>
           </div>
@@ -132,7 +133,7 @@ export default function Dashboard() {
                 <div>
                   <b>{m.email}</b>
                   <span className="an-meta">
-                    {m.joinedAt ? `joined ${ago(m.joinedAt)} · ` : ''}{m.plan ?? 'no payment'} · {m.payments} payment{m.payments === 1 ? '' : 's'} · {m.active ? `${m.daysLeft} days left` : `lapsed ${-m.daysLeft}d ago`} · last visit {ago(m.lastVisit)}{m.device ? ` · ${m.device}` : ''}
+                    {m.joinedAt ? `joined ${ago(m.joinedAt)} · ` : ''}Apify ${m.apifyUsd30} / 30d ({m.queryCount} searches) · {m.plan ?? 'no payment'} · {m.payments} payment{m.payments === 1 ? '' : 's'} · {m.active ? `${m.daysLeft} days left` : `lapsed ${-m.daysLeft}d ago`} · last visit {ago(m.lastVisit)}{m.device ? ` · ${m.device}` : ''}
                   </span>
                 </div>
                 <div className="an-member-sum"><b>{m.feed.exact}</b><span>in their feed, 14d · +{m.feed.agency} via agencies · +{m.feed.rough} same role elsewhere</span></div>

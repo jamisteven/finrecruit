@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { getSessionClient } from '@/lib/supabase-session'
 import { createServerClient } from '@/lib/supabase'
+import { ipInfo } from '@/lib/ipHash'
 
 export const runtime = 'nodejs'
 
@@ -120,6 +121,7 @@ export async function POST(req: NextRequest) {
       src: src || null,
       device,
       user_agent: userAgent,
+      ...ipInfo(req),
       referrer: clip(attr.referrer, 300),
       utm_source: clip(attr.utm_source, 100),
       utm_medium: clip(attr.utm_medium, 100),

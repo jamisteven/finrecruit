@@ -11,7 +11,7 @@ type Db = SupabaseClient<any, any, any>
 export const FULL_BATCH = 20
 // A query's very first visit reaches back through the month of posts, so a new member starts with a full
 // feed instead of only the newest 20. Later visits go back to the small top-ups below.
-export const FIRST_BATCH = 100
+export const FIRST_BATCH = 70
 const TINY_BATCH = 5
 
 type Run = { query: string; posts_returned: number | null; jobs_inserted: number | null; duplicates_skipped: number | null; run_at: string }

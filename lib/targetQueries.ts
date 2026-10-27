@@ -11,6 +11,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { distilForQuery } from '@/lib/matchTarget'
 import { wideningLadder } from '@/lib/widenLocation'
+import { findDuds, DUD_COOLDOWN_DAYS } from '@/lib/sweepBudget'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, any, any>
@@ -155,8 +156,14 @@ export async function staleQueriesFor(db: Db, userId: string, maxAgeMs = 12 * 36
       .select('query, last_run_at').ilike('query', exact(q)).limit(1).maybeSingle()
     return data
   }))
-  return rows
+  const due = rows
     .filter((r): r is { query: string; last_run_at: string | null } => !!r)
     .filter((r) => !r.last_run_at || Date.parse(r.last_run_at) < cutoff)
+  // Searches LinkedIn barely has posts for (two real batches in a row with <=1 kept) keep their 4-day cooldown
+  // here too. The schedule no longer runs member searches, so this is now the only place the cooldown applies.
+  const duds = await findDuds(db, 'priority', due.map((r) => String(r.query)))
+  const dudCutoff = Date.now() - DUD_COOLDOWN_DAYS * 86_400_000
+  return due
+    .filter((r) => !(duds.has(String(r.query)) && r.last_run_at && Date.parse(r.last_run_at) > dudCutoff))
     .map((r) => String(r.query))
 }

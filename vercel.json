@@ -6,15 +6,7 @@
     },
     {
       "path": "/api/ingest-hashtags",
-      "schedule": "0 8 * * 1-5"
-    },
-    {
-      "path": "/api/ingest-hashtags",
       "schedule": "0 11 * * 1-5"
-    },
-    {
-      "path": "/api/ingest-hashtags",
-      "schedule": "0 13 * * 1-5"
     },
     {
       "path": "/api/ingest-hashtags",
@@ -22,15 +14,7 @@
     },
     {
       "path": "/api/ingest-hashtags",
-      "schedule": "0 17 * * 1-5"
-    },
-    {
-      "path": "/api/ingest-hashtags",
       "schedule": "0 19 * * 1-5"
-    },
-    {
-      "path": "/api/ingest-hashtags",
-      "schedule": "0 21 * * 1-5"
     },
     {
       "path": "/api/ingest-hashtags?offset=0",

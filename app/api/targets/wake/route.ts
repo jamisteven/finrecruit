@@ -9,7 +9,7 @@ export const maxDuration = 300   // the runs continue in the background (after) 
 // A member who has been away has had their searches paused (see activeMemberQueries). When they open the site,
 // catch their searches up straight away: every query of theirs that is more than 12 hours old runs now, so new
 // roles arrive within minutes of the visit instead of waiting for the next cron pass.
-const CHUNK = 6          // queries per run-priority call; the call has two lanes and a ~4 minute budget
+const CHUNK = 4          // queries per run-priority call; the call runs up to four lanes and has a ~4 minute budget
 const MAX_QUERIES = 24   // a member's whole set, with room to spare
 const recentlyWoken = new Map<string, number>()   // per server instance: don't fire the same query twice in 15 minutes
 const WAKE_COOLDOWN_MS = 15 * 60_000

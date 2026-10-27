@@ -25,6 +25,8 @@ const BONUS_QUERIES = [
   'hiring zurich', 'hiring switzerland', 'hiring minneapolis', 'hiring denver', 'hiring portland', 'hiring baltimore',
 ]
 
+// What free visitors searched for in 60 days decides what is here: topics nobody searched (Bern, Geneva, Basel, private equity,
+// corporate finance) were dropped, and the five most-searched get a second slot. The rotation spends the same per run either way.
 const HASHTAG_QUERIES = [
   // English
   '#hiring',
@@ -39,14 +41,13 @@ const HASHTAG_QUERIES = [
   '#wirstellenein',
   // Swiss location searches
   'hiring zurich',
-  'hiring basel',
   'hiring switzerland',
-  'hiring bern',
-  'hiring geneva',
   // US cities
   'hiring new york',
   'hiring chicago',
+  '#remotejobs', // second slot: the most-searched topic (123 free visitors in 60 days)
   'hiring boston',
+  'hiring london', // second slot: 33 free visitors
   'hiring los angeles',
   'hiring san francisco',
   'hiring portland',
@@ -60,6 +61,7 @@ const HASHTAG_QUERIES = [
   'hiring san diego',
   'hiring minneapolis',
   'hiring washington dc',
+  'hiring chicago', // second slot: 27 free visitors
   // UK
   'hiring london',
   'hiring manchester',
@@ -67,12 +69,12 @@ const HASHTAG_QUERIES = [
   // Middle East
   // Canada
   'hiring toronto',
+  'hiring new york', // second slot: the most-searched city
   // Terms paying users searched and found nothing for
   'hiring grc',
   'hiring fixed income',
-  'hiring private equity',
+  'hiring los angeles', // second slot: 34 free visitors
   // Function-led — driven by what paying users actually search for
-  'hiring corporate finance',
   'hiring finance new york',
   'hiring finance chicago',
   '#financejobs',

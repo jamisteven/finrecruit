@@ -71,7 +71,9 @@ export async function apifyBudget(db: Db): Promise<Budget> {
  *  - at the cycle's target: only queries keeping half or more of what they return
  */
 export function budgetMode(b: Budget): { mode: 'catch-up' | 'on-pace' | 'ease-off' | 'stop'; bonusQueries: number; minKeptRate: number } {
-  if (b.spentUsd >= b.targetUsd) return { mode: 'stop', bonusQueries: 0, minKeptRate: 0.5 }
+  // over the plan: member searches still run (they are what members pay for), but the shared sweep only keeps the queries
+  // that keep 70%+ of what they return. Only ~12% of the sweep's jobs match any member's keyword.
+  if (b.spentUsd >= b.targetUsd) return { mode: 'stop', bonusQueries: 0, minKeptRate: 0.7 }
   const behindUsd = b.paceUsd - b.spentUsd
   if (behindUsd > 2) return { mode: 'catch-up', bonusQueries: Math.min(4, Math.floor(behindUsd / 0.04)), minKeptRate: 0 }  // $0.04 = one 20-post run
   if (behindUsd < -1.5) return { mode: 'ease-off', bonusQueries: 0, minKeptRate: 0.45 }
