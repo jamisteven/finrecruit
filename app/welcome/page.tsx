@@ -4,7 +4,8 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import RoleInput from '@/components/RoleInput'
 import { isCompoundRole } from '@/lib/splitRole'
 import { useSearchParams } from 'next/navigation'
-import { citiesIn, canonPlace } from '@/lib/widenLocation'
+import { isBroadPlace } from '@/lib/widenLocation'
+import BroadPlaceNudge from '@/components/BroadPlaceNudge'
 
 type Suggest = { locations: string[]; titles: string[] }
 type Preview = { rows: { keyword: string; location: string; exact: number; agency: number; nearby: number }[]; places: { location: string; all: number }[] }
@@ -19,6 +20,7 @@ function Onboarding() {
   const [showThird, setShowThird] = useState(false)
   const [locations, setLocations] = useState<string[]>([])
   const [locInput, setLocInput] = useState('')
+  const [broad, setBroad] = useState<string | null>(null)   // a country or state typed in, waiting for a city
   const [remoteOk, setRemoteOk] = useState(true)
   const [sug, setSug] = useState<Suggest>({ locations: [], titles: [] })
   const [preview, setPreview] = useState<Preview | null>(null)
@@ -84,7 +86,7 @@ function Onboarding() {
     const q = locInput.trim().toLowerCase()
     if (q.length < 2) return []
     return sug.locations
-      .filter((l) => l.toLowerCase().includes(q) && !locations.includes(l))
+      .filter((l) => l.toLowerCase().includes(q) && !locations.includes(l) && !isBroadPlace(l))
       .slice(0, 6)
   }, [locInput, sug.locations, locations])
 
@@ -115,13 +117,19 @@ function Onboarding() {
 
   const addLocation = (v: string) => {
     const t = v.trim()
-    if (!t || locations.includes(t) || locations.length >= 3) return
-    setLocations([...locations, t]); setLocInput('')
+    if (!t) return
+    if (t.toLowerCase() === 'remote') { setRemoteOk(true); setLocInput(''); return }
+    // a country or state is not a place recruiters write: ask for the city instead of taking it
+    if (isBroadPlace(t)) { setBroad(t); setLocInput(''); setError(''); return }
+    if (locations.some((x) => x.toLowerCase() === t.toLowerCase()) || locations.length >= 3) return
+    setLocations([...locations, t]); setLocInput(''); setBroad(null); setError('')
   }
 
   const finish = async () => {
     if (filledRoles.length === 0) { setError('Add at least one role'); return }
     if (compoundError) { setError(compoundError); setStage('roles'); return }
+    if (broad) { setError(`Pick at least one city in ${broad}, or choose remote roles only.`); return }
+    if (locations.length === 0 && !remoteOk) { setError('Add a city, or turn on remote roles.'); return }
     setStage('saving'); setError('')
     // One target per role x location. No slice here: a 3-role / 3-location
     // save used to be cut to the first three pairs, which were all role 1.
@@ -222,8 +230,8 @@ function Onboarding() {
       <p className="eyebrow">Step 2 of 2</p>
       <h1>Where would you take a job?</h1>
       <p className="lede">
-        Add the cities, regions or countries you&apos;d work in. Recruiters usually name one
-        place per post, so precise locations give cleaner matches.
+        Add the cities you&apos;d work in, up to three. Recruiters name one city per post, so a city
+        finds far more than a country does.
       </p>
 
       <div className="fields">
@@ -242,7 +250,7 @@ function Onboarding() {
           <input
             className="field"
             value={locInput}
-            placeholder="Start typing a city, state or country"
+            placeholder="Start typing a city"
             onChange={(e) => setLocInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') { e.preventDefault(); addLocation(locMatches[0] ?? locInput) }
@@ -258,23 +266,14 @@ function Onboarding() {
           <p className="help">These are places we already carry roles for. Press enter to pick the first.</p>
         </div>
 
-        {locations.map((l) => {
-          const cities = citiesIn(l).filter((c) => !locations.some((x) => canonPlace(x) === canonPlace(c))).slice(0, 4)
-          if (cities.length === 0) return null
-          return (
-            <div className="ob-cities" key={`cities-${l}`}>
-              <p>Recruiters usually name a city, not {l}. A city search finds posts a country-wide one misses. Add one or two:</p>
-              <div className="chips">
-                {cities.map((c) => (
-                  <button type="button" className="chip" key={c}
-                    onClick={() => setLocations((prev) => (prev.length < 3 ? [...prev, c] : prev.map((x) => (x === l ? c : x))))}>
-                    + {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )
-        })}
+        {broad && (
+          <BroadPlaceNudge place={broad} taken={locations} onPick={addLocation}
+            onRemoteOnly={locations.length === 0 ? () => { setBroad(null); setRemoteOk(true) } : undefined} />
+        )}
+        {locations.filter(isBroadPlace).map((l) => (
+          <BroadPlaceNudge key={`broad-${l}`} place={l} taken={locations}
+            onPick={(c) => setLocations((prev) => (prev.length < 3 ? [...prev, c] : prev.map((x) => (x === l ? c : x))))} />
+        ))}
 
         {placeKey && preview && preview.rows.length > 0 && (
           <div className="ob-preview" aria-live="polite">
@@ -502,10 +501,8 @@ function Frame({ step, roles = [], locations = [], children }: {
         .field:focus { border-color: #2F55D4; box-shadow: 0 0 0 3px rgba(47,85,212,.18); }
         .field::placeholder { color: #8A8378; }
         .help { font-size: 13px; color: #605A50; margin: 6px 0 0; }
-        .ob-cities { padding: 14px 16px; border-radius: 12px; border: 1px solid #D9D2C5; background: #fff; font-size: 14px; line-height: 1.5; color: #514C43; }
-        .ob-cities p { margin: 0 0 10px; }
-        .ob-preview { padding: 14px 16px; border-radius: 12px; background: #EFEBE1; font-size: 14px; line-height: 1.5; }
-        .ob-preview b { display: block; margin-bottom: 8px; font-weight: 600; }
+        .ob-preview { padding: 14px 16px; border-radius: 10px; background: #fff; border: 1px solid #E6DFD3; font-size: 14px; line-height: 1.5; color: #514C43; }
+        .ob-preview b { display: block; margin-bottom: 8px; font-weight: 600; color: #1C1B19; }
         .ob-preview ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
         .ob-preview li { display: flex; justify-content: space-between; gap: 16px; }
         .ob-preview li em { font-style: normal; color: #8A8378; }

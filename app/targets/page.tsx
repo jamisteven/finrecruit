@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import RoleInput from '@/components/RoleInput'
 import { isCompoundRole } from '@/lib/splitRole'
+import { isBroadPlace } from '@/lib/widenLocation'
+import BroadPlaceNudge from '@/components/BroadPlaceNudge'
 
 type Suggest = { locations: string[]; titles: string[] }
 
@@ -15,6 +17,7 @@ function Targets() {
   const [showThird, setShowThird] = useState(false)
   const [locations, setLocations] = useState<string[]>([])
   const [locInput, setLocInput] = useState('')
+  const [broad, setBroad] = useState<string | null>(null)   // a country or state typed in, waiting for a city
   const [remoteOk, setRemoteOk] = useState(true)
   const [sug, setSug] = useState<Suggest>({ locations: [], titles: [] })
 
@@ -58,7 +61,7 @@ function Targets() {
     const q = locInput.trim().toLowerCase()
     if (q.length < 2) return []
     return sug.locations
-      .filter((l) => l.toLowerCase().includes(q) && !locations.includes(l))
+      .filter((l) => l.toLowerCase().includes(q) && !locations.includes(l) && !isBroadPlace(l))
       .slice(0, 6)
   }, [locInput, sug.locations, locations])
 
@@ -89,13 +92,19 @@ function Targets() {
 
   const addLocation = (v: string) => {
     const t = v.trim()
-    if (!t || locations.includes(t) || locations.length >= 3) return
-    setLocations([...locations, t]); setLocInput('')
+    if (!t) return
+    if (t.toLowerCase() === 'remote') { setRemoteOk(true); setLocInput(''); return }
+    // a country or state is not a place recruiters write: ask for the city instead of taking it
+    if (isBroadPlace(t)) { setBroad(t); setLocInput(''); setError(''); return }
+    if (locations.some((x) => x.toLowerCase() === t.toLowerCase()) || locations.length >= 3) return
+    setLocations([...locations, t]); setLocInput(''); setBroad(null); setError('')
   }
 
   const finish = async () => {
     if (filledRoles.length === 0) { setError('Add at least one role'); return }
     if (compoundError) { setError(compoundError); setStage('roles'); return }
+    if (broad) { setError(`Pick at least one city in ${broad}, or choose remote roles only.`); return }
+    if (locations.length === 0 && !remoteOk) { setError('Add a city, or turn on remote roles.'); return }
     setStage('saving'); setError('')
     // One target per role x location. No slice here: a 3-role / 3-location
     // save used to be cut to the first three pairs, which were all role 1.
@@ -219,8 +228,8 @@ function Targets() {
       <p className="eyebrow">Step 2 of 2</p>
       <h1>Where would you take a job?</h1>
       <p className="lede">
-        Add the cities, regions or countries you&apos;d work in. Recruiters usually name one
-        place per post, so precise locations give cleaner matches.
+        Add the cities you&apos;d work in, up to three. Recruiters name one city per post, so a city
+        finds far more than a country does.
       </p>
 
       <div className="fields">
@@ -239,7 +248,7 @@ function Targets() {
           <input
             className="field"
             value={locInput}
-            placeholder="Start typing a city, state or country"
+            placeholder="Start typing a city"
             onChange={(e) => setLocInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') { e.preventDefault(); addLocation(locMatches[0] ?? locInput) }
@@ -254,6 +263,15 @@ function Targets() {
           )}
           <p className="help">These are places we already carry roles for. Press enter to pick the first.</p>
         </div>
+
+        {broad && (
+          <BroadPlaceNudge place={broad} taken={locations} onPick={addLocation}
+            onRemoteOnly={locations.length === 0 ? () => { setBroad(null); setRemoteOk(true) } : undefined} />
+        )}
+        {locations.filter(isBroadPlace).map((l) => (
+          <BroadPlaceNudge key={`broad-${l}`} place={l} taken={locations}
+            onPick={(c) => setLocations((prev) => (prev.length < 3 ? [...prev, c] : prev.map((x) => (x === l ? c : x))))} />
+        ))}
 
         <label className="toggle">
           <input type="checkbox" checked={remoteOk} onChange={(e) => setRemoteOk(e.target.checked)} />

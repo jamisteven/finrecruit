@@ -211,6 +211,33 @@ export const canonPlace = (s: string) => {
 }
 const canon = canonPlace
 
+// Places wider than a city: every country (from the runtime's own region names), every region our city map rolls up to
+// (Germany, Texas, UAE...), and the US states. City-states and names that are also the city people mean stay allowed.
+const NOT_BROAD = new Set(['singapore', 'hong kong', 'macao', 'monaco', 'vatican city', 'gibraltar', 'new york', 'washington dc', 'district of columbia', 'remote'])
+const BROAD_PLACES: Set<string> = (() => {
+  const out = new Set<string>(['england', 'scotland', 'wales', 'northern ireland', 'holland', 'korea', 'russia', 'turkey', 'czech republic', 'uk', 'usa', 'us', 'uae', 'great britain', 'america', 'deutschland'])
+  try {
+    const names = new Intl.DisplayNames(['en'], { type: 'region' })
+    const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    for (const a of A) for (const b of A) {
+      try {
+        const n = names.of(a + b)
+        if (n && n !== a + b && !/unknown|region/i.test(n)) out.add(canonPlace(n))
+      } catch { /* not a region code */ }
+    }
+  } catch { /* no Intl.DisplayNames: the lists below still cover the main markets */ }
+  for (const r of Object.values(CITY_TO_REGION)) out.add(canonPlace(r))
+  for (const r of US_REGIONS) out.add(canonPlace(r))
+  for (const n of NOT_BROAD) out.delete(canonPlace(n))
+  return out
+})()
+
+/** Is this a country, state or region rather than a city? Recruiters name the city, so these can't stand alone as a search place. */
+export function isBroadPlace(place: string): boolean {
+  const c = canonPlace(place)
+  return !!c && BROAD_PLACES.has(c)
+}
+
 /**
  * Every region a location belongs to, lower-case, narrowest first — the location
  * itself, its state/metro or country, and the US for a US state. "Dubai, UAE"
