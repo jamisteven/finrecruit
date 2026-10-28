@@ -34,6 +34,33 @@ export type MemberStatus = {
 
 const DAY = 86_400_000
 
+// The last 14 days of roles, shared by every member's status call. Reading them cost ~0.75 MB of Supabase egress
+// per call, and the site makes that call on every member page load (and the welcome page polls it every 6s), so
+// the rows are kept in memory for a few minutes per server instance instead.
+const JOBS_TTL_MS = 3 * 60_000
+type StatusJob = { title: string | null; location: string | null; work_type: string | null; extracted_at: string; employer_type: string | null }
+let jobsCache: { rows: StatusJob[]; at: number } | undefined
+let jobsInflight: Promise<StatusJob[]> | undefined
+
+async function recentJobs(db: Db): Promise<StatusJob[]> {
+  if (jobsCache && Date.now() - jobsCache.at < JOBS_TTL_MS) return jobsCache.rows
+  if (!jobsInflight) {
+    jobsInflight = (async () => {
+      const { data, error } = await db.from('jobs').select('title, location, work_type, extracted_at, employer_type')
+        .gte('extracted_at', new Date(Date.now() - 14 * DAY).toISOString())
+        .or('quality.is.null,quality.neq.low').limit(5000)
+      if (error) throw new Error(error.message)
+      const rows = (data ?? []) as StatusJob[]
+      jobsCache = { rows, at: Date.now() }
+      return rows
+    })().finally(() => { jobsInflight = undefined })
+  }
+  try { return await jobsInflight } catch (e) {
+    if (jobsCache) return jobsCache.rows   // serve stale rather than fail the page
+    throw e
+  }
+}
+
 export async function memberStatus(db: Db, userId: string): Promise<MemberStatus> {
   const { data: targets } = await db.from('user_targets')
     .select('keyword, location, created_at').eq('user_id', userId).order('created_at')
@@ -43,11 +70,9 @@ export async function memberStatus(db: Db, userId: string): Promise<MemberStatus
   const texts = new Set<string>()
   for (const t of targets) { texts.add(primaryQuery(t).toLowerCase()); const w = widenedQueryFor(t); if (w) texts.add(w.toLowerCase()) }
 
-  const [{ data: queries }, { data: jobs }] = await Promise.all([
+  const [{ data: queries }, jobs] = await Promise.all([
     db.from('priority_queries').select('query, last_run_at, active'),
-    db.from('jobs').select('title, location, work_type, extracted_at, employer_type')
-      .gte('extracted_at', new Date(Date.now() - 14 * DAY).toISOString())
-      .or('quality.is.null,quality.neq.low').limit(5000),
+    recentJobs(db),
   ])
   const byText = new Map<string, { last_run_at: string | null; active: boolean }>()
   for (const q of queries ?? []) { const k = String(q.query).toLowerCase(); if (texts.has(k)) byText.set(k, q) }
@@ -57,7 +82,7 @@ export async function memberStatus(db: Db, userId: string): Promise<MemberStatus
     const q = primaryQuery(t); const qi = byText.get(q.toLowerCase())
     const w = widenedQueryFor(t); const wi = w ? byText.get(w.toLowerCase()) : undefined
     let exact = 0, agency = 0, nearby = 0, fresh = 0
-    for (const j of jobs ?? []) {
+    for (const j of jobs) {
       if (!keywordMatches(t.keyword, j.title ?? '', null)) continue
       nearby++
       if (locationMatches(t.location, j.location, j.work_type)) {

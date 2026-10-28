@@ -78,7 +78,10 @@ export default function Dashboard() {
       <header className="an-head">
         <div>
           <h1>Analytics</h1>
-          <p className="an-sub">{data ? `Generated ${ago(data.generatedAt)} · reload for fresh numbers` : err ? `Couldn't load: ${err}` : 'Loading…'}</p>
+          <p className="an-sub">{data ? `Generated ${ago(data.generatedAt)} · kept for up to 3 min · ` : err ? `Couldn't load: ${err}` : 'Loading…'}{data && (
+            <button type="button" onClick={() => { getJson('/api/analytics?fresh=1').then(setData).catch((e) => setErr(e.message)) }}
+              style={{ background: 'none', border: 0, padding: 0, font: 'inherit', color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>refresh now</button>
+          )}</p>
         </div>
         <div className="an-tools">
           <nav className="an-tabs" aria-label="Panels">
