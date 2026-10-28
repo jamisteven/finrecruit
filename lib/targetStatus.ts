@@ -108,3 +108,30 @@ export async function memberStatus(db: Db, userId: string): Promise<MemberStatus
     newTotal: rows.reduce((s, r) => s + r.newSinceYesterday, 0),
   }
 }
+
+export type PreviewRow = { keyword: string; location: string; exact: number; agency: number; nearby: number }
+export type PreviewPlace = { location: string; all: number }
+
+/**
+ * What a role + place would match today, before the member saves anything (the onboarding location step).
+ * Counted exactly the way memberStatus counts, from the same cached 14-day slice, so it costs no extra reads.
+ * `places` is how many roles of ANY title sit in each named place, so a thin country can be called thin.
+ */
+export async function previewCounts(db: Db, roles: string[], locations: string[]): Promise<{ rows: PreviewRow[]; places: PreviewPlace[] }> {
+  const jobs = await recentJobs(db)
+  const rows: PreviewRow[] = []
+  for (const keyword of roles) {
+    const byTitle = jobs.filter((j) => keywordMatches(keyword, j.title ?? '', null))
+    for (const location of locations) {
+      let exact = 0, agency = 0
+      for (const j of byTitle) {
+        if (!locationMatches(location, j.location, j.work_type)) continue
+        if (j.employer_type === 'agency') agency++; else exact++
+      }
+      rows.push({ keyword, location, exact, agency, nearby: byTitle.length })
+    }
+  }
+  const places = locations.filter((l) => l && l.toLowerCase() !== 'remote')
+    .map((location) => ({ location, all: jobs.filter((j) => locationMatches(location, j.location, j.work_type)).length }))
+  return { rows, places }
+}

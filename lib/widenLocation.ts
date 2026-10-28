@@ -172,6 +172,24 @@ export function wideningLadder(location: string | null): WidenStep[] {
   return steps
 }
 
+/**
+ * The cities we know inside a country, state or region ("Germany" -> Berlin, Munich, Frankfurt, Hamburg), for steering a
+ * member from a country to a city: recruiters name the city, so a city search finds posts a country search misses.
+ * Empty unless there are at least two to offer.
+ */
+export function citiesIn(place: string): string[] {
+  const want = canonPlace(place)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const [city, region] of Object.entries(CITY_TO_REGION)) {
+    const c = canonPlace(city)
+    if (canonPlace(region) !== want || c === want || seen.has(c)) continue
+    seen.add(c)
+    out.push(city.replace(/(^|[\s-])\p{L}/gu, (m) => m.toUpperCase()))
+  }
+  return out.length >= 2 ? out : []
+}
+
 /** The query string we'd send Apify for a given keyword and rung. */
 export function widenedQuery(keyword: string, step: WidenStep): string {
   return step.location ? `hiring ${keyword} ${step.location}` : `hiring ${keyword}`

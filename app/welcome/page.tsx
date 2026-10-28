@@ -4,8 +4,10 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import RoleInput from '@/components/RoleInput'
 import { isCompoundRole } from '@/lib/splitRole'
 import { useSearchParams } from 'next/navigation'
+import { citiesIn, canonPlace } from '@/lib/widenLocation'
 
 type Suggest = { locations: string[]; titles: string[] }
+type Preview = { rows: { keyword: string; location: string; exact: number; agency: number; nearby: number }[]; places: { location: string; all: number }[] }
 
 function Onboarding() {
   const sid = useSearchParams().get('session_id')
@@ -19,6 +21,7 @@ function Onboarding() {
   const [locInput, setLocInput] = useState('')
   const [remoteOk, setRemoteOk] = useState(true)
   const [sug, setSug] = useState<Suggest>({ locations: [], titles: [] })
+  const [preview, setPreview] = useState<Preview | null>(null)
 
   useEffect(() => {
     fetch('/api/suggest').then((r) => r.json()).then(setSug).catch(() => {})
@@ -46,6 +49,24 @@ function Onboarding() {
   }, [sid])
 
   const filledRoles = roles.map((r) => r.trim()).filter(Boolean)
+
+  // Location step: what each role + place matches today, so a thin choice is visible before it is saved
+  const roleKey = filledRoles.join('|')
+  const placeKey = [...locations, ...(remoteOk ? ['remote'] : [])].join('|')
+  useEffect(() => {
+    if (stage !== 'location' || !roleKey || !placeKey) return
+    let cancelled = false
+    const t = setTimeout(() => {
+      fetch('/api/targets/preview', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roles: roleKey.split('|'), locations: placeKey.split('|') }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (!cancelled && d) setPreview(d) })
+        .catch(() => {})
+    }, 300)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [stage, roleKey, placeKey])
 
   // Roles sharing a word with role 1, drawn from titles we actually carry
   const related = useMemo(() => {
@@ -237,6 +258,50 @@ function Onboarding() {
           <p className="help">These are places we already carry roles for. Press enter to pick the first.</p>
         </div>
 
+        {locations.map((l) => {
+          const cities = citiesIn(l).filter((c) => !locations.some((x) => canonPlace(x) === canonPlace(c))).slice(0, 4)
+          if (cities.length === 0) return null
+          return (
+            <div className="ob-cities" key={`cities-${l}`}>
+              <p>Recruiters usually name a city, not {l}. A city search finds posts a country-wide one misses. Add one or two:</p>
+              <div className="chips">
+                {cities.map((c) => (
+                  <button type="button" className="chip" key={c}
+                    onClick={() => setLocations((prev) => (prev.length < 3 ? [...prev, c] : prev.map((x) => (x === l ? c : x))))}>
+                    + {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+
+        {placeKey && preview && preview.rows.length > 0 && (
+          <div className="ob-preview" aria-live="polite">
+            <b>What these match today</b>
+            <ul>
+              {preview.rows.map((r) => {
+                const found = r.exact + r.agency
+                return (
+                  <li key={`${r.keyword}|${r.location}`}>
+                    <span>{r.keyword} <em>· {r.location.toLowerCase() === 'remote' ? 'Remote' : r.location}</em></span>
+                    <span className={found > 0 ? 'ok' : 'none'}>
+                      {found > 0 ? `${found} ${found === 1 ? 'role' : 'roles'} now`
+                        : r.nearby > 0 ? `none right now · ${r.nearby} elsewhere` : 'none right now'}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+            {preview.places.filter((p) => p.all < 40).map((p) => (
+              <p key={p.location} className="thin">
+                {p.location} is a quiet market on our feed: {p.all === 0 ? 'no roles' : `${p.all} ${p.all === 1 ? 'role' : 'roles'}`} in the last two weeks across all titles.
+                {remoteOk ? ' Keeping remote on helps.' : ' Turning on remote roles usually helps.'} We keep watching either way.
+              </p>
+            ))}
+          </div>
+        )}
+
         <label className="toggle">
           <input type="checkbox" checked={remoteOk} onChange={(e) => setRemoteOk(e.target.checked)} />
           <span><b>Include remote roles</b><em>Remote posts open to your country count as a match.</em></span>
@@ -255,7 +320,7 @@ function Onboarding() {
   )
 }
 
-type StatusRow = { keyword: string; location: string | null; ranSinceSave: boolean; exact: number; nearby: number }
+type StatusRow = { keyword: string; location: string | null; ranSinceSave: boolean; exact: number; agency?: number; nearby: number }
 type Status = { targets: StatusRow[]; pending: number; exactTotal: number; checkedAt: string | null }
 
 /**
@@ -286,7 +351,12 @@ function Progress({ roles, locations }: { roles: string[]; locations: string[] }
 
   const total = status?.exactTotal ?? 0
   const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1)
-  const rows = status?.targets ?? roles.flatMap((k) => (locations.length ? locations : ['']).map((l) => ({ keyword: k, location: l || null, ranSinceSave: false, exact: 0, nearby: 0 })))
+  const rows = status?.targets ?? roles.flatMap((k) => (locations.length ? locations : ['']).map((l) => ({ keyword: k, location: l || null, ranSinceSave: false, exact: 0, agency: 0, nearby: 0 })))
+  // searches that have finished and found nothing, direct or via agencies
+  const quiet = rows.filter((r) => r.ranSinceSave && r.exact === 0 && (r.agency ?? 0) === 0)
+  const withMatches = rows.length - quiet.length
+  const agencyTotal = rows.reduce((n, r) => n + (r.agency ?? 0), 0)
+  const partial = settled && total > 0 && quiet.length > 0 && rows.length > 1
 
   return (
     <>
@@ -295,11 +365,14 @@ function Progress({ roles, locations }: { roles: string[]; locations: string[] }
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
         </span>
       ) : <span className="ob-spin" aria-hidden="true" />}
-      <h1>{settled ? (total > 0 ? `${total} ${total === 1 ? 'role matches' : 'roles match'} your searches.` : 'Your searches are set up.')
+      <h1>{settled ? (partial ? `${withMatches} of ${rows.length} searches have matches.` : total > 0 ? `${total} ${total === 1 ? 'role matches' : 'roles match'} your searches.` : 'Your searches are set up.')
           : timedOut ? 'Still searching in the background.' : 'Searching recruiter posts for you…'}</h1>
       <p className="lede">
         {settled
-          ? (total > 0 ? 'These are live now. From here on, new matches land in your feed on their own.' : 'Nothing has matched in the first pass, which happens with specific titles. Your searches keep running and the feed fills as posts appear.')
+          ? (partial ? `${total} ${total === 1 ? 'role is' : 'roles are'} live now. The others are quiet at the moment; they keep running and anything new lands in your feed on its own.`
+            : total > 0 ? 'These are live now. From here on, new matches land in your feed on their own.'
+            : agencyTotal > 0 ? `${agencyTotal} ${agencyTotal === 1 ? 'role' : 'roles'} from agencies match so far, and the feed fills as new posts appear.`
+            : 'Nothing has matched in the first pass, which happens with specific titles. Your searches keep running and the feed fills as posts appear.')
           : 'Each search takes about a minute. You can wait here or go to the feed; either way they finish.'}
       </p>
 
@@ -309,7 +382,7 @@ function Progress({ roles, locations }: { roles: string[]; locations: string[] }
             <span className="ob-pt">{cap(t.keyword)} <em>· {t.location ? cap(t.location) : 'anywhere'}</em></span>
             <span className="ob-pn">
               {t.ranSinceSave
-                ? (t.exact > 0 ? `${t.exact} found` : t.nearby > 0 ? `0 here · ${t.nearby} elsewhere` : 'nothing yet')
+                ? (t.exact > 0 ? `${t.exact} found` : (t.agency ?? 0) > 0 ? `${t.agency} via agencies` : t.nearby > 0 ? `0 here · ${t.nearby} elsewhere` : 'nothing yet')
                 : <><span className="ob-dot" /> searching</>}
             </span>
           </li>
@@ -321,6 +394,13 @@ function Progress({ roles, locations }: { roles: string[]; locations: string[] }
           <b>What happens from here</b>
           <p>New recruiter posts that match your searches appear in your feed automatically, as we find them, around the clock. Each search is checked at least twice a day, and exact matches sit first, then the same roles nearby.</p>
           <p>A quiet search for a few days means we checked and nothing new was posted, not that anything stopped.</p>
+          {quiet.length > 0 && (
+            <p>
+              Quiet right now: {quiet.map((r) => `${cap(r.keyword)} · ${r.location ? cap(r.location) : 'anywhere'}`).join(', ')}.
+              A single country or a very specific title is often quiet. Adding a nearby city, remote, or a broader title
+              usually fills it: <a href="/targets">edit your searches</a>.
+            </p>
+          )}
         </div>
       )}
 
@@ -422,6 +502,16 @@ function Frame({ step, roles = [], locations = [], children }: {
         .field:focus { border-color: #2F55D4; box-shadow: 0 0 0 3px rgba(47,85,212,.18); }
         .field::placeholder { color: #8A8378; }
         .help { font-size: 13px; color: #605A50; margin: 6px 0 0; }
+        .ob-cities { padding: 14px 16px; border-radius: 12px; border: 1px solid #D9D2C5; background: #fff; font-size: 14px; line-height: 1.5; color: #514C43; }
+        .ob-cities p { margin: 0 0 10px; }
+        .ob-preview { padding: 14px 16px; border-radius: 12px; background: #EFEBE1; font-size: 14px; line-height: 1.5; }
+        .ob-preview b { display: block; margin-bottom: 8px; font-weight: 600; }
+        .ob-preview ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+        .ob-preview li { display: flex; justify-content: space-between; gap: 16px; }
+        .ob-preview li em { font-style: normal; color: #8A8378; }
+        .ob-preview .ok { font-weight: 600; color: #191713; white-space: nowrap; }
+        .ob-preview .none { color: #605A50; white-space: nowrap; }
+        .ob-preview .thin { margin: 10px 0 0; color: #514C43; }
 
         .link-btn { align-self: flex-start; background: none; border: 0; padding: 0;
           font: inherit; font-size: 15px; font-weight: 600; color: #2F55D4; cursor: pointer; }
