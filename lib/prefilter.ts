@@ -51,7 +51,6 @@ const OFF_MARKET_TEXT: Array<[RegExp, string]> = [
   // Candidate-side marketing, never a role. C2C / corp-to-corp are NOT here any more: real contract roles carry them
   // ("Remote, C2C") and so do posts saying "NO C2C"; the classifier already treats them as an agency signal.
   [/\b(bench sales|h1b transfer|opt\/cpt)\b/i, 'visa marketing / bench sales'],
-  [/\bhot ?list\b/i, 'consultant hotlist'],
 ]
 
 // "50 openings, $80–150/hr, no experience needed, help train AI" gigs.
@@ -92,6 +91,10 @@ export function prefilterPost(post: {
   if (AI_TRAINING_GIG.some((r) => r.test(text)) && (MANY_OPENINGS.test(text) || /\$\d+\s*[–-]\s*\$?\d+\s*\/\s*h(ou)?r/i.test(text))) {
     return { label: 'bad', reason: 'prefilter: ai-training gig' }
   }
+
+  // A consultant hotlist announces itself in its first lines; a real role post can mention the word further down
+  // (a hashtag, a footer), so only the opening counts.
+  if (/\bhot ?list\b/i.test(text.slice(0, 250))) return { label: 'bad', reason: 'prefilter: consultant hotlist' }
 
   const market = OFF_MARKET_TEXT.find(([r]) => r.test(text))
   if (market) return { label: 'off-market', reason: `prefilter: ${market[1]}` }
