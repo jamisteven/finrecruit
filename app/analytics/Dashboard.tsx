@@ -140,7 +140,7 @@ export default function Dashboard() {
                     {m.joinedAt ? `joined ${ago(m.joinedAt)} · ` : ''}Apify ${m.apifyUsd30} / 30d ({m.queryCount} searches) · {m.plan ?? 'no payment'} · {m.payments} payment{m.payments === 1 ? '' : 's'} · {m.active ? `${m.daysLeft} days left` : `lapsed ${-m.daysLeft}d ago`} · last visit {ago(m.lastVisit)}{m.device ? ` · ${m.device}` : ''}
                   </span>
                 </div>
-                <div className="an-member-sum"><b>{m.feed.exact}</b><span>in their feed, 14d · +{m.feed.agency} via agencies · +{m.feed.rough} same role elsewhere</span></div>
+                <div className="an-member-sum"><b>{m.feed.exact + m.feed.agency}</b><span>in their feed, 14d · {m.feed.exact} direct · {m.feed.agency} via agencies · +{m.feed.rough} same role elsewhere</span></div>
               </div>
               {m.targets.length === 0 ? <p className="an-muted">No targets saved.</p> : (
                 <table>
