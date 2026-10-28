@@ -1735,10 +1735,16 @@ export default function HomePage() {
                   {' '}{myRough.length} more with the same job titles{myNearby > 0 ? <> — {myNearby} nearby (same state or country), then the rest</> : ' in other places'}.
                 </p>
               )}
-              {myFeedOn && myExact.length === 0 && myRough.length > 0 && (
+              {myFeedOn && myExact.length === 0 && (myRough.length > 0 || myAgency.length > 0) && (
                 <p className="match-note">
-                  Nothing in your locations yet — here are {myRough.length} roles with the
-                  same job titles{myNearby > 0 ? <>, nearest first ({myNearby} in your state or country)</> : ' elsewhere'}.
+                  {myAgency.length > 0
+                    ? <><b>No direct employers are hiring for your searches right now.</b> {myAgency.length} {myAgency.length === 1 ? 'role is' : 'roles are'} posted by agencies, below
+                      {myRough.length > 0 ? <>, then {myRough.length} with the same job titles{myNearby > 0 ? <> (nearest first, {myNearby} in your state or country)</> : ' in other places'}</> : null}.</>
+                    : <>Nothing in your locations yet — here are {myRough.length} roles with the
+                      same job titles{myNearby > 0 ? <>, nearest first ({myNearby} in your state or country)</> : ' elsewhere'}.</>}
+                  {myTargets.length > 0 && myTargets.every((t) => /^\s*remote\s*$/i.test(t.location ?? '')) && (
+                    <> Searching remote only narrows this a lot: few recruiters post fully remote roles for these titles. <a href="/targets">Add a city or state</a> to see on-site and hybrid roles near you.</>
+                  )}
                 </p>
               )}
               {earlierJobs.slice(0, visibleCount).map((job, jobIndex) => {

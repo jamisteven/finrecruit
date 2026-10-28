@@ -48,7 +48,10 @@ const OFF_MARKET_TEXT: Array<[RegExp, string]> = [
   [/\b(pan[- ]india|work from home.*\bfreshers?\b|\bfreshers?\b.*work from home)/i, 'freshers / pan-India'],
   [/\b(candidates?|applicants?)\s+(from|in|based in|located in)\s+(india|pakistan|nigeria|kenya|egypt|philippines)\b/i, 'residency rule'],
   [/\blocation\s*:\s*(pakistan|india|bangladesh|sri lanka|nigeria|kenya|ghana|egypt|philippines|indonesia|vietnam)\b/i, 'location in an off-market country'],
-  [/\b(c2c|corp[- ]to[- ]corp|bench sales|h1b transfer|opt\/cpt)\b/i, 'US contract-staffing (C2C)'],
+  // Candidate-side marketing, never a role. C2C / corp-to-corp are NOT here any more: real contract roles carry them
+  // ("Remote, C2C") and so do posts saying "NO C2C"; the classifier already treats them as an agency signal.
+  [/\b(bench sales|h1b transfer|opt\/cpt)\b/i, 'visa marketing / bench sales'],
+  [/\bhot ?list\b/i, 'consultant hotlist'],
 ]
 
 // "50 openings, $80–150/hr, no experience needed, help train AI" gigs.
