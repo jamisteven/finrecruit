@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
           raw_text: post.text,
           posted_at: post.postedAt,
           extracted_at: new Date().toISOString(),
-          work_type: inferWorkType(classified.location, classified.tags, classified.title),
+          work_type: inferWorkType(classified.location, classified.tags, classified.title, post.text),
           is_verified_job: true,
           employer_type: employerType(classified.employer, post.text, post.authorHeadline, classified.company, jobSector, classified.apply_method),
           on_linkedin_jobs: hasJobCard(post.text),

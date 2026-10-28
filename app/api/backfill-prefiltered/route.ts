@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       apply_method: c.apply_method, summary: c.summary, tags: c.tags, sector: jobSector, quality: c.quality ?? 'medium',
       post_url: r.post_url, author_name: post.authorName, author_headline: post.authorHeadline, author_linkedin_url: post.authorLinkedinUrl,
       author_avatar: null, raw_text: post.text, posted_at: r.posted_at, extracted_at: new Date().toISOString(),
-      work_type: inferWorkType(c.location, c.tags, c.title), is_verified_job: true,
+      work_type: inferWorkType(c.location, c.tags, c.title, post.text), is_verified_job: true,
       employer_type: employerType(c.employer, post.text, post.authorHeadline, c.company, jobSector, c.apply_method),
       on_linkedin_jobs: hasJobCard(post.text),
     }
