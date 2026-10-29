@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { DATASETS } from '@/lib/analyticsDatasets'
 import { Chart, ChartCard, CHART_CSS, COLORS, Funnel, Heatmap, HBars, Tile, fmtUsd, weekOverWeek, type ChartRow, type Series } from './charts'
+import Trajectory from './Trajectory'
 import { WEEKDAYS, WEEKDAYS_LONG, clock, hh, rebase, summarise, timingOf, tzOffsetHours } from './timing'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,18 +44,37 @@ export default function Dashboard() {
   const [ySort, setYSort] = useState<'spend' | 'yield'>('spend')
   const [memberSort, setMemberSort] = useState<'time' | 'newest'>('time')
 
+  // Each tab reads its own tables, so a tab is fetched the first time it opens (the first one on arrival) instead of
+  // reading all five up front. Panels already loaded are kept.
+  const [busy, setBusy] = useState<Record<string, boolean>>({ members: true })   // the first panel starts loading on arrival
+  const [perr, setPerr] = useState<Record<string, string>>({})
+  const loadPanel = (panel: Exclude<Tab, 'growth'>, fresh = false) => {
+    setBusy((b) => ({ ...b, [panel]: true })); setPerr((e) => ({ ...e, [panel]: '' }))
+    getJson(`/api/analytics?panel=${panel}${fresh ? '&fresh=1' : ''}`)
+      .then((j) => setData((prev: Data) => ({ ...(prev ?? {}), ...j })))
+      .catch((e) => { setPerr((x) => ({ ...x, [panel]: e.message })); if (panel === 'members') setErr(e.message) })
+      .finally(() => setBusy((b) => ({ ...b, [panel]: false })))
+  }
+  const loadGrowth = (fresh = false) => {
+    setGBusy(true); setGErr(null)
+    getJson(`/api/analytics?panel=growth${fresh ? '&fresh=1' : ''}`)
+      .then((j) => { setGrowth(j.growth); setData((prev: Data) => ({ ...(prev ?? {}), generatedAt: j.generatedAt })) })
+      .catch((e) => setGErr(e.message)).finally(() => setGBusy(false))
+  }
+
   useEffect(() => {
-    getJson('/api/analytics').then(setData).catch((e) => setErr(e.message))
+    getJson('/api/analytics?panel=members')
+      .then((j) => setData((prev: Data) => ({ ...(prev ?? {}), ...j })))
+      .catch((e) => { setPerr((x) => ({ ...x, members: e.message })); setErr(e.message) })
+      .finally(() => setBusy((b) => ({ ...b, members: false })))
   }, [])
 
-  // growth reads 90 days of visits, so it loads the first time its tab opens
   const open = (t: Tab) => {
     setTab(t)
-    if (t === 'growth' && !growth && !gBusy) {
-      setGBusy(true)
-      getJson('/api/analytics?panel=growth').then((j) => setGrowth(j.growth)).catch((e) => setGErr(e.message)).finally(() => setGBusy(false))
-    }
+    if (t === 'growth') { if (!growth && !gBusy) loadGrowth() }
+    else if (!data?.[t] && !busy[t]) loadPanel(t)
   }
+  const refresh = () => { if (tab === 'growth') loadGrowth(true); else loadPanel(tab, true) }
 
   const M = data?.members, D = data?.demand, E = data?.engagement, S = data?.supply
   const d = D?.[win]?.[seg]
@@ -79,7 +99,7 @@ export default function Dashboard() {
         <div>
           <h1>Analytics</h1>
           <p className="an-sub">{data ? `Generated ${ago(data.generatedAt)} · kept for up to 3 min · ` : err ? `Couldn't load: ${err}` : 'Loading…'}{data && (
-            <button type="button" onClick={() => { getJson('/api/analytics?fresh=1').then(setData).catch((e) => setErr(e.message)) }}
+            <button type="button" onClick={refresh}
               style={{ background: 'none', border: 0, padding: 0, font: 'inherit', color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>refresh now</button>
           )}</p>
         </div>
@@ -100,7 +120,9 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {!data && !err && <div className="an-card an-muted">Pulling the last 30 to 90 days from the database…</div>}
+      {tab !== 'growth' && !data?.[tab] && (
+        <div className="an-card an-muted">{perr[tab] ? `Couldn't load ${tab}: ${perr[tab]}` : `Reading the ${tab} numbers from the database…`}</div>
+      )}
 
       {/* ------------------------------------------------ members */}
       {tab === 'members' && M && (
@@ -334,6 +356,9 @@ function Growth({ G, generatedAt }: { G: Data; generatedAt: string }) {
         </label>
       </div>
 
+      <Trajectory G={G} asOf={generatedAt} />
+
+      <h2 className="an-section">Recent activity</h2>
       <div className="an-tiles">
         <Tile value={wow('visitors').now} label="visitors, last 7 days" spark={col('visitors').slice(-30)} delta={wow('visitors')} />
         <Tile value={wow('signups').now} label="new accounts, last 7 days" spark={col('signups').slice(-30)} delta={wow('signups')} />
@@ -472,6 +497,11 @@ const CSS = `
 .an-tabs button, .an-seg button { border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
 .an-tabs button.on, .an-seg button.on { background: var(--ink); color: #fff; }
 .an-controls { display: flex; gap: 10px; flex-wrap: wrap; }
+.an-tj-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; padding: 16px 18px; }
+.an-tj-controls label { display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.an-tj-controls b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; margin-left: 4px; }
+.an-tj-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.an-tj-controls small { color: var(--ink-3); font-size: 12px; line-height: 1.4; }
 .an-grid { display: grid; gap: 14px; }
 .an-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
 .an-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }

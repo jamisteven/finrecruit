@@ -22,14 +22,31 @@ const dayRange = (n: number) => Array.from({ length: n }, (_, i) => new Date(Dat
 type Q = any
 
 async function fetchAll(db: Db, table: string, columns: string, apply: (q: Q) => unknown): Promise<Row[]> {
-  const out: Row[] = []
-  for (let from = 0; ; from += 1000) {
-    let q: Q = db.from(table).select(columns)
+  const page = async (from: number, withCount: boolean) => {
+    let q: Q = db.from(table).select(columns, withCount ? { count: 'exact' } : undefined)
     q = apply(q) ?? q
-    const { data, error } = await q.range(from, from + 999)
+    const { data, error, count } = await q.range(from, from + 999)
     if (error) throw new Error(`${table}: ${error.message}`)
-    out.push(...(data ?? []))
-    if (!data || data.length < 1000) break
+    return { rows: (data ?? []) as Row[], count: count as number | null }
+  }
+  // The first page also says how many rows there are, so the rest can be fetched side by side instead of one after another
+  // (a 17,000-row table used to be 18 round trips in a row).
+  const first = await page(0, true)
+  if (first.rows.length < 1000) return first.rows
+  const out: Row[] = [...first.rows]
+  if (first.count === null || first.count === undefined) {
+    for (let from = 1000; ; from += 1000) {
+      const p = await page(from, false)
+      out.push(...p.rows)
+      if (p.rows.length < 1000) break
+    }
+    return out
+  }
+  const starts: number[] = []
+  for (let from = 1000; from < first.count; from += 1000) starts.push(from)
+  for (let i = 0; i < starts.length; i += 6) {
+    const chunk = await Promise.all(starts.slice(i, i + 6).map((f) => page(f, false)))
+    for (const c of chunk) out.push(...c.rows)
   }
   return out
 }
