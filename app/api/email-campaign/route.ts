@@ -14,7 +14,8 @@ export const dynamic = 'force-dynamic'
 //     dryRun: true,                     default true: counts + rendered samples, sends nothing
 //     limit: 25,                        max 60 per call (one call stays under the function time limit)
 //     minAgeDays: 2,                    skip accounts newer than this
-//     preview: 3,                       dry run only: how many rendered samples to return
+//     preview: 3,                       dry run only: how many rendered samples to return (max 8)
+//     html: true,                       dry run only: include the HTML of each sample, not just the text
 //     testTo: "you@x.com",              send ONE rendered email to this address (not logged), using the first eligible member's data
 //     asEmail: "member@x.com" }         with testTo: render using this member's data instead
 //
@@ -59,9 +60,11 @@ export async function POST(req: NextRequest) {
 
     if (dryRun) {
       const samples = []
-      for (const r of batch.slice(0, previewN)) {
+      // asEmail: preview one specific member (must be eligible). Without it, the first few in the batch.
+      const wanted = typeof body.asEmail === 'string' ? eligible.filter((r) => r.email.toLowerCase() === body.asEmail.toLowerCase()) : batch.slice(0, previewN)
+      for (const r of wanted) {
         const m = await build(r)
-        samples.push({ to: r.email, kind: r.kind, subject: m.subject, summary: m.summary, text: m.text })
+        samples.push({ to: r.email, kind: r.kind, subject: m.subject, summary: m.summary, text: m.text, ...(body.html ? { html: m.html } : {}) })
       }
       // how many of the batch would get real numbers vs the generic version
       let withNumbers = 0
