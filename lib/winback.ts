@@ -89,57 +89,136 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const place = (l: string | null) => (l ? cap(l) : 'anywhere')
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
 
-export type Built = { subject: string; html: string; text: string; headers: Record<string, string>; summary: { total: number; fresh: number; lines: number } }
+export type Built = { subject: string; html: string; text: string; headers: Record<string, string>; summary: { total: number; fresh: number; lines: number; tier: Tier } }
 
-export async function targetsFor(db: Db, userId: string): Promise<TargetCount[]> {
-  const { data } = await db.from('user_targets').select('keyword, location').eq('user_id', userId).order('created_at')
-  const targets = (data ?? []) as { keyword: string; location: string | null }[]
-  if (!targets.length) return []
-  return countsForTargets(db, targets)
+// How much we have to say. Numbers are only shown when they are worth showing:
+//   strong (6+ roles in 14 days): full email with the summary card
+//   medium (3-5):                 the list of searches, no big-number card
+//   thin   (1-2) / none (0):      nothing worth a headline; the campaign holds these members back by default
+export const STRONG_AT = 6
+export const MEDIUM_AT = 3
+export type Tier = 'strong' | 'medium' | 'thin' | 'none'
+export const totalOf = (counts: TargetCount[]) => counts.reduce((s, c) => s + c.exact + c.agency, 0)
+export const tierOf = (counts: TargetCount[]): Tier => {
+  const t = totalOf(counts)
+  return t >= STRONG_AT ? 'strong' : t >= MEDIUM_AT ? 'medium' : t > 0 ? 'thin' : 'none'
 }
 
-export function buildWinback(opts: { kind: Kind; userId: string; campaign: string; counts: TargetCount[]; passEndedAt: string | null; address: string }): Built {
+export type Source = 'saved' | 'searched'
+export type MemberData = { counts: TargetCount[]; source: Source; topTerm: string | null }
+
+// Searches that say nothing about a role. Counting them would inflate the numbers ("business" matches half the board).
+const VAGUE = new Set(['entry', 'entry level', 'junior', 'senior', 'remote', 'hybrid', 'business', 'science', 'content', 'jobs', 'job', 'work', 'intern', 'internship', 'internships', 'level', 'full time', 'part time'])
+
+type SearchRow = { user_id: string; term: string; locations: unknown; n: number; last_at: string }
+const lastLocation = (v: unknown): string | null => {
+  const arr = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()) : []
+  return arr.length ? arr[arr.length - 1].trim().toLowerCase() : null   // ["United States","Atlanta"] -> atlanta
+}
+
+/** Saved searches for members who have them (paid), otherwise what they searched on the site in the last 60 days. */
+export async function memberDataFor(db: Db, ids: string[]): Promise<Map<string, MemberData>> {
+  const out = new Map<string, MemberData>()
+  const saved = new Map<string, { keyword: string; location: string | null }[]>()
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100)
+    for (let from = 0; ; from += 1000) {
+      const { data } = await db.from('user_targets').select('user_id, keyword, location').in('user_id', chunk).order('created_at').range(from, from + 999)
+      for (const r of data ?? []) {
+        const list = saved.get(r.user_id as string) ?? []
+        list.push({ keyword: r.keyword as string, location: (r.location as string | null) ?? null })
+        saved.set(r.user_id as string, list)
+      }
+      if ((data ?? []).length < 1000) break
+    }
+  }
+  const searchIds = ids.filter((id) => !saved.has(id))
+  const searched = new Map<string, { keyword: string; location: string | null }[]>()
+  if (searchIds.length) {
+    const rows: SearchRow[] = []
+    for (let i = 0; i < searchIds.length; i += 100) {
+      const { data, error } = await db.rpc('member_searches', { p_ids: searchIds.slice(i, i + 100), p_days: 60 })
+      if (error) throw new Error(`member_searches: ${error.message} (did you run supabase/2026-10-30-member-searches.sql?)`)
+      rows.push(...((data ?? []) as SearchRow[]))
+    }
+    rows.sort((a, b) => b.last_at.localeCompare(a.last_at))   // most recent first
+    for (const r of rows) {
+      const term = r.term.trim()
+      if (term.length < 4 || VAGUE.has(term)) continue
+      const list = searched.get(r.user_id) ?? []
+      if (list.some((t) => t.keyword === term)) continue       // one line per role: its most recent version
+      if (list.length >= 4) continue
+      list.push({ keyword: term, location: lastLocation(r.locations) })
+      searched.set(r.user_id, list)
+    }
+  }
+  for (const id of ids) {
+    const mine = saved.get(id)
+    const targets = mine ?? searched.get(id) ?? []
+    const counts = targets.length ? await countsForTargets(db, targets) : []
+    out.set(id, { counts, source: mine ? 'saved' : 'searched', topTerm: targets[0]?.keyword ?? null })
+  }
+  return out
+}
+
+export async function dataFor(db: Db, userId: string): Promise<MemberData> {
+  return (await memberDataFor(db, [userId])).get(userId)!
+}
+
+export function buildWinback(opts: { kind: Kind; userId: string; campaign: string; counts: TargetCount[]; passEndedAt: string | null; address: string; source?: Source }): Built {
   const { kind, userId, campaign, counts, address } = opts
-  const lines = counts.map((c) => ({ label: `${cap(c.keyword)} · ${place(c.location)}`, n: c.exact + c.agency, fresh: c.fresh }))
-    .filter((l) => l.n > 0).sort((a, b) => b.n - a.n).slice(0, 4)
-  const total = counts.reduce((s, c) => s + c.exact + c.agency, 0)
+  const searched = opts.source === 'searched'   // free member: built from what they searched, not from saved searches
+  let lines = counts.map((c) => ({ keyword: c.keyword, label: `${cap(c.keyword)} · ${place(c.location)}`, n: c.exact + c.agency, fresh: c.fresh }))
+    .filter((l) => l.n > 0).sort((a, b) => b.n - a.n)
+  // a row that says "1 role" next to rows with real numbers just looks thin: show the ones with 2+ when there are any
+  if (lines.some((l) => l.n >= 2)) lines = lines.filter((l) => l.n >= 2)
+  lines = lines.slice(0, 4)
+  const total = totalOf(counts)
   const fresh = counts.reduce((s, c) => s + c.fresh, 0)
-  const hasNumbers = lines.length > 0
+  const tier = tierOf(counts)
+  const hasNumbers = tier === 'strong' || tier === 'medium'
+  const showCard = tier === 'strong'
+  const showFresh = fresh >= 2   // "1 new in 48 hours" is not a selling point
 
   // with real matches the button promises "your matched roles", so it opens their matches feed (?mine=1); the roles they
   // tap there lead to /offer with the post itself. With nothing to show it goes straight to the offer page.
   const utm = `utm_source=email&utm_medium=winback&utm_campaign=${encodeURIComponent(campaign)}`
-  const url = hasNumbers ? `${SITE}/?mine=1&${utm}` : `${SITE}/offer?src=email&${utm}`
+  const url = !hasNumbers ? `${SITE}/offer?src=email&${utm}`
+    : searched ? `${SITE}/?q=${encodeURIComponent(lines[0].keyword)}&${utm}`   // the feed, already searched for their top role
+    : `${SITE}/?mine=1&${utm}`
   const unsub = unsubUrl(userId)
   const passUrl = quarterUrl(userId, campaign)
   const endedOn = opts.passEndedAt ? new Date(opts.passEndedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : null
 
   const first = counts.length === 1 ? counts[0] : null
   const subject = kind === 'lapsed'
-    ? (hasNumbers ? `Your pass ended. ${plural(total, 'role')} matched your searches since.` : 'Your Backchannel pass ended; here is what is new')
+    ? (hasNumbers ? `Your pass ended. ${plural(total, 'role')} matched your searches in the last 2 weeks.` : 'Your Backchannel pass ended; here is what is new')
     : hasNumbers
       ? (first ? `${plural(total, cap(first.keyword) + ' role')} in ${place(first.location)} in the last 2 weeks` : `${plural(total, 'role')} matched your searches in the last 2 weeks`)
       : 'Recruiter posts, 48 hours before the free feed'
 
   const headline = kind === 'lapsed'
     ? (hasNumbers ? 'We kept looking. Here\'s what we found.' : 'Your pass ended. Here\'s what\'s new.')
-    : (hasNumbers ? 'Here\'s what your searches found.' : 'Recruiter posts, before the free feed.')
+    : (hasNumbers ? (searched ? 'Here\'s what\'s new for the roles you searched.' : 'Here\'s what your searches found.') : 'Recruiter posts, before the free feed.')
   const intro = kind === 'lapsed'
     ? `Your saved searches continued running after your Backchannel pass${endedOn ? ` ended on ${endedOn}` : ' ended'}. Here's what matched your criteria.`
     : hasNumbers
-      ? 'Your saved searches have been running since you signed up. Here\'s what matched your criteria.'
+      ? (searched
+        ? 'You have been looking around Backchannel, so I wanted to show you what has been posted for roles like the ones you searched for.'
+        : 'Your saved searches have been running since you signed up. Here\'s what matched your criteria.')
       : 'Backchannel finds roles that recruiters post on LinkedIn before they reach a job board, and checks your searches at least twice a day.'
 
+  const introFull = hasNumbers && !showCard ? `${intro} In the last 14 days they matched ${plural(total, 'role')}${showFresh ? `, ${fresh} of them found in the last 2 days` : ''}.` : intro
   const calloutTitle = 'Don\'t let someone else get there first.'
   const calloutB = 'Premium gives you immediate access, recruiter names and direct links to their original posts, so you can reach out before other candidates.'
-  const ctaLabel = hasNumbers ? `See your ${total} matched role${total === 1 ? '' : 's'} →` : 'See what Premium shows →'
+  const ctaLabel = hasNumbers ? `See ${searched ? 'the' : 'your'} ${total} ${searched ? '' : 'matched '}role${total === 1 ? '' : 's'} →` : 'See what Premium shows →'
   const priceLine = `First month $${PRICE.intro} · Then $${PRICE.monthly}/month · Cancel anytime`
   const altLine = `Prefer not to subscribe? Get 90 days of Premium for $${PRICE.quarter}, paid once. No renewal.`
   const questions = 'Questions? Just reply to this email. I read every one.'
 
   const text = [
-    headline, '', intro,
-    ...(hasNumbers ? ['', `YOUR LAST 14 DAYS: ${total} matching opportunit${total === 1 ? 'y' : 'ies'}`, `New in the last 48 hours: ${fresh}`, '', 'What your searches found:', ...lines.map((l) => `- ${l.label}: ${plural(l.n, 'role')}`)] : []),
+    headline, '', introFull,
+    ...(hasNumbers ? ['', ...(showCard ? [`YOUR LAST 14 DAYS: ${total} matching opportunities`, ...(showFresh ? [`New in the last 48 hours: ${fresh}`] : []), ''] : []), (searched ? 'Roles like the ones you searched for:' : 'What your searches found:'), ...lines.map((l) => `- ${l.label}: ${plural(l.n, 'role')}`)] : []),
     '', calloutTitle, calloutB, '',
     `${ctaLabel.replace(' →', '')}: ${url}`, priceLine, '',
     `${altLine} ${passUrl}`, '', questions, '', 'Jami', '',
@@ -148,16 +227,17 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
 
   const serif = "Georgia,'Times New Roman',serif"
   const sans = "Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
-  const card = hasNumbers ? `
+  const summaryCard = showCard ? `
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#FFFFFF;border-radius:12px;margin:0 0 24px"><tr><td style="padding:16px 18px">
       <div style="font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:#7A7366;font-weight:600;margin:0 0 6px">Your last 14 days</div>
       <div style="font-size:17px;font-weight:600;color:#191713;margin:0 0 12px"><span style="font-family:${serif};font-size:30px;font-weight:500;margin-right:6px">${total}</span>matching opportunit${total === 1 ? 'y' : 'ies'}</div>
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #E4DED1"><tr>
+      ${showFresh ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #E4DED1"><tr>
         <td style="padding:12px 0 0;font-size:14.5px;color:#5C574D">New in the last 48 hours</td>
         <td align="right" style="padding:12px 0 0;font-family:${serif};font-size:22px;font-weight:500;color:#24468F">${fresh}</td>
-      </tr></table>
-    </td></tr></table>
-    <h2 style="margin:0 0 6px;font-family:${serif};font-size:19px;font-weight:500;color:#191713">What your searches found</h2>
+      </tr></table>` : ''}
+    </td></tr></table>` : ''
+  const list = hasNumbers ? `
+    <h2 style="margin:0 0 6px;font-family:${serif};font-size:19px;font-weight:500;color:#191713">${searched ? 'Roles like the ones you searched for' : 'What your searches found'}</h2>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 24px">${lines.map((l) => `<tr><td style="padding:11px 0;border-bottom:1px solid #E4DED1;font-size:14.5px;color:#191713">${esc(l.label)}</td><td align="right" style="padding:11px 0;border-bottom:1px solid #E4DED1;font-size:14.5px;font-weight:600;color:#191713;white-space:nowrap">${plural(l.n, 'role')}</td></tr>`).join('')}</table>` : ''
 
   const html = `<!doctype html><html><body style="margin:0;background:#F5F2EB;font-family:${sans};color:#191713">
@@ -167,7 +247,7 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
       <td style="vertical-align:middle;font-family:${serif};font-size:22px;font-weight:600;color:#191713">backchannel<span style="color:#5C574D;font-weight:400;font-style:italic">.jobs</span></td>
     </tr></table>
     <h1 style="margin:0 0 10px;font-family:${serif};font-weight:500;font-size:26px;line-height:1.2;color:#191713">${esc(headline)}</h1>
-    <p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#5C574D">${esc(intro)}</p>${card}
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#5C574D">${esc(introFull)}</p>${summaryCard}${list}
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#E9EDF3;border-radius:12px;margin:0 0 18px"><tr><td style="padding:18px">
       <p style="margin:0 0 8px;font-family:${serif};font-size:18px;font-weight:500;color:#24324D">${esc(calloutTitle)}</p>
       <p style="margin:0;font-size:14.5px;line-height:1.55;color:#4A463D">${esc(calloutB)}</p>
@@ -185,6 +265,6 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
   return {
     subject, html, text,
     headers: { 'List-Unsubscribe': `<${unsub}>, <mailto:${process.env.EMAIL_REPLY_TO || 'unsubscribe@backchanneljobs.com'}?subject=unsubscribe>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
-    summary: { total, fresh, lines: lines.length },
+    summary: { total, fresh, lines: lines.length, tier },
   }
 }

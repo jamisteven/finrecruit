@@ -422,6 +422,13 @@ export default function HomePage() {
   const [filtersOpen, setFiltersOpen] = useState(false)  // mobile filter accordion
   const [nowTs, setNowTs] = useState<number | null>(null)  // null until mounted — avoids SSR hydration mismatch
   const visitorId = useRef<string | null>(null)
+  // Links from campaign emails open the feed already searched for the role: /?q=software%20engineer
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get('q')?.trim().slice(0, 80)
+      if (q) setTimeout(() => setFilters((f) => ({ ...f, search: q })), 0)
+    } catch { /* ignore */ }
+  }, [])
   useEffect(() => {
     captureAttribution()   // remember how this visitor first arrived (used at checkout)
     try {
