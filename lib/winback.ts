@@ -88,7 +88,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const title = (l: string) => l.split(/\s+/).map(cap).join(' ')
 const withPlace = (kw: string, l: string | null) => (l ? `${cap(kw)} · ${title(l)}` : cap(kw))
-const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
+const plural = (n: number, w: string) => `${fmtCount(n)} ${w}${n === 1 ? '' : 's'}`
 
 export type Built = { subject: string; html: string; text: string; headers: Record<string, string>; summary: { total: number; fresh: number; lines: number; tier: Tier } }
 
@@ -100,15 +100,18 @@ export const STRONG_AT = 6
 export const MEDIUM_AT = 3
 export type Tier = 'strong' | 'medium' | 'thin' | 'none'
 export const totalOf = (counts: TargetCount[]) => counts.reduce((s, c) => s + c.exact + c.agency, 0)
-export const tierOf = (counts: TargetCount[]): Tier => {
-  const t = totalOf(counts)
-  return t >= STRONG_AT ? 'strong' : t >= MEDIUM_AT ? 'medium' : t > 0 ? 'thin' : 'none'
-}
+export const tierFromTotal = (t: number): Tier => (t >= STRONG_AT ? 'strong' : t >= MEDIUM_AT ? 'medium' : t > 0 ? 'thin' : 'none')
+export const tierOf = (counts: TargetCount[]): Tier => tierFromTotal(totalOf(counts))
+// "1155 roles" is not a number anyone can act on: show big counts as 200+
+export const fmtCount = (n: number) => (n >= 200 ? '200+' : String(n))
 
 export type Source = 'saved' | 'searched'
 /** The stretch the numbers cover: since their last visit (date set), or, if they were away longer than we look back, the last N days. */
 export type Win = { date: string | null; days: number }
-export type MemberData = { counts: TargetCount[]; source: Source; topTerm: string | null; win: Win }
+export type MemberData = { counts: TargetCount[]; total: number; fresh: number; source: Source; topTerm: string | null; win: Win; droppedBroad: string[] }
+// A search that matches more than this share of ALL roles in the last 30 days ("manager", "analyst") says nothing about what
+// the member wants, so it is left out of the email rather than counted.
+const BROAD_SHARE = 0.08
 const LOOKBACK_DAYS = 30
 const FALLBACK_DAYS = 14   // when we cannot tell when they were last here
 
@@ -183,8 +186,19 @@ export async function memberDataFor(db: Db, ids: string[]): Promise<Map<string, 
       const days = seen ? LOOKBACK_DAYS : FALLBACK_DAYS
       win = { date: null, days }; sinceIso = new Date(now - days * DAY).toISOString()
     }
-    const counts = targets.length ? countsSince(jobs, targets, sinceIso) : []
-    out.set(id, { counts, source: mine ? 'saved' : 'searched', topTerm: targets[0]?.keyword ?? null, win })
+    // drop searches too broad to mean anything, judged over the whole 30-day window
+    const droppedBroad: string[] = []
+    let usable = targets
+    if (targets.length && jobs.length) {
+      const wide = countsSince(jobs, targets, new Date(now - LOOKBACK_DAYS * DAY).toISOString()).counts
+      usable = targets.filter((t, i) => {
+        const broad = (wide[i].exact + wide[i].agency) / jobs.length > BROAD_SHARE
+        if (broad) droppedBroad.push(t.keyword)
+        return !broad
+      })
+    }
+    const r = usable.length ? countsSince(jobs, usable, sinceIso) : { counts: [] as TargetCount[], total: 0, fresh: 0 }
+    out.set(id, { counts: r.counts, total: r.total, fresh: r.fresh, source: mine ? 'saved' : 'searched', topTerm: usable[0]?.keyword ?? null, win, droppedBroad })
   }
   return out
 }
@@ -193,7 +207,7 @@ export async function dataFor(db: Db, userId: string): Promise<MemberData> {
   return (await memberDataFor(db, [userId])).get(userId)!
 }
 
-export function buildWinback(opts: { kind: Kind; userId: string; campaign: string; counts: TargetCount[]; passEndedAt: string | null; address: string; source?: Source; win?: Win }): Built {
+export function buildWinback(opts: { kind: Kind; userId: string; campaign: string; counts: TargetCount[]; passEndedAt: string | null; address: string; source?: Source; win?: Win; total?: number; fresh?: number }): Built {
   const { kind, userId, campaign, counts, address } = opts
   const win: Win = opts.win ?? { date: null, days: FALLBACK_DAYS }
   const lastVisit = win.date ? new Date(win.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
@@ -205,9 +219,9 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
   // a row that says "1 role" next to rows with real numbers just looks thin: show the ones with 2+ when there are any
   if (lines.some((l) => l.n >= 2)) lines = lines.filter((l) => l.n >= 2)
   lines = lines.slice(0, 4)
-  const total = totalOf(counts)
-  const fresh = counts.reduce((s, c) => s + c.fresh, 0)
-  const tier = tierOf(counts)
+  const total = opts.total ?? totalOf(counts)
+  const fresh = opts.fresh ?? counts.reduce((s, c) => s + c.fresh, 0)
+  const tier = tierFromTotal(total)
   const hasNumbers = tier === 'strong' || tier === 'medium'
   const showCard = tier === 'strong'
   const showFresh = fresh >= 2   // "1 new in 48 hours" is not a selling point
@@ -246,14 +260,14 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
   const cardLabel = lastVisit ? 'Since your last visit' : `Last ${win.days} days`
   const calloutTitle = 'Don\'t let someone else get there first.'
   const calloutB = 'Premium gives you immediate access, recruiter names and direct links to their original posts, so you can reach out before other candidates.'
-  const ctaLabel = hasNumbers ? `See ${searched ? 'the' : 'your'} ${total} ${searched ? '' : 'matched '}role${total === 1 ? '' : 's'} →` : 'See what Premium shows →'
+  const ctaLabel = hasNumbers ? `See ${searched ? 'the' : 'your'} ${fmtCount(total)} ${searched ? '' : 'matched '}role${total === 1 ? '' : 's'} →` : 'See what Premium shows →'
   const priceLine = `First month $${PRICE.intro} · Then $${PRICE.monthly}/month · Cancel anytime`
   const altLine = `Prefer not to subscribe? Get 90 days of Premium for $${PRICE.quarter}, paid once. No renewal.`
   const questions = 'Questions? Just reply to this email. I read every one.'
 
   const text = [
     headline, '', introFull,
-    ...(hasNumbers ? ['', ...(showCard ? [`${cardLabel.toUpperCase()}: ${total} matching opportunities`, ...(showFresh ? [`New in the last 48 hours: ${fresh}`] : []), ''] : []), (searched ? 'Roles like the ones you searched for:' : 'What your searches found:'), ...lines.map((l) => `- ${l.label}: ${plural(l.n, 'role')}`)] : []),
+    ...(hasNumbers ? ['', ...(showCard ? [`${cardLabel.toUpperCase()}: ${fmtCount(total)} matching opportunities`, ...(showFresh ? [`New in the last 48 hours: ${fresh}`] : []), ''] : []), (searched ? 'Roles like the ones you searched for:' : 'What your searches found:'), ...lines.map((l) => `- ${l.label}: ${plural(l.n, 'role')}`)] : []),
     '', calloutTitle, calloutB, '',
     `${ctaLabel.replace(' →', '')}: ${url}`, priceLine, '',
     `${altLine} ${passUrl}`, '', questions, '', 'Jami', '',
@@ -265,7 +279,7 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
   const summaryCard = showCard ? `
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#FFFFFF;border-radius:12px;margin:0 0 24px"><tr><td style="padding:16px 18px">
       <div style="font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:#7A7366;font-weight:600;margin:0 0 6px">${esc(cardLabel)}</div>
-      <div style="font-size:17px;font-weight:600;color:#191713;margin:0 0 12px"><span style="font-family:${serif};font-size:30px;font-weight:500;margin-right:6px">${total}</span>matching opportunit${total === 1 ? 'y' : 'ies'}</div>
+      <div style="font-size:17px;font-weight:600;color:#191713;margin:0 0 12px"><span style="font-family:${serif};font-size:30px;font-weight:500;margin-right:6px">${fmtCount(total)}</span>matching opportunit${total === 1 ? 'y' : 'ies'}</div>
       ${showFresh ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #E4DED1"><tr>
         <td style="padding:12px 0 0;font-size:14.5px;color:#5C574D">New in the last 48 hours</td>
         <td align="right" style="padding:12px 0 0;font-family:${serif};font-size:22px;font-weight:500;color:#24468F">${fresh}</td>

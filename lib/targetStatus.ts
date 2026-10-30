@@ -178,18 +178,25 @@ export async function jobsWindow(db: Db, days: number): Promise<StatusJob[]> {
   return rows
 }
 
-/** Matches for each target among roles found after `sinceIso`. `fresh` = found in the last 48 hours. */
-export function countsSince(jobs: StatusJob[], targets: { keyword: string; location: string | null }[], sinceIso: string): TargetCount[] {
+/**
+ * Matches for each target among roles found after `sinceIso`, plus the number of DISTINCT roles that match any of
+ * them (two searches that catch the same role count it once). `fresh` = direct-employer roles found in the last 48 hours.
+ */
+export function countsSince(jobs: StatusJob[], targets: { keyword: string; location: string | null }[], sinceIso: string): { counts: TargetCount[]; total: number; fresh: number } {
   const fresh48 = new Date(Date.now() - 2 * DAY).toISOString()
-  return targets.map((t) => {
-    let exact = 0, agency = 0, fresh = 0
-    for (const j of jobs) {
-      if (j.extracted_at < sinceIso) continue
-      if (!keywordMatches(t.keyword, j.title ?? '', null)) continue
-      if (!locationMatches(t.location, j.location, j.work_type)) continue
-      if (j.employer_type === 'agency') agency++
-      else { exact++; if (j.extracted_at >= fresh48) fresh++ }
-    }
-    return { keyword: t.keyword, location: t.location, exact, agency, fresh }
-  })
+  const counts = targets.map((t) => ({ keyword: t.keyword, location: t.location, exact: 0, agency: 0, fresh: 0 }))
+  let total = 0, fresh = 0
+  for (const j of jobs) {
+    if (j.extracted_at < sinceIso) continue
+    let any = false
+    targets.forEach((t, i) => {
+      if (!keywordMatches(t.keyword, j.title ?? '', null)) return
+      if (!locationMatches(t.location, j.location, j.work_type)) return
+      any = true
+      if (j.employer_type === 'agency') counts[i].agency++
+      else { counts[i].exact++; if (j.extracted_at >= fresh48) counts[i].fresh++ }
+    })
+    if (any) { total++; if (j.employer_type !== 'agency' && j.extracted_at >= fresh48) fresh++ }
+  }
+  return { counts, total, fresh }
 }

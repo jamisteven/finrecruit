@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { sendEmailDetailed } from '@/lib/email'
-import { buildWinback, dataFor, loadRecipients, memberDataFor, tierOf, totalOf, type MemberData, type Audience, type Recipient, type Kind } from '@/lib/winback'
+import { buildWinback, dataFor, loadRecipients, memberDataFor, tierFromTotal, type MemberData, type Audience, type Recipient, type Kind } from '@/lib/winback'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   try {
     const { eligible, counts } = await loadRecipients(db, audience, campaign, minAgeDays)
     const build = (r: Member, d: MemberData) =>
-      buildWinback({ kind: r.kind, userId: r.id, campaign, counts: d.counts, source: d.source, win: d.win, passEndedAt: r.pass_expires_at, address: address || '[postal address not set]' })
+      buildWinback({ kind: r.kind, userId: r.id, campaign, counts: d.counts, total: d.total, fresh: d.fresh, source: d.source, win: d.win, passEndedAt: r.pass_expires_at, address: address || '[postal address not set]' })
 
     // test send: one rendered email to your own inbox, nothing logged
     if (typeof body.testTo === 'string' && body.testTo.includes('@')) {
@@ -62,9 +62,14 @@ export async function POST(req: NextRequest) {
         if (p) who = { ...(p as Recipient), kind: body.kind === 'lapsed' ? 'lapsed' : body.kind === 'free' ? 'free' : (p.pass_expires_at ? 'lapsed' : 'free') }
       }
       if (!who) return NextResponse.json({ error: 'no member with that email, and no eligible member to render from' }, { status: 404 })
-      const m = build(who, await dataFor(db, who.id))
+      const data = await dataFor(db, who.id)
+      const m = build(who, data)
       const out = await sendEmailDetailed(body.testTo, `[TEST ${new Date().toISOString().slice(11, 19)}] ${m.subject}`, m.html, m.text, { headers: m.headers })
-      return NextResponse.json({ test: true, renderedFor: who.email, kind: who.kind, tier: m.summary.tier, ok: out.ok, error: out.error, warnings })
+      const wouldSend = m.summary.total >= minMatches
+      return NextResponse.json({
+        test: true, renderedFor: who.email, kind: who.kind, tier: m.summary.tier, matches: m.summary.total, tooBroadIgnored: data.droppedBroad, ok: out.ok, error: out.error, warnings,
+        ...(wouldSend ? {} : { note: `This member has ${m.summary.total} matches (below minMatches ${minMatches}), so a real send would SKIP them. You were sent the generic no-numbers version. Pick a member from the dry run with tier strong or medium.` }),
+      })
     }
 
     // what each eligible member has to show, and who is worth emailing at all
@@ -74,11 +79,15 @@ export async function POST(req: NextRequest) {
     const sendable: Member[] = []
     for (const r of eligible) {
       const d = byUser.get(r.id)!
-      tiers[tierOf(d.counts)]++
+      tiers[tierFromTotal(d.total)]++
       sources[d.source]++
-      if (totalOf(d.counts) >= minMatches) sendable.push(r)
+      if (d.total >= minMatches) sendable.push(r)
     }
     const heldBack = eligible.length - sendable.length
+    // searches left out for being too broad to mean anything ("manager", "analyst"), most common first
+    const broad = new Map<string, number>()
+    for (const d of byUser.values()) for (const t of d.droppedBroad) broad.set(t, (broad.get(t) ?? 0) + 1)
+    const broadDropped = [...broad.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([term, members]) => ({ term, members }))
 
     if (dryRun) {
       const wanted = typeof body.asEmail === 'string'
@@ -90,7 +99,7 @@ export async function POST(req: NextRequest) {
       })
       return NextResponse.json({
         dryRun: true, campaign, audience, minMatches, counts, eligible: eligible.length, tiers, sources,
-        wouldSend: sendable.length, heldBack, thisBatch: Math.min(limit, sendable.length), warnings, samples,
+        wouldSend: sendable.length, heldBack, broadDropped, thisBatch: Math.min(limit, sendable.length), warnings, samples,
       })
     }
 
