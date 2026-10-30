@@ -86,7 +86,8 @@ export async function loadRecipients(
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-const place = (l: string | null) => (l ? cap(l) : 'anywhere')
+const title = (l: string) => l.split(/\s+/).map(cap).join(' ')
+const withPlace = (kw: string, l: string | null) => (l ? `${cap(kw)} · ${title(l)}` : cap(kw))
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
 
 export type Built = { subject: string; html: string; text: string; headers: Record<string, string>; summary: { total: number; fresh: number; lines: number; tier: Tier } }
@@ -168,7 +169,7 @@ export async function dataFor(db: Db, userId: string): Promise<MemberData> {
 export function buildWinback(opts: { kind: Kind; userId: string; campaign: string; counts: TargetCount[]; passEndedAt: string | null; address: string; source?: Source }): Built {
   const { kind, userId, campaign, counts, address } = opts
   const searched = opts.source === 'searched'   // free member: built from what they searched, not from saved searches
-  let lines = counts.map((c) => ({ keyword: c.keyword, label: `${cap(c.keyword)} · ${place(c.location)}`, n: c.exact + c.agency, fresh: c.fresh }))
+  let lines = counts.map((c) => ({ keyword: c.keyword, label: withPlace(c.keyword, c.location), n: c.exact + c.agency, fresh: c.fresh }))
     .filter((l) => l.n > 0).sort((a, b) => b.n - a.n)
   // a row that says "1 role" next to rows with real numbers just looks thin: show the ones with 2+ when there are any
   if (lines.some((l) => l.n >= 2)) lines = lines.filter((l) => l.n >= 2)
@@ -194,21 +195,21 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
   const subject = kind === 'lapsed'
     ? (hasNumbers ? `Your pass ended. ${plural(total, 'role')} matched your searches in the last 2 weeks.` : 'Your Backchannel pass ended; here is what is new')
     : hasNumbers
-      ? (first ? `${plural(total, cap(first.keyword) + ' role')} in ${place(first.location)} in the last 2 weeks` : `${plural(total, 'role')} matched your searches in the last 2 weeks`)
+      ? (first ? `${plural(total, cap(first.keyword) + ' role')}${first.location ? ` in ${title(first.location)}` : ''} in the last 2 weeks` : `${plural(total, 'role')} matched your searches in the last 2 weeks`)
       : 'Recruiter posts, 48 hours before the free feed'
 
   const headline = kind === 'lapsed'
     ? (hasNumbers ? 'We kept looking. Here\'s what we found.' : 'Your pass ended. Here\'s what\'s new.')
-    : (hasNumbers ? (searched ? 'Here\'s what\'s new for the roles you searched.' : 'Here\'s what your searches found.') : 'Recruiter posts, before the free feed.')
+    : (hasNumbers ? (searched ? 'New leads based on your search.' : 'Here\'s what your searches found.') : 'Recruiter posts, before the free feed.')
   const intro = kind === 'lapsed'
     ? `Your saved searches continued running after your Backchannel pass${endedOn ? ` ended on ${endedOn}` : ' ended'}. Here's what matched your criteria.`
     : hasNumbers
       ? (searched
-        ? 'You have been looking around Backchannel, so I wanted to show you what has been posted for roles like the ones you searched for.'
+        ? `Since you\u2019ve been exploring Backchannel, here are ${plural(total, 'new role')} posted in the last 14 days that match what you\u2019re looking for.`
         : 'Your saved searches have been running since you signed up. Here\'s what matched your criteria.')
       : 'Backchannel finds roles that recruiters post on LinkedIn before they reach a job board, and checks your searches at least twice a day.'
 
-  const introFull = hasNumbers && !showCard ? `${intro} In the last 14 days they matched ${plural(total, 'role')}${showFresh ? `, ${fresh} of them found in the last 2 days` : ''}.` : intro
+  const introFull = hasNumbers && !showCard && !searched ? `${intro} In the last 14 days they matched ${plural(total, 'role')}${showFresh ? `, ${fresh} of them found in the last 2 days` : ''}.` : intro
   const calloutTitle = 'Don\'t let someone else get there first.'
   const calloutB = 'Premium gives you immediate access, recruiter names and direct links to their original posts, so you can reach out before other candidates.'
   const ctaLabel = hasNumbers ? `See ${searched ? 'the' : 'your'} ${total} ${searched ? '' : 'matched '}role${total === 1 ? '' : 's'} →` : 'See what Premium shows →'
