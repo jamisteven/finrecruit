@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   try {
     const { eligible, counts } = await loadRecipients(db, audience, campaign, minAgeDays)
     const build = (r: Member, d: MemberData) =>
-      buildWinback({ kind: r.kind, userId: r.id, campaign, counts: d.counts, source: d.source, passEndedAt: r.pass_expires_at, address: address || '[postal address not set]' })
+      buildWinback({ kind: r.kind, userId: r.id, campaign, counts: d.counts, source: d.source, win: d.win, passEndedAt: r.pass_expires_at, address: address || '[postal address not set]' })
 
     // test send: one rendered email to your own inbox, nothing logged
     if (typeof body.testTo === 'string' && body.testTo.includes('@')) {

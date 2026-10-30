@@ -1,10 +1,10 @@
 // Win-back / "come see what your searches found" email to free and lapsed members.
-// Personalised from each member's saved searches (user_targets), counted against the last 14 days of roles.
+// Personalised from each member's saved searches, or from what they searched on the site, counted against roles found since their last visit.
 // Plain and short on purpose: no countdown timers, no invented scarcity, only numbers we can show.
 
 import { createHmac, timingSafeEqual } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { countsForTargets, type TargetCount } from './targetStatus'
+import { countsSince, jobsWindow, type TargetCount } from './targetStatus'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, any, any>
@@ -93,7 +93,7 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
 export type Built = { subject: string; html: string; text: string; headers: Record<string, string>; summary: { total: number; fresh: number; lines: number; tier: Tier } }
 
 // How much we have to say. Numbers are only shown when they are worth showing:
-//   strong (6+ roles in 14 days): full email with the summary card
+//   strong (6+ new roles since their last visit): full email with the summary card
 //   medium (3-5):                 the list of searches, no big-number card
 //   thin   (1-2) / none (0):      nothing worth a headline; the campaign holds these members back by default
 export const STRONG_AT = 6
@@ -106,7 +106,11 @@ export const tierOf = (counts: TargetCount[]): Tier => {
 }
 
 export type Source = 'saved' | 'searched'
-export type MemberData = { counts: TargetCount[]; source: Source; topTerm: string | null }
+/** The stretch the numbers cover: since their last visit (date set), or, if they were away longer than we look back, the last N days. */
+export type Win = { date: string | null; days: number }
+export type MemberData = { counts: TargetCount[]; source: Source; topTerm: string | null; win: Win }
+const LOOKBACK_DAYS = 30
+const FALLBACK_DAYS = 14   // when we cannot tell when they were last here
 
 // Searches that say nothing about a role. Counting them would inflate the numbers ("business" matches half the board).
 const VAGUE = new Set(['entry', 'entry level', 'junior', 'senior', 'remote', 'hybrid', 'business', 'science', 'content', 'jobs', 'job', 'work', 'intern', 'internship', 'internships', 'level', 'full time', 'part time'])
@@ -143,9 +147,14 @@ export async function memberDataFor(db: Db, ids: string[]): Promise<Map<string, 
       rows.push(...((data ?? []) as SearchRow[]))
     }
     rows.sort((a, b) => b.last_at.localeCompare(a.last_at))   // most recent first
+    // The site logs a search shortly after each pause in typing, so "customer success" leaves "customer" behind.
+    // A term that is the start of a longer term the same member also searched is a fragment: drop it.
+    const termsOf = new Map<string, string[]>()
+    for (const r of rows) { const l = termsOf.get(r.user_id) ?? []; l.push(r.term.trim()); termsOf.set(r.user_id, l) }
+    const isFragment = (uid: string, term: string) => (termsOf.get(uid) ?? []).some((o) => o.length > term.length && o.startsWith(term))
     for (const r of rows) {
       const term = r.term.trim()
-      if (term.length < 4 || VAGUE.has(term)) continue
+      if (term.length < 4 || VAGUE.has(term) || isFragment(r.user_id, term)) continue
       const list = searched.get(r.user_id) ?? []
       if (list.some((t) => t.keyword === term)) continue       // one line per role: its most recent version
       if (list.length >= 4) continue
@@ -153,11 +162,29 @@ export async function memberDataFor(db: Db, ids: string[]): Promise<Map<string, 
       searched.set(r.user_id, list)
     }
   }
+  // when each member was last here, so the numbers can be "new since your last visit"
+  const lastSeen = new Map<string, string>()
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await db.rpc('member_last_seen', { p_ids: ids.slice(i, i + 100) })
+    if (error) throw new Error(`member_last_seen: ${error.message} (did you run supabase/2026-10-30-member-last-seen.sql?)`)
+    for (const r of (data ?? []) as { user_id: string; last_seen: string }[]) lastSeen.set(r.user_id, r.last_seen)
+  }
+  const jobs = await jobsWindow(db, LOOKBACK_DAYS)
+  const now = Date.now()
   for (const id of ids) {
     const mine = saved.get(id)
     const targets = mine ?? searched.get(id) ?? []
-    const counts = targets.length ? await countsForTargets(db, targets) : []
-    out.set(id, { counts, source: mine ? 'saved' : 'searched', topTerm: targets[0]?.keyword ?? null })
+    const seen = lastSeen.get(id)
+    const seenMs = seen ? new Date(seen).getTime() : NaN
+    let win: Win, sinceIso: string
+    if (seen && now - seenMs <= LOOKBACK_DAYS * DAY) {
+      win = { date: seen, days: Math.max(1, Math.round((now - seenMs) / DAY)) }; sinceIso = seen
+    } else {
+      const days = seen ? LOOKBACK_DAYS : FALLBACK_DAYS
+      win = { date: null, days }; sinceIso = new Date(now - days * DAY).toISOString()
+    }
+    const counts = targets.length ? countsSince(jobs, targets, sinceIso) : []
+    out.set(id, { counts, source: mine ? 'saved' : 'searched', topTerm: targets[0]?.keyword ?? null, win })
   }
   return out
 }
@@ -166,8 +193,12 @@ export async function dataFor(db: Db, userId: string): Promise<MemberData> {
   return (await memberDataFor(db, [userId])).get(userId)!
 }
 
-export function buildWinback(opts: { kind: Kind; userId: string; campaign: string; counts: TargetCount[]; passEndedAt: string | null; address: string; source?: Source }): Built {
+export function buildWinback(opts: { kind: Kind; userId: string; campaign: string; counts: TargetCount[]; passEndedAt: string | null; address: string; source?: Source; win?: Win }): Built {
   const { kind, userId, campaign, counts, address } = opts
+  const win: Win = opts.win ?? { date: null, days: FALLBACK_DAYS }
+  const lastVisit = win.date ? new Date(win.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
+  // the stretch the numbers cover, in words
+  const sinceText = lastVisit ? `since your last visit on ${lastVisit}` : `in the last ${win.days} days`
   const searched = opts.source === 'searched'   // free member: built from what they searched, not from saved searches
   let lines = counts.map((c) => ({ keyword: c.keyword, label: withPlace(c.keyword, c.location), n: c.exact + c.agency, fresh: c.fresh }))
     .filter((l) => l.n > 0).sort((a, b) => b.n - a.n)
@@ -193,9 +224,9 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
 
   const first = counts.length === 1 ? counts[0] : null
   const subject = kind === 'lapsed'
-    ? (hasNumbers ? `Your pass ended. ${plural(total, 'role')} matched your searches in the last 2 weeks.` : 'Your Backchannel pass ended; here is what is new')
+    ? (hasNumbers ? `Your pass ended. ${plural(total, 'role')} matched your searches ${sinceText}.` : 'Your Backchannel pass ended; here is what is new')
     : hasNumbers
-      ? (first ? `${plural(total, cap(first.keyword) + ' role')}${first.location ? ` in ${title(first.location)}` : ''} in the last 2 weeks` : `${plural(total, 'role')} matched your searches in the last 2 weeks`)
+      ? (first ? `${plural(total, cap(first.keyword) + ' role')}${first.location ? ` in ${title(first.location)}` : ''} ${sinceText}` : `${plural(total, 'role')} matched your searches ${sinceText}`)
       : 'Recruiter posts, 48 hours before the free feed'
 
   const headline = kind === 'lapsed' && !(searched && hasNumbers)
@@ -205,11 +236,14 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
     ? `Your saved searches continued running after your Backchannel pass${endedOn ? ` ended on ${endedOn}` : ' ended'}. Here's what matched your criteria.`
     : hasNumbers
       ? (searched
-        ? `Since you\u2019ve been exploring Backchannel, here are ${plural(total, 'new role')} posted in the last 14 days that match what you\u2019re looking for.`
+        ? (lastVisit
+          ? `Since you last visited Backchannel on ${lastVisit}, here are ${plural(total, 'new role')} that match what you\u2019re looking for.`
+          : `Since you\u2019ve been exploring Backchannel, here are ${plural(total, 'new role')} posted in the last ${win.days} days that match what you\u2019re looking for.`)
         : 'Your saved searches have been running since you signed up. Here\'s what matched your criteria.')
       : 'Backchannel finds roles that recruiters post on LinkedIn before they reach a job board, and checks your searches at least twice a day.'
 
-  const introFull = hasNumbers && !showCard && !searched ? `${intro} In the last 14 days they matched ${plural(total, 'role')}${showFresh ? `, ${fresh} of them found in the last 2 days` : ''}.` : intro
+  const introFull = hasNumbers && !showCard && !searched ? `${intro} Your searches matched ${plural(total, 'role')} ${sinceText}${showFresh ? `, ${fresh} of them found in the last 2 days` : ''}.` : intro
+  const cardLabel = lastVisit ? 'Since your last visit' : `Last ${win.days} days`
   const calloutTitle = 'Don\'t let someone else get there first.'
   const calloutB = 'Premium gives you immediate access, recruiter names and direct links to their original posts, so you can reach out before other candidates.'
   const ctaLabel = hasNumbers ? `See ${searched ? 'the' : 'your'} ${total} ${searched ? '' : 'matched '}role${total === 1 ? '' : 's'} →` : 'See what Premium shows →'
@@ -219,7 +253,7 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
 
   const text = [
     headline, '', introFull,
-    ...(hasNumbers ? ['', ...(showCard ? [`YOUR LAST 14 DAYS: ${total} matching opportunities`, ...(showFresh ? [`New in the last 48 hours: ${fresh}`] : []), ''] : []), (searched ? 'Roles like the ones you searched for:' : 'What your searches found:'), ...lines.map((l) => `- ${l.label}: ${plural(l.n, 'role')}`)] : []),
+    ...(hasNumbers ? ['', ...(showCard ? [`${cardLabel.toUpperCase()}: ${total} matching opportunities`, ...(showFresh ? [`New in the last 48 hours: ${fresh}`] : []), ''] : []), (searched ? 'Roles like the ones you searched for:' : 'What your searches found:'), ...lines.map((l) => `- ${l.label}: ${plural(l.n, 'role')}`)] : []),
     '', calloutTitle, calloutB, '',
     `${ctaLabel.replace(' →', '')}: ${url}`, priceLine, '',
     `${altLine} ${passUrl}`, '', questions, '', 'Jami', '',
@@ -230,7 +264,7 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
   const sans = "Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
   const summaryCard = showCard ? `
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#FFFFFF;border-radius:12px;margin:0 0 24px"><tr><td style="padding:16px 18px">
-      <div style="font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:#7A7366;font-weight:600;margin:0 0 6px">Your last 14 days</div>
+      <div style="font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:#7A7366;font-weight:600;margin:0 0 6px">${esc(cardLabel)}</div>
       <div style="font-size:17px;font-weight:600;color:#191713;margin:0 0 12px"><span style="font-family:${serif};font-size:30px;font-weight:500;margin-right:6px">${total}</span>matching opportunit${total === 1 ? 'y' : 'ies'}</div>
       ${showFresh ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #E4DED1"><tr>
         <td style="padding:12px 0 0;font-size:14.5px;color:#5C574D">New in the last 48 hours</td>

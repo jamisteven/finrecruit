@@ -157,3 +157,39 @@ export async function countsForTargets(db: Db, targets: { keyword: string; locat
     return { keyword: t.keyword, location: t.location, exact, agency, fresh }
   })
 }
+
+
+let windowCache: { days: number; rows: StatusJob[]; at: number } | undefined
+
+/** Roles found in the last `days` days, paged, for campaign emails. Kept apart from the 14-day cache the site's pages share. */
+export async function jobsWindow(db: Db, days: number): Promise<StatusJob[]> {
+  if (windowCache && windowCache.days === days && Date.now() - windowCache.at < 5 * 60_000) return windowCache.rows
+  const cutoff = new Date(Date.now() - days * DAY).toISOString()
+  const rows: StatusJob[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from('jobs').select('title, location, work_type, extracted_at, employer_type')
+      .gte('extracted_at', cutoff).or('quality.is.null,quality.neq.low')
+      .order('extracted_at', { ascending: false }).range(from, from + 999)
+    if (error) throw new Error(error.message)
+    rows.push(...((data ?? []) as StatusJob[]))
+    if ((data ?? []).length < 1000) break
+  }
+  windowCache = { days, rows, at: Date.now() }
+  return rows
+}
+
+/** Matches for each target among roles found after `sinceIso`. `fresh` = found in the last 48 hours. */
+export function countsSince(jobs: StatusJob[], targets: { keyword: string; location: string | null }[], sinceIso: string): TargetCount[] {
+  const fresh48 = new Date(Date.now() - 2 * DAY).toISOString()
+  return targets.map((t) => {
+    let exact = 0, agency = 0, fresh = 0
+    for (const j of jobs) {
+      if (j.extracted_at < sinceIso) continue
+      if (!keywordMatches(t.keyword, j.title ?? '', null)) continue
+      if (!locationMatches(t.location, j.location, j.work_type)) continue
+      if (j.employer_type === 'agency') agency++
+      else { exact++; if (j.extracted_at >= fresh48) fresh++ }
+    }
+    return { keyword: t.keyword, location: t.location, exact, agency, fresh }
+  })
+}
