@@ -56,7 +56,7 @@ export function renderPostSnapshot(
           </div>
           <div style={{ display: 'flex', position: 'absolute', left: 0, right: 0, bottom: 0, height: 300, background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1) 70%)', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 26 }}>
             <div style={{ display: 'flex', fontSize: 24, color: '#5b5b5b', background: '#fff', border: '2px solid #D8D2C2', borderRadius: 40, padding: '10px 26px' }}>
-              …see more · apply details & recruiter hidden
+              …see more · unlock the full post & recruiter
             </div>
           </div>
         </div>

@@ -91,6 +91,14 @@ export default function OfferPage() {
   const [gateJob, setGateJob] = useState<GateJob | null>(null)
   // the tapped post as a picture; the plain role card stays until (and unless) it loads
   const [snap, setSnap] = useState<'idle' | 'ok' | 'fail'>('idle')
+  // the headline depends on what we remember about the visitor; hold a quiet placeholder until that is known
+  // so the page does not rewrite itself under their thumb (layout shift)
+  const [ready, setReady] = useState(false)
+  const [wantsSearch, setWantsSearch] = useState(false)
+  const [withheldDone, setWithheldDone] = useState(false)
+  const [liveDone, setLiveDone] = useState(false)
+  const [giveUp, setGiveUp] = useState(false)
+  const [pulse, setPulse] = useState(false)
   const priceRef = useRef<HTMLDivElement>(null)
   const srcRef = useRef<string | null>(null)
   const [src, setSrc] = useState<string | null>(null)
@@ -116,6 +124,9 @@ export default function OfferPage() {
         if (v && v.title && Date.now() - (v.at ?? 0) < 30 * 60_000) setTimeout(() => setGateJob(v), 0)
       }
     } catch {}
+    setTimeout(() => setReady(true), 0)
+    const t = setTimeout(() => setGiveUp(true), 2000)
+    return () => clearTimeout(t)
   }, [])
   
   useEffect(() => {
@@ -140,10 +151,12 @@ export default function OfferPage() {
         } catch {}
       })
       .catch(() => {})
+      .finally(() => setLiveDone(true))
   }, [])
 
   useEffect(() => {
     const ls = readLastSearch()
+    if (ls && (ls.q || (ls.locations?.length ?? 0) > 0 || (ls.sector && ls.sector !== 'all'))) setTimeout(() => setWantsSearch(true), 0)
     const p = new URLSearchParams({ withheld: '1' })
     if (ls?.q) p.set('q', ls.q)
     if (ls?.sector && ls.sector !== 'all') p.set('sector', ls.sector)
@@ -156,12 +169,13 @@ export default function OfferPage() {
         setWithheld({ roles: d.roles ?? [], matched: d.matched ?? 0, total: d.total ?? 0, fallback: d.fallback ?? [] })
       })
       .catch(() => {})
+      .finally(() => setWithheldDone(true))
   }, [])
 
   useEffect(() => {
     const el = priceRef.current
     if (!el || typeof IntersectionObserver === 'undefined') return
-    const io = new IntersectionObserver(([e]) => setShowSticky(!e.isIntersecting && e.boundingClientRect.top < 0))
+    const io = new IntersectionObserver(([e]) => setShowSticky(!e.isIntersecting))
     io.observe(el)
     return () => io.disconnect()
   }, [])
@@ -189,12 +203,23 @@ export default function OfferPage() {
     setTimeout(() => setErr(false), 8000)
   }
 
+  // tapping the (picture of the) post: it looks expandable, so answer the tap by taking them to the unlock card
+  const nudgeBuy = () => {
+    track('snapshot_tap', { src: srcRef.current })
+    priceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setPulse(true)
+    setTimeout(() => setPulse(false), 1600)
+  }
+
   const hasPass = !!live?.hasPass
   const hidden = live ? Math.max(0, live.fresh - live.shown) : 0
   const hasSearch = !!lastSearch && (!!lastSearch.q || (lastSearch.locations?.length ?? 0) > 0 || (!!lastSearch.sector && lastSearch.sector !== 'all'))
   const searchMatched = !!withheld && withheld.roles.length > 0 && hasSearch
   const searchDesc = describeSearch(lastSearch)
   const lockedRows: LockedRole[] = withheld ? (withheld.roles.length ? withheld.roles : withheld.fallback) : []
+
+  const lockedSrc = src === 'feed_top' || src === 'locked_title' || src === 'new_today' || src === 'inline'
+  const pending = !giveUp && (!ready || (!gateJob && ((wantsSearch && !withheldDone) || (lockedSrc && !liveDone))))
 
   const variant: 'recruiter' | 'search' | 'locked' | 'cold' =
     gateJob ? 'recruiter'
@@ -245,10 +270,11 @@ export default function OfferPage() {
       <main className="pp-main">
         <section className={`pp-hero${snapMode ? ' has-snap' : ''}`}>
           <div className="pp-hook">
-            {variant === 'search' && (
+            {pending && <div className="pp-hook-wait" aria-hidden="true"><i /><i /><i /></div>}
+            {!pending && variant === 'search' && (
               <span className="pp-eyebrow">🎯 Exact Match Found for: {q || sectorLabel(lastSearch?.sector)}{lastSearch?.locations?.length ? ` in ${lastSearch.locations.join(', ')}` : ''}</span>
             )}
-            {variant === 'recruiter' && gateJob ? (
+            {pending ? null : variant === 'recruiter' && gateJob ? (
               <h1>Bypass the ATS black hole for <em>{gateJob.title}</em>.</h1>
             ) : variant === 'search' ? (
               <h1><em>{lockedCount.toLocaleString()} {searchDesc}</em> were posted before anyone else saw them.</h1>
@@ -258,12 +284,12 @@ export default function OfferPage() {
               <h1>Skip the job board black hole. <em>Apply directly to hiring managers and internal teams.</em></h1>
             )}
             
-            {!snapMode && <p className="sub">Most high-value roles are shared directly by hiring managers, internal recruiters, and staff, they never make it to traditional job boards. Backchannel indexes these unlisted posts in real time so you can pitch decision-makers first.</p>}
+            {!pending && !snapMode && <p className="sub">Most high-value roles are shared directly by hiring managers, internal recruiters, and staff, they never make it to traditional job boards. Backchannel indexes these unlisted posts in real time so you can pitch decision-makers first.</p>}
             
             {hasPass && <p className="pp-have">✨ You already have active Premium access. <a href="/">Go to today&apos;s feed &rarr;</a></p>}
 
             {/* Value proposition check strip */}
-            {!snapMode && <div className="pp-value-strip">
+            {!pending && !snapMode && <div className="pp-value-strip">
               <div>⚡ <strong>Real-time alerts</strong> before public indexing</div>
               <div>🤝 <strong>Direct hiring manager</strong> identity & link</div>
               <div>🔒 <strong>Cancel anytime</strong> in 2 clicks</div>
@@ -271,7 +297,7 @@ export default function OfferPage() {
           </div>
 
           <div className="pp-price-col" ref={priceRef}>
-            <section className="pp-card">
+            <section className={`pp-card${pulse ? ' pulse' : ''}`}>
               <div className="pp-card-badge">⚡ Special Intro Offer — 40% Off</div>
               <div className="pp-price-lockup">
                 <div className="pp-price">
@@ -297,13 +323,13 @@ export default function OfferPage() {
               </button>
               
               <div className="pp-guarantee-box">
-                <ShieldIcon /> <span>Secure checkout via Stripe. Cancel anytime with 2 clicks from your settings—keep full access until your billing cycle ends.</span>
+                <ShieldIcon /> <span><b>${PRICE.intro} today, then ${PRICE.monthly}/mo.</b> Cancel in 2 clicks from your settings and keep full access until your billing period ends. Secure checkout via Stripe.</span>
               </div>
 
-              <div className="pp-divider"><span>or save more</span></div>
+              <div className="pp-divider"><span>prefer no subscription?</span></div>
 
               <button type="button" className="pp-quarter" onClick={() => checkout('quarter', 'offer_quarter')} disabled={busy !== null}>
-                {busy === 'quarter' ? 'Opening secure checkout…' : <>Get a 90-Day Unrestricted Pass for <b>${PRICE.quarter} (Best Value) &rarr;</b></>}
+                {busy === 'quarter' ? 'Opening secure checkout…' : <><span className="pp-q-top">90-day pass · <b>${PRICE.quarter} once &rarr;</b></span><span className="pp-q-sub">Pay once. No subscription, no auto-renewal. Best value.</span></>}
               </button>
               
               {err && <p className="pp-err" role="alert">⚠️ Checkout didn&apos;t open, and you haven&apos;t been charged. Please try again or check your blocker settings.</p>}
@@ -311,14 +337,17 @@ export default function OfferPage() {
           </div>
 
           {/* the thing they came for */}
-          {!hasPass && (
+          {!hasPass && !pending && (
             <div className="pp-thing">
               {variant === 'recruiter' && gateJob?.id && snap !== 'fail' && (
                 <div className="pp-snap">
                   <div className="pp-snap-label"><i />The original post, as captured</div>
                   {/* a picture, not text: nothing to select or copy, and the hidden details never reach the page.
                       The frame keeps its shape while the picture is drawn, so the page does not jump. */}
-                  <div className={`pp-snap-frame${snap === 'ok' ? ' ready' : ''}`}>
+                  <div
+                    className={`pp-snap-frame${snap === 'ok' ? ' ready' : ''}`}
+                    {...(snap === 'ok' ? { role: 'button', tabIndex: 0, 'aria-label': 'Unlock the full post', onClick: nudgeBuy, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nudgeBuy() } } } : {})}
+                  >
                     {snap !== 'ok' && <span className="pp-snap-wait">Pulling up the original post…</span>}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -396,7 +425,7 @@ export default function OfferPage() {
           <h2>Frequently Asked Questions</h2>
           <details open><summary>Why do I need Backchannel?</summary><p>Traditional job boards force you to compete alongside thousands of automated applicants for the exact same listings in an ATS black hole. Backchannel gives you access to an entirely hidden pool of unlisted jobs shared directly by hiring managers, internal teams, and professionals - roles that never make it to public boards. It’s how seasoned professionals actually find their next role: by bypassing the public cattle call and engaging in an uncrowded, high-intent pool where you reach decision-makers in seconds.</p></details>
           <details><summary>What happens after my first month?</summary><p>Your first month is just ${PRICE.intro}, then ${PRICE.monthly}/month until you cancel. Backchannel keeps monitoring your saved searches several times a day, so new opportunities keep coming to you without having to start your search from scratch. Your feed stays updated with the latest matches, and you can pick up where you left off whenever you return.</p></details>
-          <details><summary>Don’t like subscriptions?</summary><p>The 90-day pass is ${PRICE.quarter}, with no automatic renewal.</p></details>
+          <details><summary>Don’t like subscriptions?</summary><p>Then skip it. The 90-day pass is ${PRICE.quarter}, paid once, with no automatic renewal, so you will never be billed again. <button type="button" className="pp-faq-link" onClick={() => checkout('quarter', 'offer_faq_quarter')} disabled={busy !== null}>Get the 90-day pass &rarr;</button></p></details>
           <details><summary>How do I cancel my subscription?</summary><p>Cancel anytime in just two clicks from your account menu. You’ll keep full access until your paid period ends, and you’ll never be charged again after canceling. No emails, no awkward conversations, no hoops to jump through.</p></details>
         </section>
       </main>
@@ -410,7 +439,7 @@ export default function OfferPage() {
       {!hasPass && (
         <div className={`pp-sticky${showSticky ? ' is-on' : ''}`} aria-hidden={!showSticky}>
           <div className="pp-sticky-txt">
-            <span>First month special</span>
+            <span>First month · cancel anytime</span>
             <b>${PRICE.intro} <span className="pp-sticky-strike">(${PRICE.monthly})</span></b>
           </div>
           <button type="button" className="pp-btn pp-btn-primary" tabIndex={showSticky ? 0 : -1} onClick={() => checkout('monthly', 'offer_sticky')} disabled={busy !== null}>
@@ -527,8 +556,23 @@ export default function OfferPage() {
         .pp-divider::before, .pp-divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--hair); }
         .pp-divider span { padding: 0 10px; }
 
-        .pp-quarter { background: var(--surface); border: 1px solid var(--hair); padding: 11px 12px; border-radius: 10px; font: inherit; font-size: 13px; color: var(--ink-2); cursor: pointer; text-align: center; transition: border-color .12s; }
-        .pp-quarter b { color: var(--accent); font-weight: 600; }
+        .pp-quarter { background: var(--surface); border: 1.5px solid var(--accent); padding: 12px 14px; border-radius: 12px; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; text-align: center; transition: border-color .12s, background .12s; display: flex; flex-direction: column; gap: 2px; width: 100%; }
+        .pp-quarter b { color: var(--accent); font-weight: 700; }
+        .pp-q-top { font-weight: 600; font-size: 14.5px; }
+        .pp-q-sub { font-size: 12px; color: var(--ink-2); }
+        .pp-guarantee-box b { color: var(--ink); font-weight: 600; }
+        .pp-faq-link { font: inherit; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+        .pp-faq-link:disabled { opacity: .6; cursor: default; }
+        .pp-hook-wait { display: flex; flex-direction: column; gap: 12px; min-height: 150px; }
+        .pp-hook-wait i { display: block; height: 18px; border-radius: 6px; background: linear-gradient(100deg, #ece8dc 30%, #f6f3ea 50%, #ece8dc 70%) 0 0 / 200% 100%; animation: pp-shim 1.4s linear infinite; }
+        .pp-hook-wait i:nth-child(1) { height: 34px; width: 92%; }
+        .pp-hook-wait i:nth-child(2) { height: 34px; width: 64%; }
+        .pp-hook-wait i:nth-child(3) { width: 80%; }
+        .pp-snap-frame.ready { cursor: pointer; }
+        .pp-snap-frame.ready:focus-visible { outline: 2px solid var(--cta); outline-offset: 2px; }
+        .pp-card.pulse { animation: pp-pulse 1.4s ease-out 1; }
+        @keyframes pp-pulse { 0% { box-shadow: 0 0 0 0 rgba(27,79,130,.5); } 100% { box-shadow: 0 0 0 20px rgba(27,79,130,0); } }
+        @media (prefers-reduced-motion: reduce) { .pp-card.pulse, .pp-hook-wait i { animation: none; } }
         .pp-quarter:hover:not(:disabled) { border-color: var(--accent); background: #FAF9F6; }
         .pp-quarter:disabled { opacity: .7; cursor: default; }
         
