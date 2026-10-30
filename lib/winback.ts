@@ -106,39 +106,61 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
       ? (first ? `${plural(total, cap(first.keyword) + ' role')} in ${place(first.location)} in the last 2 weeks` : `${plural(total, 'role')} matched your searches in the last 2 weeks`)
       : 'Recruiter posts, 48 hours before the free feed'
 
+  const headline = kind === 'lapsed'
+    ? (hasNumbers ? 'We kept looking. Here\'s what we found.' : 'Your pass ended. Here\'s what\'s new.')
+    : (hasNumbers ? 'Here\'s what your searches found.' : 'Recruiter posts, before the free feed.')
   const intro = kind === 'lapsed'
-    ? `Your Backchannel pass ended${endedOn ? ` on ${endedOn}` : ''}. Your saved searches kept running, so here is what they found.`
-    : 'You signed up for Backchannel, so I wanted to show you what your searches have found.'
+    ? `Your saved searches continued running after your Backchannel pass${endedOn ? ` ended on ${endedOn}` : ' ended'}. Here's what matched your criteria.`
+    : hasNumbers
+      ? 'Your saved searches have been running since you signed up. Here\'s what matched your criteria.'
+      : 'Backchannel finds roles that recruiters post on LinkedIn before they reach a job board, and checks your searches at least twice a day.'
 
-  const numbers = hasNumbers
-    ? `In the last 14 days, your searches matched ${plural(total, 'role')}${fresh > 0 ? `, ${fresh} of them found in the last 2 days` : ''}:`
-    : 'Backchannel finds roles that recruiters post on LinkedIn before they reach a job board, and checks your searches at least twice a day.'
-
-  const gap = 'On the free plan, a new role appears after a 48-hour delay and the recruiter\'s name and link stay hidden. Premium shows each one the moment we find it, with the recruiter\'s name and a direct link to their post, so you can message them first.'
-  const price = `First month is $${PRICE.intro}, then $${PRICE.monthly}/month; cancel in two clicks and you keep access until the period ends. If you would rather not subscribe, there is a 90-day pass for $${PRICE.quarter}, paid once, with no renewal.`
-  const cta = kind === 'lapsed' ? 'Come back and see them' : 'See them now'
-  const sign = 'Reply to this email if you have questions; I read every one.\n\nJami\nbackchanneljobs.com'
+  const calloutTitle = 'Don\'t let someone else get there first.'
+  const calloutB = 'Premium gives you immediate access, recruiter names and direct links to their original posts, so you can reach out before other candidates.'
+  const ctaLabel = hasNumbers ? `See your ${total} matched role${total === 1 ? '' : 's'} →` : 'See what Premium shows →'
+  const priceLine = `First month $${PRICE.intro} · Then $${PRICE.monthly}/month · Cancel anytime`
+  const altLine = `Prefer not to subscribe? Get 90 days of Premium for $${PRICE.quarter}, paid once. No renewal.`
+  const questions = 'Questions? Just reply to this email. I read every one.'
 
   const text = [
-    intro, '', numbers,
-    ...(hasNumbers ? ['', ...lines.map((l) => `- ${l.label}: ${plural(l.n, 'role')}`)] : []),
-    '', gap, '', price, '', `${cta}: ${url}`, '', sign, '',
+    headline, '', intro,
+    ...(hasNumbers ? ['', `YOUR LAST 14 DAYS: ${total} matching opportunit${total === 1 ? 'y' : 'ies'}`, `New in the last 48 hours: ${fresh}`, '', 'What your searches found:', ...lines.map((l) => `- ${l.label}: ${plural(l.n, 'role')}`)] : []),
+    '', calloutTitle, calloutB, '',
+    `${ctaLabel.replace(' →', '')}: ${url}`, priceLine, '',
+    altLine, '', questions, '', 'Jami', '',
     '--', `You are receiving this because you have a Backchannel account. Unsubscribe: ${unsub}`, address,
   ].join('\n')
 
-  const p = (t: string, extra = '') => `<p style="margin:0 0 14px;font-size:15px;line-height:1.55;color:#191713;${extra}">${esc(t)}</p>`
-  const html = `<!doctype html><html><body style="margin:0;background:#F5F2EB;font-family:Inter,-apple-system,Segoe UI,sans-serif;color:#191713">
-  <div style="max-width:560px;margin:0 auto;padding:32px 20px">
-    <p style="margin:0 0 18px;font-family:Georgia,serif;font-size:20px;font-weight:600">backchannel<span style="color:#5C574D;font-weight:400;font-style:italic">.jobs</span></p>
-    ${p(intro)}
-    ${p(numbers)}
-    ${hasNumbers ? `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin:0 0 18px">${lines.map((l) => `<tr><td style="padding:10px 0;border-bottom:1px solid #E4DED1;font-size:14.5px">${esc(l.label)}</td><td style="padding:10px 0;border-bottom:1px solid #E4DED1;font-size:14.5px;text-align:right;font-weight:600">${plural(l.n, 'role')}</td></tr>`).join('')}</table>` : ''}
-    ${p(gap)}
-    ${p(price)}
-    <p style="margin:22px 0 26px"><a href="${url}" style="display:inline-block;padding:13px 20px;border-radius:10px;background:#1B4F82;color:#fff;text-decoration:none;font-weight:600;font-size:15px">${esc(cta)}</a></p>
-    <p style="margin:0 0 4px;font-size:14.5px;line-height:1.5;color:#191713">Reply to this email if you have questions; I read every one.</p>
-    <p style="margin:0 0 28px;font-size:14.5px;color:#191713">Jami</p>
-    <p style="margin:0;font-size:12px;line-height:1.5;color:#8A8378">You are receiving this because you have a Backchannel account. <a href="${unsub}" style="color:#8A8378">Unsubscribe</a>.<br>${esc(address)}</p>
+  const sans = "Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
+  const card = hasNumbers ? `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#FFFFFF;border-radius:14px;margin:0 0 26px"><tr><td style="padding:18px 20px">
+      <div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#7A7366;font-weight:600;margin:0 0 6px">Your last 14 days</div>
+      <div style="font-size:19px;font-weight:600;color:#191713;margin:0 0 14px"><span style="font-size:30px;font-weight:600;margin-right:6px">${total}</span>matching opportunit${total === 1 ? 'y' : 'ies'}</div>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #E4DED1"><tr>
+        <td style="padding:14px 0 0;font-size:15px;color:#5C574D">New in the last 48 hours</td>
+        <td align="right" style="padding:14px 0 0;font-size:22px;font-weight:600;color:#2D5486">${fresh}</td>
+      </tr></table>
+    </td></tr></table>
+    <h2 style="margin:0 0 6px;font-size:21px;font-weight:600;color:#191713">What your searches found</h2>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 26px">${lines.map((l) => `<tr><td style="padding:16px 0;border-bottom:1px solid #DAD5C8;font-size:16px;color:#191713">${esc(l.label)}</td><td align="right" style="padding:16px 0;border-bottom:1px solid #DAD5C8;font-size:16px;font-weight:700;color:#191713;white-space:nowrap">${plural(l.n, 'role')}</td></tr>`).join('')}</table>` : ''
+
+  const html = `<!doctype html><html><body style="margin:0;background:#F4F2EC;font-family:${sans};color:#191713">
+  <div style="max-width:600px;margin:0 auto;padding:28px 22px 36px">
+    <p style="margin:0 0 18px;padding:0 0 18px;border-bottom:1px solid #DAD5C8;font-size:28px;font-weight:700;letter-spacing:-.01em;color:#191713">backchannel</p>
+    <h1 style="margin:28px 0 14px;font-size:29px;line-height:1.2;font-weight:700;color:#191713">${esc(headline)}</h1>
+    <p style="margin:0 0 24px;font-size:17px;line-height:1.55;color:#4A463D">${esc(intro)}</p>${card}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#E8ECF2;border-radius:14px;margin:0 0 20px"><tr><td style="padding:20px">
+      <p style="margin:0 0 10px;font-size:20px;font-weight:700;color:#24324D">${esc(calloutTitle)}</p>
+      <p style="margin:0;font-size:16px;line-height:1.55;color:#4A463D">${esc(calloutB)}</p>
+    </td></tr></table>
+    <a href="${url}" style="display:block;text-align:center;padding:19px 16px;border-radius:14px;background:#2D5486;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:19px">${esc(ctaLabel)}</a>
+    <p style="margin:14px 0 22px;text-align:center;font-size:14px;color:#6B665B">${esc(priceLine)}</p>
+    <div style="border-top:1px solid #DAD5C8;padding:20px 0 0">
+      <p style="margin:0 0 22px;text-align:center;font-size:16px;line-height:1.5;color:#4A463D">${esc(altLine)}</p>
+      <p style="margin:0 0 14px;font-size:16px;color:#4A463D">${esc(questions)}</p>
+      <p style="margin:0 0 30px;font-size:19px;font-weight:700;color:#191713">Jami</p>
+    </div>
+    <p style="margin:0;font-size:12px;line-height:1.6;color:#8A8378;text-align:center">You are receiving this because you have a Backchannel account. <a href="${unsub}" style="color:#8A8378">Unsubscribe</a>.<br>${esc(address)}</p>
   </div></body></html>`
 
   return {
