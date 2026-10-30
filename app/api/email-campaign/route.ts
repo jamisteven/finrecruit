@@ -17,7 +17,8 @@ export const dynamic = 'force-dynamic'
 //     preview: 3,                       dry run only: how many rendered samples to return (max 8)
 //     html: true,                       dry run only: include the HTML of each sample, not just the text
 //     testTo: "you@x.com",              send ONE rendered email to this address (not logged), using the first eligible member's data
-//     asEmail: "member@x.com" }         with testTo: render using this member's data instead
+//     asEmail: "member@x.com",         with testTo: render using this member's data (any member, eligible or not)
+//     kind: "free"|"lapsed" }           with testTo: force which version to render
 //
 // Run it with dryRun first, send yourself a test, send a small batch, then repeat the same call until `remaining` is 0.
 
@@ -49,8 +50,14 @@ export async function POST(req: NextRequest) {
 
     // test send: one rendered email to your own inbox, nothing logged
     if (typeof body.testTo === 'string' && body.testTo.includes('@')) {
-      const who = typeof body.asEmail === 'string' ? eligible.find((r) => r.email.toLowerCase() === body.asEmail.toLowerCase()) : eligible[0]
-      if (!who) return NextResponse.json({ error: 'no eligible member to render from (try asEmail of someone eligible)' }, { status: 404 })
+      let who = typeof body.asEmail === 'string' ? eligible.find((r) => r.email.toLowerCase() === body.asEmail.toLowerCase()) : eligible[0]
+      if (!who && typeof body.asEmail === 'string') {
+        // a test can render for ANY member, eligible or not (your own account has an active pass, so it is not eligible).
+        // kind: "free" | "lapsed" picks which version to show; default is by their pass dates.
+        const { data: p } = await db.from('profiles').select('id, email, created_at, pass_expires_at').ilike('email', body.asEmail).maybeSingle()
+        if (p) who = { ...(p as { id: string; email: string; created_at: string; pass_expires_at: string | null }), kind: body.kind === 'lapsed' ? 'lapsed' : body.kind === 'free' ? 'free' : (p.pass_expires_at ? 'lapsed' : 'free') }
+      }
+      if (!who) return NextResponse.json({ error: 'no member with that email, and no eligible member to render from' }, { status: 404 })
       const m = await build(who)
       const out = await sendEmailDetailed(body.testTo, `[TEST] ${m.subject}`, m.html, m.text, { headers: m.headers })
       return NextResponse.json({ test: true, renderedFor: who.email, kind: who.kind, ok: out.ok, error: out.error, warnings })
