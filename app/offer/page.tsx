@@ -204,8 +204,18 @@ export default function OfferPage() {
   }
 
   // tapping the (picture of the) post: it looks expandable, so answer the tap by taking them to the unlock card
-  const nudgeBuy = () => {
-    track('snapshot_tap', { src: srcRef.current })
+  // the "see more" pill sits in the bottom strip of the picture: a tap there goes straight to checkout (same as Unlock Now)
+  const nudgeBuy = (e?: React.MouseEvent<HTMLElement>) => {
+    const el = e?.currentTarget
+    if (el && e && 'clientY' in e) {
+      const r = el.getBoundingClientRect()
+      if (r.height > 0 && (e.clientY - r.top) / r.height > 0.78) {
+        track('snapshot_tap', { src: srcRef.current, zone: 'see_more' })
+        checkout('monthly', 'offer_snapshot_pill')
+        return
+      }
+    }
+    track('snapshot_tap', { src: srcRef.current, zone: 'post' })
     priceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     setPulse(true)
     setTimeout(() => setPulse(false), 1600)
@@ -346,7 +356,7 @@ export default function OfferPage() {
                       The frame keeps its shape while the picture is drawn, so the page does not jump. */}
                   <div
                     className={`pp-snap-frame${snap === 'ok' ? ' ready' : ''}`}
-                    {...(snap === 'ok' ? { role: 'button', tabIndex: 0, 'aria-label': 'Unlock the full post', onClick: nudgeBuy, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nudgeBuy() } } } : {})}
+                    {...(snap === 'ok' ? { role: 'button', tabIndex: 0, 'aria-label': 'Unlock the full post', onClick: (e: React.MouseEvent<HTMLElement>) => nudgeBuy(e), onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); checkout('monthly', 'offer_snapshot_pill') } } } : {})}
                   >
                     {snap !== 'ok' && <span className="pp-snap-wait">Pulling up the original post…</span>}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
