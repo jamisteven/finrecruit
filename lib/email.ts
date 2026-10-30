@@ -75,3 +75,24 @@ export function searchesReadyEmail(status: MemberStatus): { subject: string; htm
 
   return { subject, html, text }
 }
+
+
+/** Like sendEmail, but returns Resend's message id / the error, and accepts extra headers (List-Unsubscribe) and tags. */
+export async function sendEmailDetailed(
+  to: string, subject: string, html: string, text: string,
+  opts: { headers?: Record<string, string>; tags?: { name: string; value: string }[] } = {},
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const key = process.env.RESEND_API_KEY
+  const from = process.env.EMAIL_FROM
+  if (!key || !from) return { ok: false, error: 'RESEND_API_KEY / EMAIL_FROM not set' }
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject, html, text, reply_to: process.env.EMAIL_REPLY_TO || undefined, headers: opts.headers, tags: opts.tags }),
+    })
+    const body = await res.json().catch(() => null) as { id?: string; message?: string } | null
+    if (!res.ok) return { ok: false, error: `resend ${res.status}: ${body?.message ?? 'error'}` }
+    return { ok: true, id: body?.id }
+  } catch (e) { return { ok: false, error: (e as Error).message } }
+}

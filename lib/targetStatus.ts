@@ -135,3 +135,25 @@ export async function previewCounts(db: Db, roles: string[], locations: string[]
     .map((location) => ({ location, all: jobs.filter((j) => locationMatches(location, j.location, j.work_type)).length }))
   return { rows, places }
 }
+
+export type TargetCount = { keyword: string; location: string | null; exact: number; agency: number; fresh: number }
+
+/**
+ * Per-target counts for a list of saved searches, counted the way memberStatus counts but without its
+ * priority_queries read: used where a lot of members are processed in one go (campaign emails).
+ * `fresh` is direct-employer roles found in the last 48 hours, the window free members do not see yet.
+ */
+export async function countsForTargets(db: Db, targets: { keyword: string; location: string | null }[]): Promise<TargetCount[]> {
+  const jobs = await recentJobs(db)
+  const since = new Date(Date.now() - 2 * DAY).toISOString()
+  return targets.map((t) => {
+    let exact = 0, agency = 0, fresh = 0
+    for (const j of jobs) {
+      if (!keywordMatches(t.keyword, j.title ?? '', null)) continue
+      if (!locationMatches(t.location, j.location, j.work_type)) continue
+      if (j.employer_type === 'agency') agency++
+      else { exact++; if (j.extracted_at >= since) fresh++ }
+    }
+    return { keyword: t.keyword, location: t.location, exact, agency, fresh }
+  })
+}
