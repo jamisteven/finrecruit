@@ -198,10 +198,10 @@ export function buildWinback(opts: { kind: Kind; userId: string; campaign: strin
       ? (first ? `${plural(total, cap(first.keyword) + ' role')}${first.location ? ` in ${title(first.location)}` : ''} in the last 2 weeks` : `${plural(total, 'role')} matched your searches in the last 2 weeks`)
       : 'Recruiter posts, 48 hours before the free feed'
 
-  const headline = kind === 'lapsed'
+  const headline = kind === 'lapsed' && !(searched && hasNumbers)
     ? (hasNumbers ? 'We kept looking. Here\'s what we found.' : 'Your pass ended. Here\'s what\'s new.')
     : (hasNumbers ? (searched ? 'New leads based on your search.' : 'Here\'s what your searches found.') : 'Recruiter posts, before the free feed.')
-  const intro = kind === 'lapsed'
+  const intro = kind === 'lapsed' && !(searched && hasNumbers)
     ? `Your saved searches continued running after your Backchannel pass${endedOn ? ` ended on ${endedOn}` : ' ended'}. Here's what matched your criteria.`
     : hasNumbers
       ? (searched
