@@ -11,7 +11,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { distilForQuery } from '@/lib/matchTarget'
 import { wideningLadder } from '@/lib/widenLocation'
-import { findDuds, DUD_COOLDOWN_DAYS } from '@/lib/sweepBudget'
+import { intervalsFor, BASE_INTERVAL_HOURS } from '@/lib/sweepBudget'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, any, any>
@@ -144,26 +144,24 @@ export async function activeMemberQueries(db: Db): Promise<Set<string>> {
   return out
 }
 
-/** This member's queries that have never run, or not within maxAgeMs. Uses each row's stored text. */
-export async function staleQueriesFor(db: Db, userId: string, maxAgeMs = 12 * 3600_000): Promise<string[]> {
+/** This member's queries that have never run, or whose wait since the last run is over (a day by default, longer for repeat-heavy ones). Uses each row's stored text. */
+export async function staleQueriesFor(db: Db, userId: string): Promise<string[]> {
   const { data: targets } = await db.from('user_targets').select('keyword, location').eq('user_id', userId)
   if (!targets?.length) return []
   const texts = new Set<string>()
   for (const t of targets) for (const q of queriesForTarget(t as Target)) texts.add(q)
-  const cutoff = Date.now() - maxAgeMs
   const rows = await Promise.all([...texts].map(async (q) => {
     const { data } = await db.from('priority_queries')
       .select('query, last_run_at').ilike('query', exact(q)).limit(1).maybeSingle()
     return data
   }))
-  const due = rows
-    .filter((r): r is { query: string; last_run_at: string | null } => !!r)
-    .filter((r) => !r.last_run_at || Date.parse(r.last_run_at) < cutoff)
-  // Searches LinkedIn barely has posts for (two real batches in a row with <=1 kept) keep their 4-day cooldown
-  // here too. The schedule no longer runs member searches, so this is now the only place the cooldown applies.
-  const duds = await findDuds(db, 'priority', due.map((r) => String(r.query)))
-  const dudCutoff = Date.now() - DUD_COOLDOWN_DAYS * 86_400_000
-  return due
-    .filter((r) => !(duds.has(String(r.query)) && r.last_run_at && Date.parse(r.last_run_at) > dudCutoff))
+  const found = rows.filter((r): r is { query: string; last_run_at: string | null } => !!r)
+  // Each query waits as long as its own history says is worthwhile: a day by default, longer when its last two batches
+  // were mostly repeats or kept almost nothing (see intervalsFor). The schedule no longer runs member searches, so this is
+  // the only place the waits apply. A search that has never run is always due.
+  const wait = await intervalsFor(db, 'priority', found.map((r) => String(r.query)))
+  const now = Date.now()
+  return found
+    .filter((r) => !r.last_run_at || now - Date.parse(r.last_run_at) >= (wait.get(String(r.query).toLowerCase()) ?? BASE_INTERVAL_HOURS) * 3600_000)
     .map((r) => String(r.query))
 }

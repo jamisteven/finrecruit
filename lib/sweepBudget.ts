@@ -69,6 +69,45 @@ export async function findDuds(db: Db, pipeline: string, queries: string[]): Pro
 }
 
 /**
+ * How long a member query should wait between runs, in hours, from what its last two real batches looked like.
+ *
+ * Apify bills per post. Results come newest-first, so a query that ran a few days ago and runs again mostly buys the same
+ * posts a second time (40% of everything the member lane bought in October was a repeat). Waiting lets new posts pile up so
+ * the next run finds them: nothing is lost for a quiet query, and busy ones keep the short interval.
+ *   one or no kept job in each of the last two batches   -> DUD_COOLDOWN_DAYS (as before)
+ *   75%+ repeats, or under 12% kept                     -> 72h
+ *   50-75% repeats                                      -> 48h
+ *   everything else, and queries with little history    -> BASE_INTERVAL_HOURS
+ */
+export const BASE_INTERVAL_HOURS = 24
+
+export async function intervalsFor(db: Db, pipeline: string, queries: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>(queries.map((q) => [q.toLowerCase(), BASE_INTERVAL_HOURS]))
+  if (!queries.length) return out
+  const { data } = await db.from('ingest_runs')
+    .select('query, posts_returned, jobs_inserted, duplicates_skipped, run_at')
+    .eq('pipeline', pipeline).in('query', queries)
+    .order('run_at', { ascending: false }).limit(Math.min(1000, queries.length * 6))
+  const byQuery = new Map<string, Run[]>()
+  for (const r of (data as Run[] | null) ?? []) {
+    if ((r.posts_returned ?? 0) < 8) continue   // a tiny batch says little about the repeat rate
+    const k = r.query.toLowerCase()
+    const arr = byQuery.get(k) ?? []
+    if (arr.length < 2) { arr.push(r); byQuery.set(k, arr) }
+  }
+  for (const [k, runs] of byQuery) {
+    if (runs.length < 2) continue
+    const posts = runs.reduce((s, r) => s + (r.posts_returned ?? 0), 0)
+    const kept = runs.reduce((s, r) => s + (r.jobs_inserted ?? 0), 0)
+    const dups = runs.reduce((s, r) => s + (r.duplicates_skipped ?? 0), 0)
+    if (runs.every((r) => (r.jobs_inserted ?? 0) <= 1)) out.set(k, DUD_COOLDOWN_DAYS * 24)
+    else if (dups / posts >= 0.75 || kept / posts < 0.12) out.set(k, 72)
+    else if (dups / posts >= 0.5) out.set(k, 48)
+  }
+  return out
+}
+
+/**
  * Kept-rate per query over the last 14 days: jobs inserted / posts returned.
  * Queries with fewer than 40 posts in the window are treated as unknown (null).
  */

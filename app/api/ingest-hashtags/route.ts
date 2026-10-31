@@ -10,7 +10,7 @@ import { offMarketReason } from '@/lib/market'
 import { logPrefilter, logGateDiscard, recordDecision, type ClassifyContext } from '@/lib/classifierLog'
 import { runGate } from '@/lib/gate'
 import { batchSizeFor, keptRates } from '@/lib/sweepBudget'
-import { apifyBudget, budgetMode } from '@/lib/apifyBudget'
+import { sharedBudget, budgetMode } from '@/lib/apifyBudget'
 import { createServerClient } from '@/lib/supabase'
 import { normaliseLocation } from '@/lib/normaliseLocation'
 
@@ -25,16 +25,16 @@ const BONUS_QUERIES = [
   'hiring zurich', 'hiring switzerland', 'hiring minneapolis', 'hiring denver', 'hiring portland', 'hiring baltimore',
 ]
 
+// Trimmed Oct 31 after a 30-day yield review: dropped the weakest by kept rate (#hiringnow 31%, #careeropportunity 37%,
+// hiring product manager 38%) and the three cities that kept under 30% (san francisco, portland, baltimore).
 // What free visitors searched for in 60 days decides what is here: topics nobody searched (Bern, Geneva, Basel, private equity,
 // corporate finance) were dropped, and the five most-searched get a second slot. The rotation spends the same per run either way.
 const HASHTAG_QUERIES = [
   // English
   '#hiring',
   '#nowhiring',
-  '#hiringnow',
   '#jobopportunity',
   '#werehiring',
-  '#careeropportunity',
   // German
   '#stellenangebot',
   '#jobangebot',
@@ -49,9 +49,6 @@ const HASHTAG_QUERIES = [
   'hiring boston',
   'hiring london', // second slot: 33 free visitors
   'hiring los angeles',
-  'hiring san francisco',
-  'hiring portland',
-  'hiring baltimore',
   // US cities - tier 2
   'hiring dallas',
   'hiring seattle',
@@ -79,7 +76,6 @@ const HASHTAG_QUERIES = [
   'hiring finance chicago',
   '#financejobs',
   '#remotejobs',
-  'hiring product manager',
 ]
 
 const GERMAN_HASHTAGS = ['stellenangebot', 'jobsuche', 'neuejobs', 'karriere', 'jobboerse', 'jobangebot', 'stellen', 'wirstellenein']
@@ -129,20 +125,25 @@ export async function POST(req: NextRequest) {
 
   // Spend the Apify plan, not more and not less: behind pace, add the best-yielding
   // queries to this run; ahead of pace, buy smaller batches; over target, minimum only.
-  const budget = await apifyBudget(db)
+  // Its own allowance (APIFY_SHARED_BUDGET_USD), so member searches can't use it up. No bonus queries any more (cost cut),
+  // and over the allowance the sweep still runs queries that keep 45%+ instead of shrinking to the two best, so the free
+  // feed never goes dark.
+  const budget = await sharedBudget(db)
   const plan = budgetMode(budget)
+  const minKeptRate = plan.mode === 'stop' ? 0.45 : plan.minKeptRate
+  const bonusQueries = 0
   console.log(`[ingest-hashtags] apify budget: $${budget.spentUsd.toFixed(2)} spent of $${budget.targetUsd.toFixed(2)} target, pace $${budget.paceUsd.toFixed(2)} (day ${budget.dayOfCycle}/${budget.daysInCycle}) -> ${plan.mode}`)
 
   let rotation = [...HASHTAG_QUERIES, ...HASHTAG_QUERIES].slice(offset, offset + 4)
-  if (plan.minKeptRate > 0) {
+  if (minKeptRate > 0) {
     // ahead of pace: drop the weak queries from this run, keep the strong ones at full size
     const rates = await keptRates(db, 'hashtag', rotation)
-    const dropped = rotation.filter((q) => { const r = rates.get(q.toLowerCase()); return r !== null && r !== undefined && r < plan.minKeptRate })
+    const dropped = rotation.filter((q) => { const r = rates.get(q.toLowerCase()); return r !== null && r !== undefined && r < minKeptRate })
     if (dropped.length) console.log(`[ingest-hashtags] ${plan.mode}: skipping low-yield ${dropped.map((q) => `${q} (${Math.round((rates.get(q.toLowerCase()) ?? 0) * 100)}%)`).join(', ')}`)
     rotation = rotation.filter((q) => !dropped.includes(q))
   }
-  const bonus = plan.bonusQueries > 0
-    ? [...BONUS_QUERIES, ...BONUS_QUERIES].slice(dayIndex() % BONUS_QUERIES.length, dayIndex() % BONUS_QUERIES.length + plan.bonusQueries)
+  const bonus = bonusQueries > 0
+    ? [...BONUS_QUERIES, ...BONUS_QUERIES].slice(dayIndex() % BONUS_QUERIES.length, dayIndex() % BONUS_QUERIES.length + bonusQueries)
         .filter((q) => !rotation.includes(q))
     : []
   const batch = [...rotation, ...bonus]

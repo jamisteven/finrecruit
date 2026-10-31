@@ -37,17 +37,34 @@ function cycleBounds(now = new Date()): { start: Date; end: Date } {
   return { start, end }
 }
 
-export async function apifyBudget(db: Db): Promise<Budget> {
-  const plan = parseFloat(process.env.APIFY_MONTHLY_BUDGET_USD || '29') || 29
+// PostgREST returns at most 1,000 rows per read and the ledger passes that within a few weeks, so a plain select
+// silently under-counted the month's spend. Page through it instead.
+async function ledgerRows(db: Db, sinceIso: string, pipelines?: string[]): Promise<{ posts_returned: number | null }[]> {
+  const out: { posts_returned: number | null }[] = []
+  for (let from = 0; ; from += 1000) {
+    let q = db.from('ingest_runs').select('posts_returned').gte('run_at', sinceIso)
+    if (pipelines?.length) q = q.in('pipeline', pipelines)
+    const { data } = await q.order('run_at', { ascending: true }).range(from, from + 999)
+    const page = (data as { posts_returned: number | null }[] | null) ?? []
+    out.push(...page)
+    if (page.length < 1000) break
+  }
+  return out
+}
+
+/**
+ * Month-to-date spend against a plan. With no options this is the whole ledger against APIFY_MONTHLY_BUDGET_USD (the
+ * analytics page). The shared sweep passes its own pipelines and allowance (see sharedBudget) so that member searches,
+ * which always run, cannot use up the pool and switch the free feed off.
+ */
+export async function apifyBudget(db: Db, opts: { pipelines?: string[]; planUsd?: number } = {}): Promise<Budget> {
+  const plan = opts.planUsd ?? (parseFloat(process.env.APIFY_MONTHLY_BUDGET_USD || '29') || 29)
   const { start, end } = cycleBounds()
   const now = new Date()
   const daysInCycle = Math.round((end.getTime() - start.getTime()) / 86_400_000)
   const dayOfCycle = Math.min(daysInCycle, Math.floor((now.getTime() - start.getTime()) / 86_400_000) + 1)
 
-  const { data } = await db.from('ingest_runs')
-    .select('posts_returned')
-    .gte('run_at', start.toISOString())
-  const rows = (data as { posts_returned: number | null }[] | null) ?? []
+  const rows = await ledgerRows(db, start.toISOString(), opts.pipelines)
   const posts = rows.reduce((s, r) => s + (r.posts_returned ?? 0), 0)
   const empties = rows.filter((r) => !r.posts_returned).length
   const spentUsd = posts * USD_PER_POST + empties * USD_PER_EMPTY_RUN
@@ -79,3 +96,10 @@ export function budgetMode(b: Budget): { mode: 'catch-up' | 'on-pace' | 'ease-of
   if (behindUsd < -1.5) return { mode: 'ease-off', bonusQueries: 0, minKeptRate: 0.45 }
   return { mode: 'on-pace', bonusQueries: 0, minKeptRate: 0 }
 }
+
+/**
+ * The shared sweep (hashtag and city queries, keyword queries) has its own monthly allowance, separate from member
+ * searches. Env: APIFY_SHARED_BUDGET_USD (default 14).
+ */
+export const sharedBudget = (db: Db): Promise<Budget> =>
+  apifyBudget(db, { pipelines: ['hashtag', 'keyword'], planUsd: parseFloat(process.env.APIFY_SHARED_BUDGET_USD || '14') || 14 })
