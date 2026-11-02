@@ -23,6 +23,14 @@
     {
       "path": "/api/warm-snapshots",
       "schedule": "12,42 * * * *"
+    },
+    {
+      "path": "/api/send-market-brief",
+      "schedule": "0 14 * * 1"
+    },
+    {
+      "path": "/api/send-market-brief",
+      "schedule": "30 14 * * 1"
     }
   ]
 }
