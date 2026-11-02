@@ -333,7 +333,7 @@ export default function OfferPage() {
               </button>
               
               <div className="pp-guarantee-box">
-                <ShieldIcon /> <span><b>${PRICE.intro} today, then ${PRICE.monthly}/mo.</b> Cancel in 2 clicks from your settings and keep full access until your billing period ends. Secure checkout via Stripe.</span>
+                <ShieldIcon /> <span><b>${PRICE.intro} today, then ${PRICE.monthly}/mo.</b> <b>Cancel in 2 clicks</b> from your settings and keep full access until your billing period ends. Secure checkout via Stripe.</span>
               </div>
 
               <div className="pp-divider"><span>prefer no subscription?</span></div>
@@ -449,8 +449,9 @@ export default function OfferPage() {
       {!hasPass && (
         <div className={`pp-sticky${showSticky ? ' is-on' : ''}`} aria-hidden={!showSticky}>
           <div className="pp-sticky-txt">
-            <span>First month · cancel anytime</span>
+            <span>First month · cancel in 2 clicks</span>
             <b>${PRICE.intro} <span className="pp-sticky-strike">(${PRICE.monthly})</span></b>
+            <button type="button" className="pp-sticky-once" tabIndex={showSticky ? 0 : -1} onClick={() => checkout('quarter', 'offer_sticky_quarter')} disabled={busy !== null}>or ${PRICE.quarter} once, no subscription</button>
           </div>
           <button type="button" className="pp-btn pp-btn-primary" tabIndex={showSticky ? 0 : -1} onClick={() => checkout('monthly', 'offer_sticky')} disabled={busy !== null}>
             {busy === 'monthly' ? 'Opening…' : 'Unlock All Roles Now'}
@@ -613,6 +614,8 @@ export default function OfferPage() {
           .pp-sticky.is-on { transform: translateY(0); }
           .pp-sticky-txt { display: flex; flex-direction: column; line-height: 1.25; font-size: 12px; color: var(--ink-2); }
           .pp-sticky-txt b { font-size: 15px; color: var(--ink); font-weight: 600; }
+          .pp-sticky-once { font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 2px 0 0; cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 2px; }
+          .pp-sticky-once:disabled { opacity: .6; cursor: default; }
           .pp-sticky-strike { font-size: 12px; text-decoration: line-through; color: var(--ink-3); font-weight: 400; margin-left: 2px; }
           .pp-sticky .pp-btn { flex: none; width: auto; padding: 12px 20px; font-size: 14px; }
           .pp-main { padding-bottom: 96px; }
