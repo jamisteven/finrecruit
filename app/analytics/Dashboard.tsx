@@ -43,14 +43,16 @@ export default function Dashboard() {
   const [seg, setSeg] = useState<'all' | 'members' | 'free'>('all')
   const [ySort, setYSort] = useState<'spend' | 'yield'>('spend')
   const [memberSort, setMemberSort] = useState<'time' | 'newest'>('time')
+  // the Members tab opens on the people who joined in the last 24 hours; every member is read only when asked for
+  const [memberScope, setMemberScope] = useState<'new' | 'all'>('new')
 
   // Each tab reads its own tables, so a tab is fetched the first time it opens (the first one on arrival) instead of
   // reading all five up front. Panels already loaded are kept.
   const [busy, setBusy] = useState<Record<string, boolean>>({ members: true })   // the first panel starts loading on arrival
   const [perr, setPerr] = useState<Record<string, string>>({})
-  const loadPanel = (panel: Exclude<Tab, 'growth'>, fresh = false) => {
+  const loadPanel = (panel: Exclude<Tab, 'growth'>, fresh = false, scope: 'new' | 'all' = memberScope) => {
     setBusy((b) => ({ ...b, [panel]: true })); setPerr((e) => ({ ...e, [panel]: '' }))
-    getJson(`/api/analytics?panel=${panel}${fresh ? '&fresh=1' : ''}`)
+    getJson(`/api/analytics?panel=${panel}${panel === 'members' ? `&scope=${scope}` : ''}${fresh ? '&fresh=1' : ''}`)
       .then((j) => setData((prev: Data) => ({ ...(prev ?? {}), ...j })))
       .catch((e) => { setPerr((x) => ({ ...x, [panel]: e.message })); if (panel === 'members') setErr(e.message) })
       .finally(() => setBusy((b) => ({ ...b, [panel]: false })))
@@ -74,6 +76,7 @@ export default function Dashboard() {
     if (t === 'growth') { if (!growth && !gBusy) loadGrowth() }
     else if (!data?.[t] && !busy[t]) loadPanel(t)
   }
+  const switchScope = (scope: 'new' | 'all') => { setMemberScope(scope); loadPanel('members', false, scope) }
   const refresh = () => { if (tab === 'growth') loadGrowth(true); else loadPanel(tab, true) }
 
   const M = data?.members, D = data?.demand, E = data?.engagement, S = data?.supply
@@ -98,7 +101,7 @@ export default function Dashboard() {
       <header className="an-head">
         <div>
           <h1>Analytics</h1>
-          <p className="an-sub">{data ? `Generated ${ago(data.generatedAt)} · kept for up to 3 min · ` : err ? `Couldn't load: ${err}` : 'Loading…'}{data && (
+          <p className="an-sub">{data ? `Generated ${ago(data.generatedAt)} · reloads reuse it for a while · ` : err ? `Couldn't load: ${err}` : 'Loading…'}{data && (
             <button type="button" onClick={refresh}
               style={{ background: 'none', border: 0, padding: 0, font: 'inherit', color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>refresh now</button>
           )}</p>
@@ -125,12 +128,28 @@ export default function Dashboard() {
       )}
 
       {/* ------------------------------------------------ members */}
-      {tab === 'members' && M && (
+      {tab === 'members' && M && M.scope !== memberScope && (
+        <div className="an-card an-muted">{memberScope === 'all' ? 'Reading every member…' : 'Reading the newest members…'}</div>
+      )}
+      {tab === 'members' && M && M.scope === memberScope && (
         <section className="an-grid">
+          <div className="an-seg" role="group" aria-label="Which members">
+            <button type="button" className={memberScope === 'new' ? 'on' : ''} onClick={() => switchScope('new')}>joined in the last 24 hours</button>
+            <button type="button" className={memberScope === 'all' ? 'on' : ''} onClick={() => switchScope('all')}>all members</button>
+          </div>
           <div className="an-tiles">
-            <div className="an-tile"><b>{M.active}</b><span>active members</span></div>
-            <div className="an-tile"><b>${M.avgApifyUsd30}</b><span>average Apify cost per active member, last 30 days (their own searches, shared ones split)</span></div>
-            <div className="an-tile"><b>{M.expiring7.length}</b><span>expire within 7 days</span></div>
+            {M.scope === 'new' ? (
+              <>
+                <div className="an-tile"><b>{M.members.length}</b><span>joined in the last 24 hours</span></div>
+                <div className="an-tile"><b>{M.activeTotal}</b><span>active members in total</span></div>
+              </>
+            ) : (
+              <>
+                <div className="an-tile"><b>{M.active}</b><span>active members</span></div>
+                <div className="an-tile"><b>${M.avgApifyUsd30}</b><span>average Apify cost per active member, last 30 days (their own searches, shared ones split)</span></div>
+                <div className="an-tile"><b>{M.expiring7.length}</b><span>expire within 7 days</span></div>
+              </>
+            )}
             <div className="an-tile"><b>{M.members.reduce((s: number, m: Data) => s + m.flags, 0)}</b><span>target problems · stale = no run in 2 days (5 for slow-lane queries)</span></div>
           </div>
           {M.expiring7.length > 0 && (
@@ -144,15 +163,16 @@ export default function Dashboard() {
             <button type="button" className={memberSort === 'newest' ? 'on' : ''} onClick={() => setMemberSort('newest')}>newest member</button>
           </div>
           <div className="an-cols">
-            <ChartCard title="Time left on each pass" sub="Days until access ends. Orange = a week or less." csv="members-days-left"
+            {M.scope === 'all' && <ChartCard title="Time left on each pass" sub="Days until access ends. Orange = a week or less." csv="members-days-left"
               rows={members.filter((m: Data) => m.active).map((m: Data) => ({ member: m.email, plan: m.plan, days_left: m.daysLeft }))}>
               <HBars rows={members.filter((m: Data) => m.active).map((m: Data) => ({ label: m.email, value: m.daysLeft, color: m.daysLeft <= 7 ? COLORS.orange : COLORS.blue }))} format={(n) => `${n}d`} empty="No active members" />
-            </ChartCard>
+            </ChartCard>}
             <ChartCard title="Roles in each member’s feed, last 14 days" sub="Direct-employer roles that fit a target’s role and place, each counted once, the same way the member’s own feed counts them. Agency roles and same-role-elsewhere are in the table view. A short bar is a member at risk of cancelling." csv="members-feed-14d"
               rows={members.filter((m: Data) => m.active).map((m: Data) => ({ member: m.email, direct_exact: m.feed.exact, via_agencies: m.feed.agency, same_role_elsewhere: m.feed.rough, different_roles_7d: m.exact7, target_problems: m.flags }))}>
               <HBars rows={members.filter((m: Data) => m.active).map((m: Data) => ({ label: m.email, value: m.feed.exact, note: `+${m.feed.agency} agency, +${m.feed.rough} elsewhere`, color: m.feed.exact < 10 ? COLORS.orange : COLORS.blue }))} empty="No active members" />
             </ChartCard>
           </div>
+          {M.scope === 'new' && members.length === 0 && <div className="an-card an-muted">Nobody has joined in the last 24 hours.</div>}
           {members.map((m: Data) => (
             <article key={m.email} className={`an-card an-member ${m.active ? '' : 'lapsed'}`}>
               <div className="an-member-head">

@@ -75,6 +75,24 @@ function tokenPresent(t: string, haySet: Set<string>, hayText: string): boolean 
 }
 
 /**
+ * For narrowing a database read before keywordMatches runs on the rows. Returns groups that must ALL be found in
+ * the title; inside a group, finding ANY of its substrings is enough. It is never stricter than keywordMatches
+ * (same plural / alias / role-family rules), so it only ever drops roles keywordMatches would have rejected.
+ * null = the keyword can't match anything.
+ */
+export function titleSearchGroups(keyword: string): string[][] | null {
+  const kt = tokens(keyword)
+  if (kt.length === 0) return null
+  const roleWords = kt.filter((t) => familyOf(t))
+  const distinctive = kt.filter((t) => !familyOf(t) && !FILLER.has(t))
+  if (roleWords.length === 0 && distinctive.length === 0) return null
+  const variants = (t: string) => [t, t.endsWith('s') ? t.slice(0, -1) : `${t}s`, ...(TOKEN_ALIASES[t] ?? [])]
+  const groups = distinctive.map(variants)
+  if (roleWords.length) groups.push([...new Set(roleWords.flatMap((rw) => familyOf(rw)!).flatMap(variants))])
+  return groups
+}
+
+/**
  * Does `title` (plus optional `summary`) satisfy the member's `keyword`?
  *
  * The keyword is split into a distinctive part (anything not filler and not a

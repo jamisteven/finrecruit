@@ -2,7 +2,7 @@
 // One function per panel; all of them read with the service-role client.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { keywordMatches, locationMatches } from './matchTarget'
+import { keywordMatches, locationMatches, titleSearchGroups } from './matchTarget'
 import { apifyBudget, budgetMode, USD_PER_POST } from './apifyBudget'
 import { widenedQueryFor } from './targetQueries'
 
@@ -54,6 +54,94 @@ async function fetchAll(db: Db, table: string, columns: string, apply: (q: Q) =>
 /** Same paging helper, exported for the CSV export route. */
 export const fetchRaw = fetchAll
 
+/** Rows whose `col` is one of `ids`, fetched a hundred ids at a time (so the URL stays short) and side by side. */
+async function inChunks(db: Db, table: string, columns: string, col: string, ids: string[], apply: (q: Q) => unknown = () => undefined, size = 100): Promise<Row[]> {
+  if (!ids.length) return []
+  const parts: string[][] = []
+  for (let i = 0; i < ids.length; i += size) parts.push(ids.slice(i, i + size))
+  const out = await Promise.all(parts.map((part) => fetchAll(db, table, columns, (q: Q) => { q = q.in(col, part); return apply(q) ?? q })))
+  return out.flat()
+}
+
+// The roles a member's feed can hold: posted in the last 14 days (saved-date only when a post has no date), not low quality.
+const JOB_COLS = 'id, title, location, work_type, posted_at, extracted_at, quality, employer_type'
+const inFeedWindow = (q: Q) => q.or(`posted_at.gte.${ago(14)},and(posted_at.is.null,extracted_at.gte.${ago(14)})`).or('quality.is.null,quality.neq.low')
+
+/** Only the roles that could match these targets (a title prefilter in the database), instead of every role of the last 14 days. */
+async function jobsForTargets(db: Db, targets: Row[]): Promise<Row[]> {
+  const byId = new Map<string, Row>()
+  await Promise.all([...new Set(targets.map((t) => String(t.keyword)))].map(async (kw) => {
+    const groups = titleSearchGroups(kw)
+    if (!groups) return
+    const rows = await fetchAll(db, 'jobs', JOB_COLS, (q: Q) => {
+      q = inFeedWindow(q)
+      for (const g of groups) q = q.or(g.map((x) => `title.ilike."%${x}%"`).join(','))
+      return q
+    })
+    for (const r of rows) byId.set(String(r.id), r)
+  }))
+  return [...byId.values()]
+}
+
+// ---- counts the database can do for us; each falls back to reading the rows if supabase/2026-11-02-analytics-egress.sql has not been run
+
+async function visitRollup(db: Db, days: number) {
+  const perDay = new Map<string, number>()
+  const matrix = Array.from({ length: 7 }, () => Array<number>(24).fill(0))
+  const { data, error } = await db.rpc('analytics_visit_rollup', { p_days: days })
+  if (!error && data && Array.isArray(data.days)) {
+    for (const r of data.days as Row[]) perDay.set(String(r.day), Number(r.n))
+    for (const r of data.matrix as Row[]) matrix[Number(r.dow)][Number(r.hr)] += Number(r.n)
+    return { days: perDay, matrix }
+  }
+  const visits = await fetchAll(db, 'visits', 'visitor_id, visited_at', (q: Q) => q.gte('visited_at', ago(days)))
+  const seen = new Map<string, Set<string>>()
+  for (const v of visits) {
+    const k = dayKey(v.visited_at); const s = seen.get(k) ?? new Set<string>(); s.add(v.visitor_id); seen.set(k, s)
+    const d = new Date(v.visited_at); matrix[d.getUTCDay()][d.getUTCHours()]++
+  }
+  for (const [k, s] of seen) perDay.set(k, s.size)
+  return { days: perDay, matrix }
+}
+
+async function jobsRollup(db: Db, days: number) {
+  const mix = new Map<string, { direct: number; agency: number }>()
+  const sectors = new Map<string, number>()
+  const { data, error } = await db.rpc('analytics_jobs_rollup', { p_days: days })
+  if (!error && data && Array.isArray(data.days)) {
+    for (const r of data.days as Row[]) mix.set(String(r.day), { direct: Number(r.direct), agency: Number(r.agency) })
+    for (const r of data.sectors as Row[]) bump(sectors, String(r.sector), Number(r.n))
+    return { mix, sectors }
+  }
+  const rows = await fetchAll(db, 'jobs', 'extracted_at, sector, employer_type', (q: Q) => q.gte('extracted_at', ago(days)).or('quality.is.null,quality.neq.low'))
+  for (const j of rows) {
+    const d = mix.get(dayKey(j.extracted_at)) ?? { direct: 0, agency: 0 }
+    if (j.employer_type === 'agency') d.agency++; else d.direct++
+    mix.set(dayKey(j.extracted_at), d)
+    bump(sectors, String(j.sector ?? 'other'))
+  }
+  return { mix, sectors }
+}
+
+async function classifierRollup(db: Db, days: number) {
+  const classifier = new Map<string, number>()
+  const haikuByDay = new Map<string, number>()
+  const { data, error } = await db.rpc('analytics_classifier_rollup', { p_days: days })
+  if (!error && Array.isArray(data)) {
+    for (const r of data as Row[]) {
+      bump(classifier, `${r.kind}:${r.decision ?? '?'}`, Number(r.n))
+      if (r.kind === 'model') bump(haikuByDay, String(r.day), Number(r.n))
+    }
+    return { classifier, haikuByDay }
+  }
+  const rows = await fetchAll(db, 'classifier_log', 'created_at, model, decision', (q: Q) => q.gte('created_at', ago(days)).not('model', 'like', '%backfill%'))
+  for (const r of rows) {
+    bump(classifier, `${r.model === 'prefilter' ? 'prefilter' : r.model === 'gate' ? 'gate' : 'model'}:${r.decision ?? '?'}`)
+    if (r.model !== 'prefilter' && r.model !== 'gate') bump(haikuByDay, dayKey(r.created_at))
+  }
+  return { classifier, haikuByDay }
+}
+
 function topN(counts: Map<string, number>, n: number) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([key, count]) => ({ key, count }))
 }
@@ -62,17 +150,59 @@ const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].s
 
 // ---------------------------------------------------------------- members
 
-export async function membersPanel(db: Db) {
-  const [profiles, targets, queries, checkouts, jobs, visits, priorityRuns] = await Promise.all([
-    fetchAll(db, 'profiles', 'id, email, pass_expires_at, created_at, signup_device', (q: Q) => q.not('pass_expires_at', 'is', null)),
-    fetchAll(db, 'user_targets', 'user_id, keyword, location, created_at', () => undefined),
+const CHECKOUT_COLS = 'user_id, plan, paid_at'
+
+/**
+ * Members. With `sinceHours`, only people who joined (first payment) in that window, and every read is narrowed to
+ * them; without it, every member (the "all members" view and the CSV export).
+ */
+export async function membersPanel(db: Db, opts: { sinceHours?: number } = {}) {
+  const since = opts.sinceHours ? new Date(Date.now() - opts.sinceHours * 3600_000).toISOString() : null
+  const PROFILE_COLS = 'id, email, pass_expires_at, created_at, signup_device'
+  let profiles: Row[], checkouts: Row[]
+  if (since) {
+    const [paidNow, madeNow] = await Promise.all([
+      fetchAll(db, 'checkout_events', 'user_id', (q: Q) => q.not('paid_at', 'is', null).gte('paid_at', since)),
+      fetchAll(db, 'profiles', 'id', (q: Q) => q.not('pass_expires_at', 'is', null).gte('created_at', since)),
+    ])
+    const ids = [...new Set([...paidNow.map((r) => r.user_id), ...madeNow.map((r) => r.id)].filter(Boolean))] as string[]
+    const [ps, cs] = await Promise.all([
+      inChunks(db, 'profiles', PROFILE_COLS, 'id', ids, (q: Q) => q.not('pass_expires_at', 'is', null)),
+      inChunks(db, 'checkout_events', CHECKOUT_COLS, 'user_id', ids, (q: Q) => q.not('paid_at', 'is', null)),
+    ])
+    // joined = first payment (the account date when there is no payment row), so a renewal is not a new member
+    const first = new Map<string, string>()
+    for (const c of cs) { const cur = first.get(c.user_id); if (!cur || c.paid_at < cur) first.set(c.user_id, c.paid_at) }
+    profiles = ps.filter((p) => (first.get(p.id) ?? p.created_at) >= since)
+    const keep = new Set(profiles.map((p) => p.id))
+    checkouts = cs.filter((c) => keep.has(c.user_id))
+  } else {
+    ;[profiles, checkouts] = await Promise.all([
+      fetchAll(db, 'profiles', PROFILE_COLS, (q: Q) => q.not('pass_expires_at', 'is', null)),
+      fetchAll(db, 'checkout_events', CHECKOUT_COLS, (q: Q) => q.not('paid_at', 'is', null)),
+    ])
+  }
+  const ids = profiles.map((p) => p.id as string)
+  const [targets, queries, visits] = await Promise.all([
+    inChunks(db, 'user_targets', 'user_id, keyword, location, created_at', 'user_id', ids),
     fetchAll(db, 'priority_queries', 'query, keyword, location, active, last_run_at, user_count', () => undefined),
-    fetchAll(db, 'checkout_events', '*', (q: Q) => q.not('paid_at', 'is', null)),
-    // the member feed's own window: posted in the last 14 days (saved-date only when a post has no date), not saved in
-    // the last 14 days — a backfill saves a month of older posts at once, and the default feed hides those
-    fetchAll(db, 'jobs', 'id, title, location, work_type, posted_at, extracted_at, quality, employer_type', (q: Q) => q.or(`posted_at.gte.${ago(14)},and(posted_at.is.null,extracted_at.gte.${ago(14)})`).or('quality.is.null,quality.neq.low')),
-    fetchAll(db, 'visits', 'user_id, visited_at', (q: Q) => q.not('user_id', 'is', null).gte('visited_at', ago(30))),
-    fetchAll(db, 'ingest_runs', 'query, run_at, posts_returned, jobs_inserted', (q: Q) => q.eq('pipeline', 'priority').gte('run_at', ago(30)).order('run_at', { ascending: false })),
+    inChunks(db, 'visits', 'user_id, visited_at', 'user_id', ids, (q: Q) => q.gte('visited_at', ago(30))),
+  ])
+  // the searches these members' targets run (their own, and the region-level one each city earns): only those runs are read
+  const textOf = new Map(queries.map((q) => [String(q.query).toLowerCase(), q]))
+  const keyOf = new Map(queries.map((q) => [`${String(q.keyword).toLowerCase()}|${String(q.location ?? '').toLowerCase()}`, q]))
+  const needed = new Set<string>()
+  for (const t of targets) {
+    const own = keyOf.get(`${String(t.keyword).toLowerCase()}|${String(t.location ?? '').toLowerCase()}`)
+    if (own) { needed.add(String(own.query)); needed.add(String(own.query).toLowerCase()) }
+    const w = widenedQueryFor({ keyword: t.keyword, location: t.location })
+    const wq = w ? textOf.get(w.toLowerCase()) : null
+    if (wq) { needed.add(String(wq.query)); needed.add(String(wq.query).toLowerCase()) }
+  }
+  const [priorityRuns, jobs] = await Promise.all([
+    inChunks(db, 'ingest_runs', 'query, run_at, posts_returned, jobs_inserted', 'query', [...needed],
+      (q: Q) => q.eq('pipeline', 'priority').gte('run_at', ago(30)).order('run_at', { ascending: false }), 40),
+    since ? jobsForTargets(db, targets) : fetchAll(db, 'jobs', JOB_COLS, inFeedWindow),
   ])
   const now = Date.now()
   // slow lane = the last two runs each returned a real batch and kept <= 1 (see lib/sweepBudget findDuds)
@@ -155,7 +285,14 @@ export async function membersPanel(db: Db) {
     .sort((a, b) => Number(b.active) - Number(a.active) || b.daysLeft - a.daysLeft)
   const activeM = members.filter((m) => m.active)
   const avgApifyUsd30 = activeM.length ? +(activeM.reduce((s, m) => s + m.apifyUsd30, 0) / activeM.length).toFixed(2) : 0
-  return { members, avgApifyUsd30, active: members.filter((m) => m.active).length, expiring7: members.filter((m) => m.active && m.daysLeft <= 7) }
+  const active = members.filter((m) => m.active).length
+  let activeTotal = active
+  if (since) {
+    // a head-only count: the number comes back, no rows
+    const { count } = await db.from('profiles').select('id', { count: 'exact', head: true }).gt('pass_expires_at', new Date().toISOString())
+    activeTotal = count ?? active
+  }
+  return { scope: since ? ('new' as const) : ('all' as const), sinceHours: opts.sinceHours ?? null, members, avgApifyUsd30, active, activeTotal, expiring7: members.filter((m) => m.active && m.daysLeft <= 7) }
 }
 
 // ---------------------------------------------------------------- demand
@@ -196,7 +333,7 @@ export async function engagementPanel(db: Db) {
     fetchAll(db, 'visits', 'visitor_id, user_id, visited_at, referrer', (q: Q) => q.gte('visited_at', ago(30))),
     fetchAll(db, 'search_events', 'visitor_id, searched_at', (q: Q) => q.gte('searched_at', ago(30))),
     fetchAll(db, 'job_clicks', 'visitor_id, clicked_at', (q: Q) => q.gte('clicked_at', ago(30))),
-    fetchAll(db, 'checkout_events', '*', () => undefined),
+    fetchAll(db, 'checkout_events', 'created_at, paid_at', (q: Q) => q.gte('created_at', ago(30))),
   ])
   const paidIds = new Set((await fetchAll(db, 'profiles', 'id', (q: Q) => q.gt('pass_expires_at', new Date().toISOString()))).map((p) => p.id))
 
@@ -252,22 +389,15 @@ export async function engagementPanel(db: Db) {
 // ---------------------------------------------------------------- supply
 
 export async function supplyPanel(db: Db) {
-  const [runs, logRows, budget, jobRows, pqRows] = await Promise.all([
+  const [runs, classifierRoll, budget, jobRoll, pqRows] = await Promise.all([
     fetchAll(db, 'ingest_runs', 'pipeline, query, run_at, posts_returned, jobs_inserted, duplicates_skipped, rejected', (q: Q) => q.gte('run_at', ago(30))),
-    fetchAll(db, 'classifier_log', 'created_at, model, decision, pipeline', (q: Q) => q.gte('created_at', ago(14)).not('model', 'like', '%backfill%')),
+    classifierRollup(db, 14),
     apifyBudget(db),
-    fetchAll(db, 'jobs', 'extracted_at, sector, employer_type', (q: Q) => q.gte('extracted_at', ago(30)).or('quality.is.null,quality.neq.low')),
+    jobsRollup(db, 30),
     fetchAll(db, 'priority_queries', 'query, active, user_count', () => undefined),
   ])
   // what the feed is made of: roles added per day split direct / agency, and by sector
-  const mix = new Map<string, { direct: number; agency: number }>()
-  const sectorCounts = new Map<string, number>()
-  for (const j of jobRows) {
-    const d = mix.get(dayKey(j.extracted_at)) ?? { direct: 0, agency: 0 }
-    if (j.employer_type === 'agency') d.agency++; else d.direct++
-    mix.set(dayKey(j.extracted_at), d)
-    bump(sectorCounts, String(j.sector ?? 'other'))
-  }
+  const { mix, sectors: sectorCounts } = jobRoll
   const jobDays = dayRange(30).map((day) => ({ day, direct: mix.get(day)?.direct ?? 0, agency: mix.get(day)?.agency ?? 0 }))
   const sectors = topN(sectorCounts, 20)
 
@@ -316,12 +446,7 @@ export async function supplyPanel(db: Db) {
   const worst = [...yieldRows].sort((a, b) => a.keptPct - b.keptPct || b.posts - a.posts).slice(0, 12)
   const best = [...yieldRows].sort((a, b) => b.keptPct - a.keptPct || b.posts - a.posts).slice(0, 12)
 
-  const classifier = new Map<string, number>()
-  const haikuByDay = new Map<string, number>()
-  for (const r of logRows) {
-    bump(classifier, `${r.model === 'prefilter' ? 'prefilter' : r.model === 'gate' ? 'gate' : 'model'}:${r.decision ?? '?'}`)
-    if (r.model !== 'prefilter' && r.model !== 'gate') bump(haikuByDay, dayKey(r.created_at))
-  }
+  const { classifier, haikuByDay } = classifierRoll
   const haikuDays = [...haikuByDay.entries()].sort().map(([day, calls]) => ({ day, calls, usd: +(calls * 0.002).toFixed(2) }))
 
   return { days, jobDays, sectors, best, worst, spend, pipelines, classifier: topN(classifier, 20), haikuDays, budget: { ...budget, mode: budgetMode(budget).mode } }
@@ -336,11 +461,11 @@ const quiet = async (p: Promise<Row[]>): Promise<Row[]> => { try { return await 
 
 export async function growthPanel(db: Db) {
   const since = ago(90)
-  const [profiles, checkouts, offerViews, visits] = await Promise.all([
+  const [profiles, checkouts, offerViews, visitRoll] = await Promise.all([
     fetchAll(db, 'profiles', 'id, email, created_at, pass_expires_at, signup_device', (q: Q) => q.order('created_at', { ascending: true })),
-    fetchAll(db, 'checkout_events', '*', (q: Q) => q.order('created_at', { ascending: true })),
+    fetchAll(db, 'checkout_events', 'user_id, plan, paid_at, created_at, src', (q: Q) => q.order('created_at', { ascending: true })),
     quiet(fetchAll(db, 'offer_views', 'visitor_id, src, has_pass, created_at', (q: Q) => q.gte('created_at', since).order('created_at', { ascending: true }))),
-    fetchAll(db, 'visits', 'visitor_id, visited_at', (q: Q) => q.gte('visited_at', since).order('visited_at', { ascending: true })),
+    visitRollup(db, 90),
   ])
 
   // each paying member's first payment (checkout row if there is one, otherwise the account date)
@@ -362,7 +487,7 @@ export async function growthPanel(db: Db) {
   const signupsByDay = tally(profiles, 'created_at')
   const paidByDay = new Map<string, number>(); for (const p of paidList) bump(paidByDay, dayKey(p.at))
   const startedByDay = tally(checkouts, 'created_at')
-  const visitorsByDay = distinct(visits, 'visited_at', 'visitor_id')
+  const visitorsByDay = visitRoll.days
   const offerByDay = distinct(offerViews.filter((o) => !o.has_pass), 'created_at', 'visitor_id')
   const revByDay = new Map<string, number>()
   for (const c of checkouts) if (c.paid_at) bump(revByDay, dayKey(c.paid_at), FIRST_PAYMENT_USD[c.plan] ?? 0)
@@ -370,15 +495,14 @@ export async function growthPanel(db: Db) {
   const days = range.map((day) => {
     cum += paidByDay.get(day) ?? 0
     return {
-      day, visitors: visitorsByDay.get(day)?.size ?? 0, offerViewers: offerByDay.get(day)?.size ?? 0,
+      day, visitors: visitorsByDay.get(day) ?? 0, offerViewers: offerByDay.get(day)?.size ?? 0,
       checkouts: startedByDay.get(day) ?? 0, signups: signupsByDay.get(day) ?? 0, paid: paidByDay.get(day) ?? 0,
       revenueUsd: revByDay.get(day) ?? 0, payingMembers: cum,
     }
   })
 
   // when visitors are on the site: weekday (0 = Sunday) x hour, UTC. The page re-bases it to a time zone.
-  const visitMatrix = Array.from({ length: 7 }, () => Array<number>(24).fill(0))
-  for (const v of visits) { const d = new Date(v.visited_at); visitMatrix[d.getUTCDay()][d.getUTCHours()]++ }
+  const visitMatrix = visitRoll.matrix
 
   // which link on the site sent people to /offer, and what became of them (30 days)
   const since30 = ago(30)
