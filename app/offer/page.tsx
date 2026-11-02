@@ -278,7 +278,7 @@ export default function OfferPage() {
       </header>
 
       <main className="pp-main">
-        <section className={`pp-hero${snapMode ? ' has-snap' : ''}`}>
+        <section className={`pp-hero${snapMode ? ' has-snap' : ''}${pending ? ' is-pending' : ''}`}>
           <div className="pp-hook">
             {pending && <div className="pp-hook-wait" aria-hidden="true"><i /><i /><i /></div>}
             {!pending && variant === 'search' && (
@@ -605,6 +605,9 @@ export default function OfferPage() {
         @media (max-width: 900px) {
           .pp-main { padding: 28px 20px 40px; }
           .pp-hero.has-snap { grid-template-areas: "hook" "thing" "price"; }
+          /* while the headline is still being decided the price card sits under a short placeholder, then gets pushed down
+             hundreds of pixels when the real headline and post arrive; keep it out of sight (not out of the layout) until then */
+          .pp-hero.is-pending .pp-price-col { visibility: hidden; }
           .pp-hero { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hook" "price" "thing"; column-gap: 0; row-gap: 20px; margin-bottom: 40px; }
           .pp-sub { font-size: 15px; }
           .pp-card { padding: 20px; gap: 14px; }

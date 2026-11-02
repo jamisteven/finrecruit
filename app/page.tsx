@@ -304,6 +304,19 @@ const HeroPromises = () => (
 function ageDaysOf(iso: string | null | undefined) {
   return iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : null
 }
+// /offer shows a picture of the post the visitor tapped, and drawing it takes a couple of seconds the first time
+// (the cron in /api/warm-snapshots only covers the newest roles). Ask for it as soon as a visit looks likely (a pause
+// over the card, a touch, the click itself) so it is drawn, and cached, by the time /offer asks for it. Once per role.
+const warmedSnapshots = new Set<string>()
+let warmTimer: ReturnType<typeof setTimeout> | undefined
+function warmSnapshot(id?: string) {
+  if (!id || warmedSnapshots.has(id)) return
+  warmedSnapshots.add(id)
+  try { fetch(`/api/post-snapshot?id=${encodeURIComponent(id)}`, { keepalive: true }).catch(() => {}) } catch { /* a speed-up only */ }
+}
+const warmOnHover = (id?: string) => { clearTimeout(warmTimer); warmTimer = setTimeout(() => warmSnapshot(id), 250) }
+const cancelWarm = () => clearTimeout(warmTimer)
+
 function stashGatedJob(job: { id?: string; title: string; company: string | null; location: string | null; posted_at: string | null }) {
   try { sessionStorage.setItem('bcj_gate_job', JSON.stringify({ id: job.id, title: job.title, company: job.company, location: job.location, posted_at: job.posted_at, at: Date.now() })) } catch {}
 }
@@ -1046,6 +1059,7 @@ export default function HomePage() {
   // role by name (title, company, location only), so remember it first.
   const openGated = (job: JobPost, where: 'recruiter_line' | 'recruiter_title' | 'recruiter_card') => {
     track('cta_click', { where, age_days: ageDaysOf(job.posted_at) })
+    warmSnapshot(job.id)
     stashGatedJob(job)
   }
 
@@ -1162,7 +1176,7 @@ export default function HomePage() {
 
   // A fresh role past the free samples: readable like any older role, recruiter and link withheld.
   const renderTeaser = (job: JobPost) => (
-    <article key={job.id} id={`job-${job.id}`} className="card tap" onClick={(e) => tapCard(e, () => { openGated(job, 'recruiter_card'); window.location.assign('/offer?src=recruiter_card') })} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
+    <article key={job.id} id={`job-${job.id}`} className="card tap" onPointerEnter={() => warmOnHover(job.id)} onPointerLeave={cancelWarm} onPointerDown={() => warmSnapshot(job.id)} onClick={(e) => tapCard(e, () => { openGated(job, 'recruiter_card'); window.location.assign('/offer?src=recruiter_card') })} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
       <div className="card-top">
         <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}{job.location && <> · {job.location}</>}</span>
         {job.posted_at && <span className="ago fresh">{timeAgo(job.posted_at)}</span>}
@@ -1764,7 +1778,7 @@ export default function HomePage() {
                   {job.id === firstRoughId && (
                     <div className="sec-head group-head"><span>Same roles, other places</span><i /><em className="sec-note">{myNearby > 0 ? `${myNearby} nearby, then the rest` : `${myRough.length}`}</em></div>
                   )}
-                  <article id={`job-${job.id}`} className={`card${job.gated ? ' tap' : ''}${highlightId === job.id ? ' flash' : ''}`} onClick={job.gated ? (e) => tapCard(e, () => { openGated(job, 'recruiter_card'); window.location.assign('/offer?src=recruiter_card') }) : undefined} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
+                  <article id={`job-${job.id}`} className={`card${job.gated ? ' tap' : ''}${highlightId === job.id ? ' flash' : ''}`} onPointerEnter={job.gated ? () => warmOnHover(job.id) : undefined} onPointerLeave={job.gated ? cancelWarm : undefined} onPointerDown={job.gated ? () => warmSnapshot(job.id) : undefined} onClick={job.gated ? (e) => tapCard(e, () => { openGated(job, 'recruiter_card'); window.location.assign('/offer?src=recruiter_card') }) : undefined} style={{ ['--sec' as string]: `var(--sec-${job.sector}, var(--ink-3))` }}>
                     <div className="card-top">
                       <span className="sec-tag"><span className="dot" />{sectorLabel(job.sector)}</span>
                       {job.is_verified_job && (
