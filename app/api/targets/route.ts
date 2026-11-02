@@ -4,7 +4,7 @@ import { sendEmail, searchesReadyEmail } from '@/lib/email'
 import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
 import { normaliseKeyword } from '@/lib/normaliseKeyword'
-import { distilForQuery } from '@/lib/matchTarget'
+import { distilForQuery, keywordMatches, locationMatches, titleSearchGroups } from '@/lib/matchTarget'
 import { claimQuery, releaseTargets, widerLocation } from '@/lib/targetQueries'
 
 export const runtime = 'nodejs'
@@ -12,6 +12,34 @@ export const runtime = 'nodejs'
 // Below this many matching roles in the last 30 days, a target earns its own
 // Apify query. Above it, the feed already covers them.
 const COVERAGE_THRESHOLD = 25
+
+/**
+ * How many roles from the last 30 days the member's feed would show for this target. It counts the way the feed
+ * does (title only, the same role-family and place rules), so "covered" means the member really sees that many.
+ * It used to match the keyword in the title OR the summary, which called thin targets covered because of roles
+ * the feed never shows. Stops early once the threshold is reached.
+ */
+async function feedCoverage(db: ReturnType<typeof createServerClient>, keyword: string, location: string | null): Promise<number> {
+  const groups = titleSearchGroups(keyword)
+  if (!groups) return 0
+  const since = new Date(Date.now() - 30 * 86400_000).toISOString()
+  let found = 0
+  for (let from = 0; from < 5000; from += 1000) {
+    let q = db.from('jobs').select('title, location, work_type')
+      .eq('is_verified_job', true)
+      .neq('sector', 'other')
+      .or('quality.is.null,quality.neq.low')
+      .gte('posted_at', since)
+    for (const g of groups) q = q.or(g.map((x) => `title.ilike."%${x}%"`).join(','))
+    const { data } = await q.order('posted_at', { ascending: false }).range(from, from + 999)
+    const rows = data ?? []
+    for (const j of rows) {
+      if (keywordMatches(keyword, j.title ?? '', null) && locationMatches(location, j.location ?? null, j.work_type ?? null)) found++
+    }
+    if (found >= COVERAGE_THRESHOLD || rows.length < 1000) break
+  }
+  return found
+}
 
 export const maxDuration = 300
 
@@ -107,19 +135,10 @@ export async function POST(req: NextRequest) {
     for (const p of ordered) {
       if (queued >= MAX_PER_USER) { covered.push(p.location ? `${p.keyword} / ${p.location}` : p.keyword); continue }
       // How much of this do we already hold?
-      let q = db.from('jobs')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_verified_job', true)
-        .neq('sector', 'other')
-        .or('quality.is.null,quality.neq.low')
-        .gte('posted_at', new Date(Date.now() - 30 * 86400_000).toISOString())
-        .or(`title.ilike.%${p.keyword}%,summary.ilike.%${p.keyword}%`)
-      if (p.location) q = q.ilike('location', `%${p.location}%`)
-
-      const { count } = await q
+      const count = await feedCoverage(db, p.keyword, p.location)
       const label = p.location ? `${p.keyword} / ${p.location}` : p.keyword
 
-      if ((count ?? 0) >= COVERAGE_THRESHOLD) { covered.push(label); continue }
+      if (count >= COVERAGE_THRESHOLD) { covered.push(label); continue }
 
       const qKeyword = distilForQuery(p.keyword)
       const queryText = p.location
@@ -136,7 +155,7 @@ export async function POST(req: NextRequest) {
       // The city they asked for is thin, so also watch the surrounding region.
       // Someone wanting ".net engineer" in San Jose gets California too, rather
       // than an empty tab while the roles sit in New York.
-      if (p.location && (count ?? 0) < 5) {
+      if (p.location && count < 5) {
         const wider = widerLocation(p.location)
         if (wider) {
           const wideText = `hiring ${qKeyword} ${wider}`
