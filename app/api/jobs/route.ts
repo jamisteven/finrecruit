@@ -6,6 +6,7 @@ import { dedupeReposts, type RepostRow } from '@/lib/dedupeReposts'
 import { matchEmployer } from '@/lib/employers'
 import { locationFacets, type LocationFacets } from '@/lib/locations'
 import type { WorkType } from '@/types'
+import { cacheGet, cachePut } from '@/lib/analyticsCache'
 
 // Free visitors see a role only once it is this old. Keep in sync with FREE_DELAY_HOURS in app/page.tsx.
 const FREE_DELAY_HOURS = 48
@@ -234,6 +235,15 @@ const FACET_MAX = 300
 const facetCache = new Map<string, { v: LocationFacets; at: number }>()
 const WORK_TYPE_SET = new Set(['Remote', 'Hybrid', 'On-site'])
 
+// The headline numbers (total roles and roles per sector) and the region/city counts are kept in the database,
+// so the page can show them the moment it loads instead of waiting for the month's roles to be read. Whoever
+// builds the full list refreshes them as a by-product (no extra reads), at most every STATS_WRITE_MS.
+const STATS_MAX_AGE_MS = 24 * 3600_000      // older than this is not shown at all
+const STATS_WRITE_MS = 5 * 60_000
+const FACET_DB_TTL_MS = 30 * 60_000
+const statsWrittenAt: Record<string, number> = {}
+type FeedStats = { total: number; sectors: Record<string, number>; at: number }
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const seniority = searchParams.get('seniority')
@@ -322,7 +332,29 @@ export async function GET(req: NextRequest) {
     } catch { return out({ roles: [], matched: 0, total: 0, fallback: [] }) }
   }
 
+  // Region/city counts: answered from memory or the shared cache when possible, before any roles are read
+  const tier = hasPass ? 'pass' : 'free'
+  let facetKey = ''
+  if (facets) {
+    const wts = (searchParams.get('wt') ?? '').split('|').filter((w) => WORK_TYPE_SET.has(w)).sort()
+    facetKey = [tier, sector && sector !== 'all' ? sector : 'all', wts.join(','), searchParams.get('region') || '', searchParams.get('cities') === '1' ? 'c' : ''].join('|')
+    const send = (v: LocationFacets) => {
+      const r = NextResponse.json(v)
+      r.headers.set('Cache-Control', 'private, max-age=60')
+      return r
+    }
+    const mem = facetCache.get(facetKey)
+    if (mem && Date.now() - mem.at < FACET_TTL_MS) return send(mem.v)
+    const shared = await cacheGet(createServerClient(), `feed:facets:${facetKey}`, FACET_DB_TTL_MS)
+    if (shared) {
+      const v = shared.out as unknown as LocationFacets
+      facetCache.set(facetKey, { v, at: Date.now() })
+      return send(v)
+    }
+  }
+
   let oldRows: Row[], recentRows: Row[], archiveRows: Row[] = []
+  let sharedStats: FeedStats | null = null
   try {
     if (facets) {
       ;[oldRows, recentRows, archiveRows] = await Promise.all([loadOld(), loadRecent(), loadArchive()])
@@ -332,7 +364,11 @@ export async function GET(req: NextRequest) {
       recentRows = []
     } else if (quick) {
       oldRows = []
-      recentRows = await loadRecent()
+      ;[recentRows, sharedStats] = await Promise.all([
+        loadRecent(),
+        cacheGet(createServerClient(), `feed:stats:${tier}`, STATS_MAX_AGE_MS)
+          .then((c) => (c ? ({ ...(c.out as Omit<FeedStats, 'at'>), at: c.at } as FeedStats) : null)),
+      ])
     } else {
       ;[oldRows, recentRows] = await Promise.all([loadOld(), loadRecent()])
     }
@@ -343,7 +379,7 @@ export async function GET(req: NextRequest) {
   const now = Date.now()
   const windowStart = now - maxAgeDays * 86400000
 
-  // merge the two caches, dropping duplicates in the overlap
+  // merge the caches, dropping duplicates in the overlap
   const seen = new Set<string>()
   const merged: Row[] = []
   for (const r of recentRows) { seen.add(r.id); merged.push(r) }
@@ -372,17 +408,13 @@ export async function GET(req: NextRequest) {
 
   if (facets) {
     const wts = (searchParams.get('wt') ?? '').split('|').filter((w) => WORK_TYPE_SET.has(w)).sort() as WorkType[]
-    const region = searchParams.get('region') || null
-    const withCities = searchParams.get('cities') === '1'
-    const sec = sector && sector !== 'all' ? sector : 'all'
-    const key = [hasPass ? 'pass' : 'free', sec, wts.join(','), region ?? '', withCities ? 'c' : ''].join('|')
-    const hit = facetCache.get(key)
-    let v = hit && now - hit.at < FACET_TTL_MS ? hit.v : null
-    if (!v) {
-      v = locationFacets(pool as any[], { sector: sec, workTypes: wts, region, cities: withCities })
-      if (facetCache.size >= FACET_MAX) facetCache.delete(facetCache.keys().next().value as string)
-      facetCache.set(key, { v, at: now })
-    }
+    const v = locationFacets(pool as any[], {
+      sector: sector && sector !== 'all' ? sector : 'all', workTypes: wts,
+      region: searchParams.get('region') || null, cities: searchParams.get('cities') === '1',
+    })
+    if (facetCache.size >= FACET_MAX) facetCache.delete(facetCache.keys().next().value as string)
+    facetCache.set(facetKey, { v, at: now })
+    void cachePut(createServerClient(), `feed:facets:${facetKey}`, v as unknown as Record<string, unknown>)
     const r = NextResponse.json(v)
     r.headers.set('Cache-Control', 'private, max-age=60')
     return r
@@ -434,6 +466,20 @@ export async function GET(req: NextRequest) {
     hasPass || pv.has(r.id)
       ? r
       : { ...r, post_url: '', author_name: null, author_linkedin_url: null, author_avatar: null, gated: true })
+  const archiveCounts = archive ? undefined : await loadArchiveCounts()
+  // Totals for the headline: what this visitor's tier can see, plus the older roles counted by the server.
+  // Worked out only for the plain request (no search or filters), so every visitor on a tier shares one figure.
+  let stats: FeedStats | undefined
+  if (!archive && !quick && !seniority && !sector && !search && offset === 0 && archiveCounts) {
+    const sectors: Record<string, number> = {}
+    for (const sec of SECTORS) sectors[sec] = (archiveCounts[sec] ?? 0)
+    for (const r of tierRows) { const k = String(r.sector ?? ''); if (k in sectors) sectors[k]++ }
+    stats = { total: tierRows.length + Object.values(archiveCounts).reduce((a, b) => a + b, 0), sectors, at: now }
+    if (now - (statsWrittenAt[tier] ?? 0) > STATS_WRITE_MS) {
+      statsWrittenAt[tier] = now
+      void cachePut(createServerClient(), `feed:stats:${tier}`, { total: stats.total, sectors })
+    }
+  }
   const res = NextResponse.json({
     topCompanies,
     jobs,
@@ -447,7 +493,8 @@ export async function GET(req: NextRequest) {
     previewIds,
     addedToday,
     latestPostedAt,
-    ...(archive ? {} : { archiveCounts: await loadArchiveCounts() }),
+    ...(archive ? {} : { archiveCounts }),
+    stats: stats ?? sharedStats ?? undefined,
   })
   // the browser may reuse this for a minute (refreshes, sort toggles) without hitting the server
   res.headers.set('Cache-Control', 'private, max-age=60')

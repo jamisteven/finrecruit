@@ -335,6 +335,8 @@ export default function HomePage() {
   const [hasPass, setHasPass] = useState(false)
   const [withheld, setWithheld] = useState(0)
   const [addedToday, setAddedToday] = useState(0)
+  // Totals worked out by the server and kept in the database: ready with the first response, nothing to wait for
+  const [feedStats, setFeedStats] = useState<{ total: number; sectors: Record<string, number> } | null>(null)
   const [previewCount, setPreviewCount] = useState(0)
   const [previewIds, setPreviewIds] = useState<string[]>([])
   const [teaserIds, setTeaserIds] = useState<string[]>([])
@@ -398,6 +400,7 @@ export default function HomePage() {
           if (seq !== fetchSeq.current) return
           if (full?.jobs?.length) { fullLanded = true; setAllJobs(full.jobs) }
           if (Array.isArray(full?.topCompanies)) setTopCompanies(full.topCompanies)
+          if (full?.stats) setFeedStats(full.stats)
           setFullLoaded(true)
         })
         .catch(() => { if (seq === fetchSeq.current) setFullLoaded(true) })
@@ -420,6 +423,7 @@ export default function HomePage() {
       setWithheld(data.withheld ?? 0)
       setArchiveCounts(data.archiveCounts ?? null)
       setAddedToday(data.addedToday ?? 0)
+      if (data.stats) setFeedStats(data.stats)
       setPreviewCount(data.previewCount ?? 0)
       setPreviewIds(data.previewIds ?? [])
       setTeaserIds(data.teaserIds ?? [])
@@ -458,7 +462,14 @@ export default function HomePage() {
   }, [filters.sector, filters.workTypes, facetRegion, hasPass])
   const [facets, setFacets] = useState<{ key: string; v: LocationFacets } | null>(null)
   const [facetsFailed, setFacetsFailed] = useState(false)
-  const facetsWanted = openDrop !== null
+  // Once the roles are in, fetch the counts quietly in the background so the lists are ready before anyone opens them
+  const [facetsPrefetch, setFacetsPrefetch] = useState(false)
+  useEffect(() => {
+    if (!fullLoaded) return
+    const t = setTimeout(() => setFacetsPrefetch(true), 1200)
+    return () => clearTimeout(t)
+  }, [fullLoaded])
+  const facetsWanted = openDrop !== null || facetsPrefetch
   useEffect(() => {
     if (!facetsWanted) return
     let dead = false
@@ -827,6 +838,25 @@ export default function HomePage() {
     olderPending && !myFeedOn && !filters.search.trim() && filters.locations.length === 0 && filters.workTypes.length === 0
       ? (filters.sector === 'all' ? Object.values(olderPending).reduce((a, b) => a + b, 0) : (olderPending[filters.sector] ?? 0))
       : 0)
+  // The total is shown once, when it is final. Until then: the figure from this visitor's last visit, or a dash.
+  const [lastTotal, setLastTotal] = useState<number | null>(null)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try { const v = Number(localStorage.getItem('bcj_total')); if (v > 0) setLastTotal(v) } catch { /* storage blocked */ }
+    }, 0)
+    return () => clearTimeout(t)
+  }, [])
+  const plainFeed = !myFeedOn && filters.sector === 'all' && !filters.search.trim() && filters.locations.length === 0 && filters.workTypes.length === 0
+  useEffect(() => {
+    if (!fullLoaded || !plainFeed || headlineCount <= 0) return
+    try { localStorage.setItem('bcj_total', String(feedStats?.total ?? headlineCount)) } catch { /* storage blocked */ }
+  }, [fullLoaded, plainFeed, headlineCount, feedStats])
+  // Unfiltered views use the server's totals as soon as they arrive; a search, location or work-type filter
+  // is counted from the loaded roles once they are in.
+  const unfiltered = !myFeedOn && !filters.search.trim() && filters.locations.length === 0 && filters.workTypes.length === 0
+  const statsCount = feedStats && unfiltered ? (filters.sector === 'all' ? feedStats.total : (feedStats.sectors[filters.sector] ?? 0)) : null
+  const shownCount = statsCount ?? (fullLoaded ? headlineCount : null)
+  const headlineText = shownCount !== null ? shownCount.toLocaleString() : (plainFeed && lastTotal ? lastTotal.toLocaleString() : '–')
   const sectorCounts = useMemo(() => {
     const plus = (id: string) => (olderPending?.[id] ?? 0)
     return {
@@ -1416,7 +1446,7 @@ export default function HomePage() {
                   style={{ ['--dot' as string]: s.id === 'all' ? 'var(--ink-3)' : `var(--sec-${s.id})` }}
                   onClick={() => { track('filter_sector', { sector: s.id }); setFilters({ ...filters, sector: s.id }) }}
                 >
-                  <span className="dot" />{s.label}<span className="cnt">{count}</span>
+                  <span className="dot" />{s.label}<span className="cnt">{feedStats ? (s.id === 'all' ? feedStats.total : (feedStats.sectors[s.id] ?? 0)) : fullLoaded ? count : ''}</span>
                 </button>
               )
             })}
@@ -1452,9 +1482,14 @@ export default function HomePage() {
               {openDrop === 'region' && (
                 <div className="drop-panel" role="radiogroup" aria-label="Region">
                   <button type="button" role="radio" aria-checked={!selRegion} className={`radio-row${!selRegion ? ' on' : ''}`} onClick={() => pickLocation('region', null)}>
-                    <span className="rad" />Any region{countsReady && <span className="n">{anyRegionTotal}</span>}
+                    <span className="rad" />Any region<span className="n">{countsReady ? anyRegionTotal : '…'}</span>
                   </button>
-                  {!countsReady && <div className="counting">Counting roles…</div>}
+                  {/* the names are known up front; only the numbers wait for the server */}
+                  {!countsReady && Object.keys(REGIONS).map((name) => (
+                    <button type="button" role="radio" aria-checked={selRegion === name} key={name} className={`radio-row${selRegion === name ? ' on' : ''}`} onClick={() => pickLocation('region', name)}>
+                      <span className="rad" />{name}<span className="n">…</span>
+                    </button>
+                  ))}
                   {countsReady && regionCounts.map((r) => (
                     <button type="button" role="radio" aria-checked={selRegion === r.name} key={r.name} className={`radio-row${selRegion === r.name ? ' on' : ''}`} onClick={() => pickLocation('region', r.name)}>
                       <span className="rad" />{r.name}<span className="n">{r.count}</span>
@@ -1513,7 +1548,7 @@ export default function HomePage() {
         <main>
           <div className="feed-bar">
             <span className="count">
-              <b>{headlineCount.toLocaleString()}</b> {headlineCount === 1 ? 'role' : 'roles'}
+              <b>{headlineText}</b> {shownCount === 1 ? 'role' : 'roles'}
               {filters.sector !== 'all' && ` in ${sectorLabel(filters.sector)}`}
             </span>
             {/* People tap this badge. For a free visitor the answer to "which ones?" is the offer page. */}
