@@ -4,6 +4,8 @@ import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
 import { dedupeReposts, type RepostRow } from '@/lib/dedupeReposts'
 import { matchEmployer } from '@/lib/employers'
+import { locationFacets, type LocationFacets } from '@/lib/locations'
+import type { WorkType } from '@/types'
 
 // Free visitors see a role only once it is this old. Keep in sync with FREE_DELAY_HOURS in app/page.tsx.
 const FREE_DELAY_HOURS = 48
@@ -71,19 +73,48 @@ type Entry = { rows: Row[]; at: number }
 const cache: Partial<Record<Kind, Entry>> = {}
 const inflight: Partial<Record<Kind, Promise<Entry>>> = {}
 
+// Rows come back 1000 at a time. Counting first lets every page be requested at once instead of one after
+// another, so a cold start no longer takes longer as the table grows. Pages share one stable order; rows are
+// de-duplicated by id in case a post lands between the count and the reads.
+const PARALLEL_PAGES = 6
 async function fetchAll(build: (q: any) => any): Promise<Row[]> {
   const db = createServerClient()
-  const out: Row[] = []
-  for (let from = 0; ; from += PAGE) {
-    const q = build(
-      db.from('jobs').select(COLUMNS)
+  const base = () => build(
+    db.from('jobs').select(COLUMNS)
+      .eq('is_verified_job', true)
+      .or('quality.is.null,quality.neq.low')
+  ).order('extracted_at', { ascending: false }).order('id', { ascending: true })
+  const page = async (from: number): Promise<Row[]> => {
+    const { data, error } = await base().range(from, from + PAGE - 1)
+    if (error) throw new Error(error.message)
+    return data ?? []
+  }
+
+  let total: number | null = null
+  try {
+    const { count, error } = await build(
+      db.from('jobs').select('id', { count: 'exact', head: true })
         .eq('is_verified_job', true)
         .or('quality.is.null,quality.neq.low')
-    ).order('extracted_at', { ascending: false }).order('id', { ascending: true }).range(from, from + PAGE - 1)
-    const { data, error } = await q
-    if (error) throw new Error(error.message)
-    out.push(...(data ?? []))
-    if (!data || data.length < PAGE) break
+    )
+    if (!error && typeof count === 'number') total = count
+  } catch { /* fall back to reading page by page */ }
+
+  const out: Row[] = []
+  if (total !== null) {
+    const starts: number[] = []
+    for (let from = 0; from < total + PAGE; from += PAGE) starts.push(from)   // one spare page catches new rows
+    for (let i = 0; i < starts.length; i += PARALLEL_PAGES) {
+      const got = await Promise.all(starts.slice(i, i + PARALLEL_PAGES).map(page))
+      for (const rows of got) out.push(...rows)
+    }
+    const seen = new Set<string>()
+    return out.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)))
+  }
+  for (let from = 0; ; from += PAGE) {
+    const data = await page(from)
+    out.push(...data)
+    if (data.length < PAGE) break
   }
   return out
 }
@@ -166,6 +197,43 @@ function matchesSearch(r: Row, tokens: string[]): boolean {
 }
 const tokenize = (s: string) => s.toLowerCase().replace(/[,()%*\\"]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 6)
 
+// Who sees what. A pass sees every role in the window; everyone else sees roles older than the free delay plus
+// a few fresh ones (3 in full, 2 as titles). Shared by the feed and by the location counts so both agree.
+function tierPool(all: Row[], recentKept: Row[], hasPass: boolean, now: number, windowStart: number): {
+  previewIds: string[]; teaserIds: string[]; withheld: number; pool: Row[]
+} {
+  const cutoff = now - FREE_DELAY_MS
+  if (hasPass) {
+    return {
+      previewIds: [], teaserIds: [], withheld: 0,
+      pool: all.filter((r) => { const t = ts(r.posted_at); return isNaN(t) || t >= windowStart }),
+    }
+  }
+  // fresh = posted inside the free delay, newest first
+  const fresh = recentKept
+    .filter((r) => { const t = ts(r.posted_at); return !isNaN(t) && t >= cutoff })
+    .sort((a, b) => ts(b.posted_at) - ts(a.posted_at))
+  const top = fresh.slice(0, FREE_SAMPLE_COUNT + FREE_TITLE_ONLY_COUNT)
+  const previewIds = top.slice(0, FREE_SAMPLE_COUNT).map((r) => r.id as string)
+  const teaserIds = top.slice(FREE_SAMPLE_COUNT).map((r) => r.id as string)
+  const pv = new Set([...previewIds, ...teaserIds])
+  return {
+    previewIds, teaserIds,
+    withheld: Math.max(0, fresh.length - top.length),
+    pool: all.filter((r) => {
+      if (pv.has(r.id)) return true
+      const t = ts(r.posted_at)
+      return !isNaN(t) && t < cutoff && t >= windowStart
+    }),
+  }
+}
+
+// Region and city counts are the same for every visitor on a tier, so they are worked out once and kept for a while.
+const FACET_TTL_MS = 10 * 60_000
+const FACET_MAX = 300
+const facetCache = new Map<string, { v: LocationFacets; at: number }>()
+const WORK_TYPE_SET = new Set(['Remote', 'Hybrid', 'On-site'])
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const seniority = searchParams.get('seniority')
@@ -176,6 +244,10 @@ export async function GET(req: NextRequest) {
   const maxAgeDays = Math.min(HISTORY_DAYS, parseInt(searchParams.get('maxAge') || String(HISTORY_DAYS)))
   const offset = Math.max(0, parseInt(searchParams.get('offset') || '0'))
   const archive = searchParams.get('archive') === '1'   // older roles, requested on demand
+  // quick=1: the newest page only, answered from the last 72h so it does not wait for the whole month to load
+  const quick = searchParams.get('quick') === '1' && !archive
+  // facets=1: region and city counts over the whole month, no roles
+  const facets = searchParams.get('facets') === '1'
 
   // Pass holders see roles as they land; everyone else waits FREE_DELAY_HOURS
   let hasPass = false
@@ -250,12 +322,17 @@ export async function GET(req: NextRequest) {
     } catch { return out({ roles: [], matched: 0, total: 0, fallback: [] }) }
   }
 
-  let oldRows: Row[], recentRows: Row[]
+  let oldRows: Row[], recentRows: Row[], archiveRows: Row[] = []
   try {
-    if (archive) {
+    if (facets) {
+      ;[oldRows, recentRows, archiveRows] = await Promise.all([loadOld(), loadRecent(), loadArchive()])
+    } else if (archive) {
       // older-than-default roles only; the page already holds everything newer
       oldRows = await loadArchive()
       recentRows = []
+    } else if (quick) {
+      oldRows = []
+      recentRows = await loadRecent()
     } else {
       ;[oldRows, recentRows] = await Promise.all([loadOld(), loadRecent()])
     }
@@ -264,14 +341,14 @@ export async function GET(req: NextRequest) {
   }
 
   const now = Date.now()
-  const cutoff = now - FREE_DELAY_MS
   const windowStart = now - maxAgeDays * 86400000
 
   // merge the two caches, dropping duplicates in the overlap
   const seen = new Set<string>()
   const merged: Row[] = []
   for (const r of recentRows) { seen.add(r.id); merged.push(r) }
-  for (const r of oldRows) if (!seen.has(r.id)) merged.push(r)
+  for (const r of oldRows) if (!seen.has(r.id)) { seen.add(r.id); merged.push(r) }
+  for (const r of archiveRows) if (!seen.has(r.id)) merged.push(r)
 
   // then fold reposts of the same mandate into their newest post, so every
   // count below (fresh, today, totals, matches) talks about jobs, not posts
@@ -279,10 +356,6 @@ export async function GET(req: NextRequest) {
   const recentIds = new Set(recentRows.map((r) => r.id))
   const recentKept = all.filter((r) => recentIds.has(r.id))
 
-  // fresh = posted inside the free delay, newest first
-  const fresh = recentKept
-    .filter((r) => { const t = ts(r.posted_at); return !isNaN(t) && t >= cutoff })
-    .sort((a, b) => ts(b.posted_at) - ts(a.posted_at))
   const addedToday = recentKept.filter((r) => ts(r.posted_at) >= now - 24 * 3600_000).length
   // newest posting time across the live set (the feed itself is ordered by extraction, not posting)
   const latestPostedAt = recentKept.reduce<string | null>((best, r) => {
@@ -293,24 +366,26 @@ export async function GET(req: NextRequest) {
   // Free tier: everything older than FREE_DELAY_HOURS, plus FREE_SAMPLE_COUNT fresh roles in full.
   // The next FREE_TITLE_ONLY_COUNT fresh roles go out like any older role: readable, but without the
   // recruiter's name, photo, profile or post link (they are marked gated below).
-  let previewIds: string[] = []
-  let teaserIds: string[] = []
+  const { previewIds, teaserIds, withheld, pool: tierRows } = tierPool(all, recentKept, hasPass, now, windowStart)
+  let pool: Row[] = tierRows
   const lockedJobs: { title: string; sector: string; posted_at: string | null }[] = []
-  let withheld = 0
-  let pool: Row[]
-  if (hasPass) {
-    pool = all.filter((r) => { const t = ts(r.posted_at); return isNaN(t) || t >= windowStart })
-  } else {
-    const top = fresh.slice(0, FREE_SAMPLE_COUNT + FREE_TITLE_ONLY_COUNT)
-    previewIds = top.slice(0, FREE_SAMPLE_COUNT).map((r) => r.id as string)
-    teaserIds = top.slice(FREE_SAMPLE_COUNT).map((r) => r.id as string)
-    withheld = Math.max(0, fresh.length - top.length)
-    const pv = new Set([...previewIds, ...teaserIds])
-    pool = all.filter((r) => {
-      if (pv.has(r.id)) return true
-      const t = ts(r.posted_at)
-      return !isNaN(t) && t < cutoff && t >= windowStart
-    })
+
+  if (facets) {
+    const wts = (searchParams.get('wt') ?? '').split('|').filter((w) => WORK_TYPE_SET.has(w)).sort() as WorkType[]
+    const region = searchParams.get('region') || null
+    const withCities = searchParams.get('cities') === '1'
+    const sec = sector && sector !== 'all' ? sector : 'all'
+    const key = [hasPass ? 'pass' : 'free', sec, wts.join(','), region ?? '', withCities ? 'c' : ''].join('|')
+    const hit = facetCache.get(key)
+    let v = hit && now - hit.at < FACET_TTL_MS ? hit.v : null
+    if (!v) {
+      v = locationFacets(pool as any[], { sector: sec, workTypes: wts, region, cities: withCities })
+      if (facetCache.size >= FACET_MAX) facetCache.delete(facetCache.keys().next().value as string)
+      facetCache.set(key, { v, at: now })
+    }
+    const r = NextResponse.json(v)
+    r.headers.set('Cache-Control', 'private, max-age=60')
+    return r
   }
 
   if (seniority && seniority !== 'All') pool = pool.filter((r) => r.seniority === seniority)
@@ -337,7 +412,7 @@ export async function GET(req: NextRequest) {
   // live count over the same rows the visitor is served, never a hand-kept list.
   const MIN_ROLES_FOR_STRIP = 2
   const employerCounts = new Map<string, { name: string; domain: string; count: number }>()
-  if (!archive) {
+  if (!archive && !quick) {
     for (const r of all) {
       const e = matchEmployer(r.company as string | null)
       if (!e) continue

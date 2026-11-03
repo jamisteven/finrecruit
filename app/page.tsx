@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback, useMemo, useRef, Fragment } from 'rea
 import { JobPost, FilterState, Sector, WorkType } from '@/types'
 import { keywordMatches, locationMatches } from '@/lib/matchTarget'
 import { nearness } from '@/lib/widenLocation'
+import { REGIONS, matchKw, locParts, jobInRegion, inferWorkType, cityTally, type LocationFacets } from '@/lib/locations'
 import EmployerStrip, { type StripCompany } from '@/components/EmployerStrip'
 import { captureAttribution } from '@/lib/attribution'
 
@@ -81,88 +82,6 @@ function dropsAround(now: number, dropBatches: DropBatch[]): { prev: Drop | null
   }
 }
 
-// Country/region groups so "Switzerland" catches Zurich, Geneva, Basel, …
-// Keywords ≤3 chars are matched as whole words to avoid e.g. "us" matching "Austin".
-const REGIONS: Record<string, string[]> = {
-  'Switzerland': ['switzerland', 'zurich', 'zürich', 'geneva', 'genève', 'genf', 'basel', 'bern', 'berne', 'lausanne', 'zug', 'lugano', 'st. gallen', 'winterthur', 'schaffhausen', 'visp', 'bülach', 'neuchâtel', 'biel', 'mägenwil', 'opfikon', 'lucerne', 'luzern', 'dübendorf', 'urdorf', 'baar', 'thun', 'wetzikon', 'uster', 'valais', 'rotkreuz', 'crissier', 'montreux', 'davos', 'sursee', 'glattbrugg', 'dietikon', 'horgen', 'pratteln', 'écublens', 'étoy', 'orsières', 'la chaux-de-fonds', 'weinfelden', 'emmen', 'oensingen', 'altdorf', 'cazis', 'vaud', 'aargau', 'ticino', 'bütschwil', 'amriswil', 'wohlen', 'netstal', 'oberburg', 'zeiningen', 'dielsdorf', 'beringen', 'affoltern am albis', 'moosseedorf', 'hünenberg'],
-  'United Kingdom': ['united kingdom', 'uk', 'england', 'scotland', 'wales', 'london', 'manchester', 'edinburgh', 'birmingham', 'leeds', 'glasgow', 'bristol', 'cambridge', 'oxford', 'belfast', 'liverpool', 'crawley', 'oxfordshire', 'west midlands', 'milton keynes', 'kingston upon thames', 'wimbledon', 'brighton', 'leicester', 'oldham', 'rochdale', 'cobham', 'rothley', 'st austell', 'wallasey', 'spennymoor', 'telford', 'solihull', 'stockport', 'bolton', 'sheffield', 'nottingham', 'cardiff', 'swansea', 'aylesford', 'croydon', 'maidenhead', 'weybridge', 'slough', 'wootton bassett', 'cowbridge', 'southampton', 'coventry', 'derby', 'hertfordshire', 'cheshire', 'hampshire', 'kent', 'devon', 'potters bar', 'east horsley', 'hereford', 'marlow', 'ascot', 'deeside', 'south uk'],
-  'United States': ['united states', 'usa', 'us', 'new york', 'nyc', 'san francisco', 'bay area', 'boston', 'chicago', 'los angeles', 'austin', 'seattle', 'miami', 'atlanta', 'dallas', 'houston', 'denver', 'washington', 'charlotte', 'philadelphia', 'columbus', 'st. louis', 'st louis', 'saint louis', 'minneapolis', 'san antonio', 'cincinnati', 'nashville', 'raleigh', 'san diego', 'phoenix', 'salt lake city', 'portland', 'kansas city', 'memphis', 'pittsburgh', 'baltimore', 'las vegas', 'richmond', 'detroit', 'jersey city', 'san jose', 'tampa', 'hartford', 'plano', 'milwaukee', 'sunnyvale', 'palo alto', 'mountain view', 'jacksonville', 'bellevue', 'arlington', 'cleveland', 'newark', 'mclean', 'orlando', 'oklahoma city', 'malvern', 'king of prussia', 'brooklyn', 'queens', 'santa clara', 'reston', 'wilmington', 'scottsdale', 'ann arbor', 'springfield', 'madison', 'albany', 'redmond', 'buffalo', 'oakland', 'tucson', 'bethesda', 'stamford', 'norwalk', 'irvine', 'pasadena', 'harrisburg', 'fresno', 'rochester', 'wichita', 'frisco', 'sacramento', 'irving', 'coppell', 'herndon', 'waltham', 'multiple us locations', 'multiple us cities', 'remote usa', 'northern virginia', 'south florida', 'southern california', 'northeast region', 'long island', 'fort worth', 'dallas-fort worth', 'raleigh-durham', 'boca raton', 'fort lauderdale', 'santa monica', 'santa barbara', 'princeton', 'hoboken', 'white plains', 'tulsa', 'omaha', 'colorado springs', 'el segundo', 'louisville', 'knoxville', 'honolulu', 'sioux falls', 'spokane', 'savannah', 'providence', 'worcester', 'natick', 'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware', 'florida', 'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan', 'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey', 'new mexico', 'north carolina', 'north dakota', 'ohio', 'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee', 'texas', 'utah', 'vermont', 'virginia', 'west virginia', 'wisconsin', 'wyoming', 'district of columbia', 'washington dc', 'washington d.c.', 'dc', 'al', 'ak', 'az', 'ar', 'ca', 'co', 'ct', 'fl', 'ga', 'hi', 'id', 'il', 'in', 'ia', 'ks', 'ky', 'la', 'me', 'md', 'ma', 'mi', 'mn', 'ms', 'mo', 'mt', 'ne', 'nv', 'nh', 'nj', 'nm', 'ny', 'nc', 'nd', 'oh', 'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn', 'tx', 'ut', 'vt', 'va', 'wa', 'wv', 'wi', 'wy'],
-  'Germany': ['germany', 'deutschland', 'berlin', 'munich', 'münchen', 'frankfurt', 'hamburg', 'cologne', 'köln', 'düsseldorf', 'stuttgart', 'hannover', 'karlsruhe', 'heilbronn', 'ulm', 'münster', 'bonn', 'dresden', 'mannheim', 'mainz', 'wiesbaden', 'essen', 'bremen', 'nürnberg', 'nuremberg', 'leipzig', 'dortmund', 'aachen', 'erfurt', 'augsburg', 'potsdam', 'trier', 'kiel', 'ratingen', 'landshut', 'würzburg', 'tübingen', 'marburg', 'offenburg', 'forchheim', 'herten', 'mülheim an der ruhr', 'bielefeld', 'kaiserslautern', 'saarbrücken', 'friedrichshafen', 'east germany', 'northern germany', 'southern germany', 'north rhine-westphalia', 'hessen', 'niedersachsen', 'bavaria', 'bayern', 'baden-württemberg'],
-  'France': ['france', 'paris', 'lyon', 'marseille', 'courbevoie', 'lille', 'antony', 'auch', 'bordeaux', 'toulouse'],
-  'Netherlands': ['netherlands', 'amsterdam', 'rotterdam', 'the hague', 'utrecht', 'eindhoven', 'delft', 'schiphol', 'schiphol-rijk', 'groningen'],
-  'UAE': ['uae', 'united arab emirates', 'dubai', 'abu dhabi', 'sharjah', 'ras al khaimah', 'ajman'],
-  'Singapore': ['singapore'],
-  'Hong Kong': ['hong kong'],
-  'India': ['india', 'mumbai', 'bangalore', 'bengaluru', 'delhi', 'new delhi', 'gurgaon', 'gurugram', 'hyderabad', 'pune', 'chennai', 'ahmedabad', 'noida', 'lucknow', 'agra', 'meerut', 'nagpur', 'thane', 'trivandrum', 'kerala', 'tamil nadu', 'rajkot', 'surat', 'rohtak', 'kolkata'],
-  'Australia': ['australia', 'sydney', 'melbourne', 'brisbane', 'perth', 'north sydney', 'campbelltown', 'toowoomba', 'wodonga'],
-  'Canada': ['canada', 'toronto', 'vancouver', 'montreal', 'calgary', 'ottawa', 'mississauga', 'edmonton', 'winnipeg', 'markham', 'brockville', 'ontario', 'alberta', 'guelph', 'coquitlam', 'owen sound', 'north york', 'british columbia', 'quebec'],
-  'Spain': ['spain', 'españa', 'espana', 'madrid', 'barcelona', 'seville', 'sevilla', 'malaga', 'málaga', 'bilbao', 'palma de mallorca', 'mallorca', 'alicante', 'zaragoza', 'ibiza', 'catalonia', 'catalunya', 'andalusia', 'canary islands'],
-  'Ireland': ['ireland', 'dublin', 'tullamore', 'limerick', 'athlone', 'donegal', 'tipperary', 'waterford', 'meath', 'cork', 'galway'],
-  'Saudi Arabia': ['saudi arabia', 'ksa', 'riyadh', 'jeddah', 'makkah', 'mecca', 'dammam', 'al qassim', 'khurais'],
-  'Qatar': ['qatar', 'doha'],
-  'Egypt': ['egypt', 'cairo', 'new cairo', 'giza', 'nasr city', 'mansoura', '10th of ramadan city'],
-  'South Africa': ['south africa', 'johannesburg', 'cape town', 'pretoria', 'durban', 'sandton', 'centurion', 'gauteng', 'western cape', 'kwazulu-natal', 'postmasburg'],
-  'Nigeria': ['nigeria', 'lagos', 'abuja', 'port harcourt', 'bauchi'],
-  'Kenya': ['kenya', 'nairobi'],
-  'Pakistan': ['pakistan', 'islamabad', 'rawalpindi', 'lahore', 'karachi', 'gujranwala', 'sialkot', 'sukkur', 'kotli'],
-  'Malaysia': ['malaysia', 'kuala lumpur', 'penang', 'cyberjaya', 'sepang', 'petaling jaya'],
-  'Philippines': ['philippines', 'manila', 'quezon city', 'makati', 'pasay', 'taguig', 'taguig city', 'bgc', 'cebu', 'parañaque', 'paranaque'],
-  'Indonesia': ['indonesia', 'jakarta', 'bali', 'bsd city', 'banyuasin', 'aceh tengah'],
-  'Israel': ['israel', 'tel aviv', 'netanya', 'holon', 'ramat gan', 'hadera', 'jerusalem', 'nazareth'],
-  'Poland': ['poland', 'warsaw', 'krakow', 'kraków', 'wroclaw', 'gdansk', 'poznan'],
-  'Austria': ['austria', 'österreich', 'wien', 'innsbruck', 'klagenfurt', 'vorarlberg', 'rankweil', 'salzburg', 'graz', 'linz'],
-  'Italy': ['italy', 'italia', 'milan', 'milano', 'rome', 'roma', 'bolzano', 'turin', 'torino', 'bologna', 'pastorano'],
-  'Belgium': ['belgium', 'brussels', 'antwerp', 'wavre', 'ghent'],
-  'Portugal': ['portugal', 'lisbon', 'porto'],
-  'Nordics': ['sweden', 'stockholm', 'halmstad', 'finland', 'helsinki', 'denmark', 'copenhagen', 'norway', 'oslo', 'trondheim'],
-  'Mexico': ['mexico', 'mexico city', 'hermosillo', 'monterrey', 'guadalajara'],
-  'Brazil': ['brazil', 'são paulo', 'sao paulo', 'parnamirim'],
-  'Nepal': ['nepal', 'kathmandu', 'chitwan'],
-}
-
-// A US state in the location ("Geneva, New York", "Lake Zurich, IL") means it is a US role,
-// so it must not also count for a same-named place abroad.
-const US_STATE_PARTS = new Set(['alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware', 'florida', 'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan', 'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey', 'new mexico', 'new york', 'north carolina', 'north dakota', 'ohio', 'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee', 'texas', 'utah', 'vermont', 'virginia', 'west virginia', 'wisconsin', 'wyoming', 'district of columbia', 'al', 'ak', 'az', 'ar', 'ca', 'co', 'ct', 'fl', 'ga', 'hi', 'id', 'il', 'in', 'ia', 'ks', 'ky', 'la', 'me', 'md', 'ma', 'mi', 'mn', 'ms', 'mo', 'mt', 'ne', 'nv', 'nh', 'nj', 'nm', 'ny', 'nc', 'nd', 'oh', 'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn', 'tx', 'ut', 'vt', 'va', 'wa', 'wv', 'wi', 'wy'])
-
-const REGION_NAMES_LC = new Set(Object.keys(REGIONS).map((k) => k.toLowerCase()))
-
-// Word-boundary keyword matching: "bern" must appear as a whole word, so it
-// matches "Bern" and "bern, switzerland" but NOT "Abernathy"; "india" must not
-// match "Indianapolis". Boundaries are any non-letter/non-digit (unicode-aware).
-const kwRegexCache = new Map<string, RegExp>()
-const matchKw = (part: string, kw: string) => {
-  let re = kwRegexCache.get(kw)
-  if (!re) {
-    const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    re = new RegExp(`(?:^|[^\\p{L}\\p{N}])${esc}(?:$|[^\\p{L}\\p{N}])`, 'u')
-    kwRegexCache.set(kw, re)
-  }
-  return re.test(part)
-}
-
-// Split compound locations into atomic parts: "New York / London" → two cities,
-// "Remote (Texas)" → remote + texas. Splits on | , / and parentheses.
-const locParts = (location: string) =>
-  location.replace(/[()]/g, ',').split(/[|,/]/).map((l) => l.trim().toLowerCase()).filter(Boolean)
-
-// Tokens that are work arrangements, not places — never shown as city chips
-const CITY_STOP = new Set(['hybrid', 'on-site', 'onsite', 'on site', 'office', 'flexible', 'wfh'])
-
-const jobInRegion = (job: JobPost, region: string) => {
-  const kws = REGIONS[region]
-  if (!kws || !job.location) return false
-  const parts = locParts(job.location)
-  if (region !== 'United States' && parts.some((p) => US_STATE_PARTS.has(p))) return false
-  return parts.some((p) => kws.some((k) => matchKw(p, k)))
-}
-
-function inferWorkType(job: JobPost): WorkType | null {
-  const text = `${job.location || ''} ${job.tags?.join(' ') || ''} ${job.title || ''}`.toLowerCase()
-  if (/\bhybrid\b/.test(text)) return 'Hybrid'
-  if (/\bremote\b/.test(text)) return 'Remote'
-  if (/\bon.?site\b|in.?office\b|in.?person\b/.test(text)) return 'On-site'
-  return null
-}
 
 // A role the free tier can see only as a title; everything else stays on the server.
 type LockedJob = { title: string; sector: string; posted_at: string | null }
@@ -478,6 +397,7 @@ export default function HomePage() {
         .then((full) => {
           if (seq !== fetchSeq.current) return
           if (full?.jobs?.length) { fullLanded = true; setAllJobs(full.jobs) }
+          if (Array.isArray(full?.topCompanies)) setTopCompanies(full.topCompanies)
           setFullLoaded(true)
         })
         .catch(() => { if (seq === fetchSeq.current) setFullLoaded(true) })
@@ -485,6 +405,7 @@ export default function HomePage() {
       // Quick page: a small page so the feed and stats paint immediately.
       const fast = new URLSearchParams(params)
       fast.set('limit', '400')
+      fast.set('quick', '1')   // answered from the last 72h, so the headline numbers do not wait for the whole month
       const res = await fetch(`/api/jobs?${fast}`)
       if (!res.ok) throw new Error('API error')
       const data = await res.json()
@@ -524,6 +445,30 @@ export default function HomePage() {
       .catch(() => { archiveRequested.current = false })
       .finally(() => setArchiveDone(true))
   }, [wantsArchive])
+
+  // Region and city counts come from the server, counted over the whole month with the same rules as the filter,
+  // so they are right the moment a list opens (the older roles themselves still download in the background).
+  // Until they arrive the list says it is counting rather than showing a number that would change.
+  const facetRegion = filters.locations.find((l) => REGIONS[l]) ?? null
+  const facetQuery = useMemo(() => {
+    const p = new URLSearchParams({ facets: '1', cities: '1', sector: filters.sector, p: hasPass ? '1' : '0' })
+    if (filters.workTypes.length) p.set('wt', [...filters.workTypes].sort().join('|'))
+    if (facetRegion) p.set('region', facetRegion)
+    return p.toString()
+  }, [filters.sector, filters.workTypes, facetRegion, hasPass])
+  const [facets, setFacets] = useState<{ key: string; v: LocationFacets } | null>(null)
+  const [facetsFailed, setFacetsFailed] = useState(false)
+  const facetsWanted = openDrop !== null
+  useEffect(() => {
+    if (!facetsWanted) return
+    let dead = false
+    fetch(`/api/jobs?${facetQuery}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((v) => { if (dead) return; if (v?.regions) { setFacets({ key: facetQuery, v }); setFacetsFailed(false) } else setFacetsFailed(true) })
+      .catch(() => { if (!dead) setFacetsFailed(true) })
+    return () => { dead = true }
+  }, [facetsWanted, facetQuery])
+  const facetNow = facets?.key === facetQuery ? facets.v : null
 
   // Debounced so typing in search doesn't fire a request per keystroke
   useEffect(() => {
@@ -908,47 +853,32 @@ export default function HomePage() {
     return true
   }), [allJobs, filters.sector, filters.workTypes])
 
-  const regionCounts = useMemo(() =>
-    Object.keys(REGIONS)
-      .map((name) => ({ name, count: locBase.filter((j) => jobInRegion(j, name)).length }))
-      // hide empty regions, but never hide one the user has selected
-      .filter((r) => r.count > 0 || filters.locations.includes(r.name))
-      .sort((a, b) => b.count - a.count),
-    [locBase, filters.locations])
+  // The server's counts are used whenever they are there. The browser only counts for itself if that request
+  // failed, and only once the older roles have downloaded, so a number on screen is never a partial one.
+  const clientCounts = facetsFailed && archiveDone && !facetNow
+  const countsReady = !!facetNow || clientCounts
+  const regionCounts = useMemo(() => {
+    const list = facetNow
+      ? facetNow.regions.slice()
+      : clientCounts
+        ? Object.keys(REGIONS)
+            .map((name) => ({ name, count: locBase.filter((j) => jobInRegion(j, name)).length }))
+            .filter((r) => r.count > 0)
+            .sort((a, b) => b.count - a.count)
+        : []
+    // never hide a region the user has selected
+    for (const sel of filters.locations) if (REGIONS[sel] && !list.some((r) => r.name === sel)) list.push({ name: sel, count: 0 })
+    return list
+  }, [facetNow, clientCounts, locBase, filters.locations])
+  const anyRegionTotal = facetNow ? facetNow.total : locBase.length
 
   // City list is scoped to the selected region(s): US selected → only US cities show
-  const cityBase = useMemo(() => {
-    const selRegions = filters.locations.filter((l) => REGIONS[l])
-    if (selRegions.length === 0) return locBase
-    return locBase.filter((j) => selRegions.some((r) => jobInRegion(j, r)))
-  }, [locBase, filters.locations])
-
-  // City counts use the SAME exact-part matcher as the feed filter, so a chip's
-  // number always equals the number of roles clicking it produces. A job located
-  // "New York / London" counts once under each city. Region names and work-mode
-  // tokens (hybrid etc.) never appear as cities.
   const cityStats = useMemo(() => {
-    // Single pass: parse each job's location once and tally every part it
-    // contains. The previous version re-parsed every job for every city name,
-    // which was ~1k names x ~6k jobs of regex work on each filter change.
-    const tally = new Map<string, { name: string; count: number }>()
-    for (const j of cityBase) {
-      if (!j.location) continue
-      const seen = new Set<string>()
-      for (const raw of j.location.replace(/[()]/g, ',').split(/[|,/]/)) {
-        const name = raw.trim()
-        if (!name || name.length >= 40) continue
-        const key = name.toLowerCase()
-        if (seen.has(key)) continue
-        seen.add(key)
-        if (REGION_NAMES_LC.has(key) || CITY_STOP.has(key)) continue
-        const cur = tally.get(key)
-        if (cur) cur.count++
-        else tally.set(key, { name, count: 1 })
-      }
-    }
-    return [...tally.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-  }, [cityBase])
+    if (facetNow) return facetNow.cities ?? []
+    if (!clientCounts) return []
+    const selRegions = filters.locations.filter((l) => REGIONS[l])
+    return cityTally(selRegions.length ? locBase.filter((j) => selRegions.some((r) => jobInRegion(j, r))) : locBase)
+  }, [facetNow, clientCounts, locBase, filters.locations])
 
   // City chips: selected ones always visible (even at 0), then matches for the
   // typed query (or the most frequent cities when nothing is typed).
@@ -1522,9 +1452,10 @@ export default function HomePage() {
               {openDrop === 'region' && (
                 <div className="drop-panel" role="radiogroup" aria-label="Region">
                   <button type="button" role="radio" aria-checked={!selRegion} className={`radio-row${!selRegion ? ' on' : ''}`} onClick={() => pickLocation('region', null)}>
-                    <span className="rad" />Any region<span className="n">{locBase.length}</span>
+                    <span className="rad" />Any region{countsReady && <span className="n">{anyRegionTotal}</span>}
                   </button>
-                  {regionCounts.map((r) => (
+                  {!countsReady && <div className="counting">Counting roles…</div>}
+                  {countsReady && regionCounts.map((r) => (
                     <button type="button" role="radio" aria-checked={selRegion === r.name} key={r.name} className={`radio-row${selRegion === r.name ? ' on' : ''}`} onClick={() => pickLocation('region', r.name)}>
                       <span className="rad" />{r.name}<span className="n">{r.count}</span>
                     </button>
@@ -1551,12 +1482,13 @@ export default function HomePage() {
                     <button type="button" role="radio" aria-checked={!selCity} className={`radio-row${!selCity ? ' on' : ''}`} onClick={() => pickLocation('city', null)}>
                       <span className="rad" />Any city
                     </button>
-                    {visibleCities.shown.map((l) => (
+                    {!countsReady && <div className="counting">Counting roles…</div>}
+                    {countsReady && visibleCities.shown.map((l) => (
                       <button type="button" role="radio" aria-checked={selCity === l.name} key={l.name} className={`radio-row${selCity === l.name ? ' on' : ''}`} onClick={() => pickLocation('city', l.name)}>
                         <span className="rad" />{l.name}<span className="n">{l.count}</span>
                       </button>
                     ))}
-                    {visibleCities.hidden > 0 && (
+                    {countsReady && visibleCities.hidden > 0 && (
                       <button type="button" className="more-note" onClick={() => setCityExpanded(true)}>Show all (+{visibleCities.hidden} more)</button>
                     )}
                   </div>
@@ -2220,6 +2152,7 @@ export default function HomePage() {
           text-decoration: underline; text-underline-offset: 3px;
         }
         .ulj .more-note:hover { color: var(--ink); }
+        .ulj .counting { padding: 10px 12px; font-size: 12px; color: var(--ink-3); }
         .ulj .chips.cities.expanded { max-height: 300px; overflow-y: auto; padding-right: 4px; }
         .ulj .side-note { font-size: 11.5px; color: var(--ink-3); line-height: 1.55; padding-top: 4px; }
         .ulj .saved-list { display: flex; flex-direction: column; gap: 2px; }

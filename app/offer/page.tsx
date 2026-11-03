@@ -324,7 +324,7 @@ export default function OfferPage() {
                 <li><CheckCircle /><span><b>Direct profile links</b> to the recruiter who posted them</span></li>
                 {variant === 'search' && q
                   ? <li><CheckCircle /><span>Continuous custom tracking for <b>&ldquo;{q}&rdquo;</b></span></li>
-                  : <li><CheckCircle /><span>Personalized role matching built for your target track</span></li>}
+                  : <li><CheckCircle /><span>Personalized matching and a <b>weekly market brief</b></span></li>}
                 <li><CheckCircle /><span>Zero automated filler roles or scraped spam</span></li>
               </ul>
 
