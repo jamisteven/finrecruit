@@ -7,6 +7,7 @@ import { matchEmployer } from '@/lib/employers'
 import { locationFacets, type LocationFacets } from '@/lib/locations'
 import type { WorkType } from '@/types'
 import { cacheGet, cachePut } from '@/lib/analyticsCache'
+import { keywordMatches, titleSearchGroups } from '@/lib/matchTarget'
 
 // Free visitors see a role only once it is this old. Keep in sync with FREE_DELAY_HOURS in app/page.tsx.
 const FREE_DELAY_HOURS = 48
@@ -262,10 +263,12 @@ export async function GET(req: NextRequest) {
   // Pass holders see roles as they land; everyone else waits FREE_DELAY_HOURS
   let hasPass = false
   let passExpiresAt: string | null = null
+  let userId: string | null = null
   try {
     const session = await getSessionClient()
     const { data: { user } } = await session.auth.getUser()
     if (user) {
+      userId = user.id
       const { data: profile, error: profErr } = await createServerClient()
         .from('profiles').select('pass_expires_at').eq('id', user.id).maybeSingle()
       passExpiresAt = profile?.pass_expires_at ?? null
@@ -273,6 +276,47 @@ export async function GET(req: NextRequest) {
       if (profErr) console.error('[jobs] profile query error:', profErr.message)
     }
   } catch { /* treat any failure as free tier */ }
+
+  // A member's matches, straight from the database: only roles whose title could match one of their saved
+  // searches (the same title prefilter the analytics page uses), checked exactly in code. A few hundred rows
+  // at most, read in one go whatever the state of the server's caches, so the home page does not have to
+  // wait for the whole month's roles before it can show a member their matches.
+  if (searchParams.get('mine') === '1') {
+    const out = (body: unknown) => {
+      const r = NextResponse.json(body)
+      r.headers.set('Cache-Control', 'private, no-store')
+      return r
+    }
+    if (!hasPass || !userId) return out({ mine: false, jobs: [] })
+    try {
+      const db = createServerClient()
+      const { data: targets, error: tErr } = await db.from('user_targets').select('keyword').eq('user_id', userId)
+      if (tErr) throw new Error(tErr.message)
+      const keywords = [...new Set((targets ?? []).map((t) => String(t.keyword)))].slice(0, 12)
+      const since = new Date(Date.now() - CORE_DAYS * 86400000).toISOString()
+      const byId = new Map<string, Row>()
+      await Promise.all(keywords.map(async (kw) => {
+        const groups = titleSearchGroups(kw)
+        if (!groups) return
+        for (let from = 0; from < 5000; from += PAGE) {
+          let q = db.from('jobs').select(COLUMNS)
+            .eq('is_verified_job', true)
+            .or('quality.is.null,quality.neq.low')
+            .or(`posted_at.gte.${since},posted_at.is.null`)
+          for (const g of groups) q = q.or(g.map((x) => `title.ilike."%${x}%"`).join(','))
+          const { data, error } = await q.order('extracted_at', { ascending: false }).order('id', { ascending: true }).range(from, from + PAGE - 1)
+          if (error) throw new Error(error.message)
+          for (const r of data ?? []) if (keywordMatches(kw, String(r.title ?? ''), null)) byId.set(r.id, r)
+          if (!data || data.length < PAGE) break
+        }
+      }))
+      const jobs = dedupeReposts([...byId.values()] as (Row & RepostRow)[])
+      return out({ mine: true, jobs })
+    } catch (e) {
+      console.error('[jobs] mine failed:', (e as Error).message)
+      return out({ mine: false, jobs: [] })
+    }
+  }
 
   // Lightweight count for the search upsell line: how many roles inside the free delay match this
   // search. Only a number leaves the server, never the roles themselves. Uses the in-memory cache.

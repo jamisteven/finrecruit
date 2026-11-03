@@ -96,6 +96,14 @@ function dropsAround(now: number, dropBatches: DropBatch[]): { prev: Drop | null
 // A role the free tier can see only as a title; everything else stays on the server.
 type LockedJob = { title: string; sector: string; posted_at: string | null }
 
+// Adds roles to a list without repeating any (by id); the newer list wins for a role in both
+const mergeJobs = (base: JobPost[], extra: JobPost[]): JobPost[] => {
+  if (!base.length) return extra
+  if (!extra.length) return base
+  const ids = new Set(extra.map((j) => j.id))
+  return [...base.filter((j) => !ids.has(j.id)), ...extra]
+}
+
 const toTime = (iso?: string | null) => (iso ? new Date(iso).getTime() : 0)
 
 // Search shorthand -> phrases people actually write in titles (keep in sync with the jobs route)
@@ -435,7 +443,7 @@ export default function HomePage() {
 
       // The quick page only fills an empty list. Once roles are showing, the full list replaces them,
       // so a refresh or re-sort never swaps a member's matches for a thinner set.
-      if (!fullLanded) setAllJobs((prev) => (prev.length ? prev : (data.jobs ?? [])))
+      if (!fullLanded) setAllJobs((prev) => mergeJobs(prev, data.jobs ?? []))
       setHasPass(!!data.hasPass)
       setPassExpires(data.passExpiresAt ?? null)
       setFirstLoad(true)
@@ -670,6 +678,7 @@ export default function HomePage() {
   const [myTargets, setMyTargets] = useState<{ keyword: string; location: string | null }[]>([])
   const [myFeedOn, setMyFeedOn] = useState(false)
   const [waking, setWaking] = useState(0)   // searches just restarted because the member had been away
+  const [mineLoaded, setMineLoaded] = useState(false)   // the member's matching roles have arrived (they come ahead of the full list)
   const [targetsChecked, setTargetsChecked] = useState(false)   // the saved-searches lookup has answered (yes or no)
   // Recognisable employers in the feed right now, for the strip under the hero
   const [topCompanies, setTopCompanies] = useState<StripCompany[]>([])
@@ -685,6 +694,13 @@ export default function HomePage() {
         // A member's home view is their matches. ?mine=1 (from onboarding and email) forces it.
         if (targets.length > 0 && (new URLSearchParams(window.location.search).get('mine') === '1' || !sessionStorage.getItem('bcj_tab_touched'))) setMyFeedOn(true)
         if (targets.length > 0) {
+          // Their matching roles come straight from the database, so the matches tab fills without waiting for the whole month
+          fetch('/api/jobs?mine=1', { cache: 'no-store' })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((m) => {
+              if (m?.mine && Array.isArray(m.jobs)) { setAllJobs((prev) => mergeJobs(prev, m.jobs)); setMineLoaded(true) }
+            })
+            .catch(() => {})
           // A member who has been away has had their searches paused to save credit. Opening the site catches
           // them up straight away (at most once every 30 minutes per browser).
           let wake: Promise<unknown> = Promise.resolve()
@@ -878,7 +894,9 @@ export default function HomePage() {
   // is counted from the loaded roles once they are in.
   const unfiltered = !myFeedOn && !filters.search.trim() && filters.locations.length === 0 && filters.workTypes.length === 0
   const statsCount = feedStats && unfiltered ? (filters.sector === 'all' ? feedStats.total : (feedStats.sectors[filters.sector] ?? 0)) : null
-  const shownCount = statsCount ?? (fullLoaded ? headlineCount : null)
+  const matchesReady = myFeedOn ? (fullLoaded || mineLoaded) : fullLoaded
+  // nothing is shown until we know whether this is a member (their home view is their matches, not the whole feed)
+  const shownCount = !targetsChecked ? null : (statsCount ?? (matchesReady ? headlineCount : null))
   const headlineText = shownCount !== null ? shownCount.toLocaleString() : (plainFeed && lastTotal ? lastTotal.toLocaleString() : '–')
   const sectorCounts = useMemo(() => {
     const plus = (id: string) => (olderPending?.[id] ?? 0)
@@ -1619,7 +1637,7 @@ export default function HomePage() {
             </div>
           )}
 
-          {loading || !targetsChecked || (myFeedOn && !fullLoaded) ? (
+          {(loading && !(myFeedOn && mineLoaded)) || !targetsChecked || (myFeedOn && !fullLoaded && !mineLoaded) ? (
             <div className="cards">
               {/* a member's matches are worked out from the full list, so wait for it rather than show a few at a time */}
               {myFeedOn && !loading && <p className="match-status" aria-live="polite"><span className="ms-dot" aria-hidden="true" />Finding your matches&hellip;</p>}
