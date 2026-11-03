@@ -9,6 +9,16 @@ import { REGIONS, matchKw, locParts, jobInRegion, inferWorkType, cityTally, type
 import EmployerStrip, { type StripCompany } from '@/components/EmployerStrip'
 import { captureAttribution } from '@/lib/attribution'
 
+// The first two requests start the moment this script runs, not after the page has finished hydrating
+// (that took over a second on a phone-sized CPU). fetchJobs picks them up if they are still fresh.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type EarlyJobs = { at: number; quick: Promise<any>; full: Promise<any> }
+const earlyJson = (url: string): Promise<any> => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+/* eslint-enable @typescript-eslint/no-explicit-any */
+let earlyJobs: EarlyJobs | null = typeof window !== 'undefined' && window.location.pathname === '/'
+  ? { at: Date.now(), quick: earlyJson('/api/jobs?sortBy=newest&limit=400&quick=1'), full: earlyJson('/api/jobs?sortBy=newest&limit=20000') }
+  : null
+
 const DEFAULT_FILTERS: FilterState = {
   sector: 'all', seniority: 'All', locations: [], workTypes: [], search: '', sortBy: 'newest',
 }
@@ -394,8 +404,10 @@ export default function HomePage() {
       // The full list starts downloading straight away, alongside the quick page (the server shares the work),
       // instead of waiting for the quick page to finish first.
       let fullLanded = false
-      fetch(`/api/jobs?${params}`)
-        .then((r) => (r.ok ? r.json() : null))
+      // Use the requests started at load if they are still fresh and the sort is the default one
+      const early = earlyJobs && Date.now() - earlyJobs.at < 15_000 && filters.sortBy === 'newest' ? earlyJobs : null
+      earlyJobs = null
+      ;(early ? early.full : fetch(`/api/jobs?${params}`).then((r) => (r.ok ? r.json() : null)))
         .then((full) => {
           if (seq !== fetchSeq.current) return
           if (full?.jobs?.length) { fullLanded = true; setAllJobs(full.jobs) }
@@ -409,9 +421,16 @@ export default function HomePage() {
       const fast = new URLSearchParams(params)
       fast.set('limit', '400')
       fast.set('quick', '1')   // answered from the last 72h, so the headline numbers do not wait for the whole month
-      const res = await fetch(`/api/jobs?${fast}`)
-      if (!res.ok) throw new Error('API error')
-      const data = await res.json()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let data: any
+      if (early) {
+        data = await early.quick
+        if (!data) throw new Error('API error')
+      } else {
+        const res = await fetch(`/api/jobs?${fast}`)
+        if (!res.ok) throw new Error('API error')
+        data = await res.json()
+      }
       if (seq !== fetchSeq.current) return
 
       // The quick page only fills an empty list. Once roles are showing, the full list replaces them,
@@ -482,8 +501,12 @@ export default function HomePage() {
   const facetNow = facets?.key === facetQuery ? facets.v : null
 
   // Debounced so typing in search doesn't fire a request per keystroke
+  // (the very first call goes straight out: there is nothing to debounce yet)
+  const firstFetch = useRef(true)
   useEffect(() => {
-    const t = setTimeout(fetchJobs, 250)
+    const wait = firstFetch.current ? 0 : 250
+    firstFetch.current = false
+    const t = setTimeout(fetchJobs, wait)
     return () => clearTimeout(t)
   }, [fetchJobs])
 
