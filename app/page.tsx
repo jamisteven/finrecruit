@@ -691,8 +691,9 @@ export default function HomePage() {
         const targets = d?.targets ?? []
         setMyTargets(targets)
         setTargetsChecked(true)
-        // A member's home view is their matches. ?mine=1 (from onboarding and email) forces it.
-        if (targets.length > 0 && (new URLSearchParams(window.location.search).get('mine') === '1' || !sessionStorage.getItem('bcj_tab_touched'))) setMyFeedOn(true)
+        // Members land on All roles on purpose: seeing the whole pool first, then narrowing to their matches,
+        // lands better than the other way round. ?mine=1 (from onboarding and email) opens their matches.
+        if (targets.length > 0 && new URLSearchParams(window.location.search).get('mine') === '1') setMyFeedOn(true)
         if (targets.length > 0) {
           // Their matching roles come straight from the database, so the matches tab fills without waiting for the whole month
           fetch('/api/jobs?mine=1', { cache: 'no-store' })
