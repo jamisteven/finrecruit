@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createServerClient } from '@/lib/supabase'
+import { logSubscriptionEvent, memberOf, iso } from '@/lib/subscriptionLog'
 
 export const runtime = 'nodejs'
 
@@ -56,6 +57,11 @@ async function grantFromSubscription(stripe: Stripe, db: Db, subId: string, user
     ...(customerId ? { stripe_customer_id: customerId } : {}),
   })
 }
+
+// newer API versions keep the period on the item, older ones on the subscription
+const periodEndOf = (sub: Stripe.Subscription): string | null =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  iso(sub.cancel_at ?? (sub as any).items?.data?.[0]?.current_period_end ?? (sub as any).current_period_end)
 
 export async function POST(req: NextRequest) {
   const key = process.env.STRIPE_SECRET_KEY
@@ -132,6 +138,36 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'user unresolved' }, { status: 500 })
       }
       await grantFromSubscription(stripe, db, subId, userId, customerId)
+      // churn log: the first invoice starts the subscription, later ones are renewals
+      const reason = inv.billing_reason as string | undefined
+      if (reason === 'subscription_create' || reason === 'subscription_cycle') {
+        await logSubscriptionEvent(db, {
+          stripe_event_id: event.id, stripe_subscription_id: subId, user_id: userId, email: inv.customer_email ?? null,
+          kind: reason === 'subscription_create' ? 'started' : 'renewed',
+          occurred_at: iso(event.created) as string, period_end: iso(inv.lines?.data?.[0]?.period?.end),
+        })
+      }
+      return NextResponse.json({ received: true })
+    }
+
+    // ── Cancel scheduled, or taken back ────────────────────────────────────
+    // (needs "customer.subscription.updated" ticked on the Stripe webhook endpoint)
+    if (event.type === 'customer.subscription.updated') {
+      const sub = event.data.object as Stripe.Subscription
+      const prev = (event.data.previous_attributes ?? {}) as Record<string, unknown>
+      // only a change to the cancel setting matters; other updates (plan, card, period) are ignored
+      if ('cancel_at_period_end' in prev || 'cancel_at' in prev) {
+        const scheduled = !!sub.cancel_at_period_end || !!sub.cancel_at
+        const who = await memberOf(db, sub.id, idOf(sub.customer))
+        await logSubscriptionEvent(db, {
+          stripe_event_id: event.id, stripe_subscription_id: sub.id, user_id: who.id, email: who.email,
+          kind: scheduled ? 'cancel_scheduled' : 'cancel_undone',
+          occurred_at: iso(event.created) as string,
+          period_end: scheduled ? periodEndOf(sub) : null,
+          reason: scheduled ? (sub.cancellation_details?.feedback ?? sub.cancellation_details?.reason ?? null) : null,
+          comment: scheduled ? (sub.cancellation_details?.comment ?? null) : null,
+        })
+      }
       return NextResponse.json({ received: true })
     }
 
@@ -142,6 +178,15 @@ export async function POST(req: NextRequest) {
       // Find them before we clear the link, so their searches can be released.
       const { data: prof } = await db.from('profiles')
         .select('id').eq('stripe_subscription_id', sub.id).maybeSingle()
+
+      const who = await memberOf(db, sub.id, idOf(sub.customer))
+      await logSubscriptionEvent(db, {
+        stripe_event_id: event.id, stripe_subscription_id: sub.id, user_id: who.id, email: who.email,
+        kind: 'ended', occurred_at: iso(event.created) as string, period_end: iso(sub.ended_at ?? sub.canceled_at),
+        // "payment_failed" here means the card, not the member, ended it
+        reason: sub.cancellation_details?.feedback ?? sub.cancellation_details?.reason ?? null,
+        comment: sub.cancellation_details?.comment ?? null,
+      })
 
       await db.from('profiles').update({ stripe_subscription_id: null }).eq('stripe_subscription_id', sub.id)
 

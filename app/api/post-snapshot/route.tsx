@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { renderPostSnapshot } from '@/lib/postSnapshot'
 
@@ -13,6 +13,36 @@ export const runtime = 'nodejs'
 const FREE_DELAY_MS = 48 * 3600_000
 const OPEN_FRESH = 5
 
+
+// Finished pictures are kept in Supabase Storage (public bucket "snapshots", see supabase/2026-11-03-snapshot-bucket.sql),
+// so a visitor whose nearest edge has not seen the picture yet gets a stored file instead of waiting for it to be
+// drawn again. A picture is only ever stored after the checks below passed, and a role only becomes more visible
+// with age, so serving a stored one needs no second check. Without the bucket this is a quiet no-op.
+const STORE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/snapshots`
+const PNG_HEADERS = {
+  'Content-Type': 'image/png',
+  // the post never changes, so a week at the edge; warmed ahead of visitors by /api/warm-snapshots
+  'Cache-Control': 'public, max-age=3600, s-maxage=604800, stale-while-revalidate=2592000',
+}
+
+async function readStored(id: string): Promise<Buffer | null> {
+  try {
+    const ctl = new AbortController()
+    const timer = setTimeout(() => ctl.abort(), 1500)
+    const r = await fetch(`${STORE_BASE}/${id}.png`, { signal: ctl.signal }).finally(() => clearTimeout(timer))
+    if (!r.ok) return null
+    return Buffer.from(await r.arrayBuffer())
+  } catch { return null }
+}
+
+// Text on white needs very few colours: a palette PNG is about a third of the size, so it reaches a phone sooner.
+async function slim(png: Buffer): Promise<Buffer> {
+  try {
+    const sharp = (await import('sharp')).default
+    const out = await sharp(png).png({ palette: true, quality: 85, effort: 4 }).toBuffer()
+    return out.length < png.length ? out : png
+  } catch { return png }
+}
 
 const miss = () => NextResponse.json({ error: 'not available' }, { status: 404, headers: { 'Cache-Control': 'public, s-maxage=300' } })
 
@@ -40,6 +70,9 @@ export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id') ?? ''
   if (!/^[0-9a-zA-Z-]{1,64}$/.test(id)) return miss()
 
+  const stored = await readStored(id)
+  if (stored) return new NextResponse(new Uint8Array(stored), { headers: { ...PNG_HEADERS, 'Server-Timing': 'stored;dur=1' } })
+
   const db = createServerClient()
   const { data: job } = await db.from('jobs')
     .select('id, posted_at, raw_text, author_name, author_headline, author_avatar, is_verified_job, quality')
@@ -66,14 +99,16 @@ export async function GET(req: NextRequest) {
 
   const img = renderPostSnapshot(job, now, photo)
   if (!img) return miss()
-  const png = Buffer.from(await img.arrayBuffer())
+  const png = await slim(Buffer.from(await img.arrayBuffer()))
   const tAll = performance.now() - t0
+  // keep it for next time, after the response has gone out
+  after(async () => {
+    try { await db.storage.from('snapshots').upload(`${id}.png`, png, { contentType: 'image/png', upsert: true }) } catch { /* no bucket yet */ }
+  })
 
-  return new NextResponse(png, {
+  return new NextResponse(new Uint8Array(png), {
     headers: {
-      'Content-Type': 'image/png',
-      // the post never changes, so a week at the edge; warmed ahead of visitors by /api/warm-snapshots
-      'Cache-Control': 'public, max-age=3600, s-maxage=604800, stale-while-revalidate=2592000',
+      ...PNG_HEADERS,
       'Server-Timing': `db;dur=${Math.round(tDb)}, prep;dur=${Math.round(tPrep - tDb)}, draw;dur=${Math.round(tAll - tPrep)}`,
     },
   })

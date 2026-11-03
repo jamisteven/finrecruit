@@ -10,7 +10,7 @@ export const maxDuration = 300
 // Roles already cached cost almost nothing, so running twice an hour is cheap.
 const SITE = 'https://www.backchanneljobs.com'
 const FREE_DELAY_MS = 48 * 3600_000
-const HOW_MANY = 60
+const HOW_MANY = 200   // roles already stored cost a fraction of a second, so this is cheap after the first run
 const CONCURRENCY = 3
 
 export async function GET(req: NextRequest) {
