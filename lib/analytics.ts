@@ -4,7 +4,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { keywordMatches, locationMatches, titleSearchGroups, titleFilter } from './matchTarget'
 import { apifyBudget, budgetMode, USD_PER_POST } from './apifyBudget'
-import { widenedQueryFor } from './targetQueries'
+import { widenedQueryFor, primaryQuery, queriesForTarget } from './targetQueries'
 import { BASE_INTERVAL_HOURS } from '@/lib/sweepBudget'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -191,14 +191,13 @@ export async function membersPanel(db: Db, opts: { sinceHours?: number } = {}) {
   ])
   // the searches these members' targets run (their own, and the region-level one each city earns): only those runs are read
   const textOf = new Map(queries.map((q) => [String(q.query).toLowerCase(), q]))
-  const keyOf = new Map(queries.map((q) => [`${String(q.keyword).toLowerCase()}|${String(q.location ?? '').toLowerCase()}`, q]))
   const needed = new Set<string>()
   for (const t of targets) {
-    const own = keyOf.get(`${String(t.keyword).toLowerCase()}|${String(t.location ?? '').toLowerCase()}`)
-    if (own) { needed.add(String(own.query)); needed.add(String(own.query).toLowerCase()) }
-    const w = widenedQueryFor({ keyword: t.keyword, location: t.location })
-    const wq = w ? textOf.get(w.toLowerCase()) : null
-    if (wq) { needed.add(String(wq.query)); needed.add(String(wq.query).toLowerCase()) }
+    // every query the target runs (one per role when several were typed, plus its region's)
+    for (const text of queriesForTarget({ keyword: t.keyword, location: t.location })) {
+      const row = textOf.get(text.toLowerCase())
+      if (row) { needed.add(String(row.query)); needed.add(String(row.query).toLowerCase()) }
+    }
   }
   const [priorityRuns, jobs] = await Promise.all([
     inChunks(db, 'ingest_runs', 'query, run_at, posts_returned, jobs_inserted', 'query', [...needed],
@@ -217,7 +216,7 @@ export async function membersPanel(db: Db, opts: { sinceHours?: number } = {}) {
   const postsByQuery = new Map<string, number>()
   for (const r of priorityRuns) { const k = String(r.query).toLowerCase(); postsByQuery.set(k, (postsByQuery.get(k) ?? 0) + (r.posts_returned ?? 0)) }
   const sharedBy = new Map(queries.map((q) => [String(q.query).toLowerCase(), Math.max(1, Number(q.user_count ?? 1))]))
-  const qByKey = new Map(queries.map((q) => [`${String(q.keyword).toLowerCase()}|${String(q.location ?? '').toLowerCase()}`, q]))
+  const qByText = new Map(queries.map((q) => [String(q.query).toLowerCase(), q]))
 
   const members = profiles
     .map((p) => {
@@ -226,7 +225,7 @@ export async function membersPanel(db: Db, opts: { sinceHours?: number } = {}) {
       const mine = targets.filter((t) => t.user_id === p.id)
       const unique7 = new Set<string>()   // each role once, however many of their targets it fits (what the feed counts)
       const rows = mine.map((t) => {
-        const q = qByKey.get(`${String(t.keyword).toLowerCase()}|${String(t.location ?? '').toLowerCase()}`)
+        const q = qByText.get(primaryQuery({ keyword: t.keyword, location: t.location }).toLowerCase())
         let exact7 = 0, exact14 = 0, agency14 = 0, anywhere14 = 0
         for (const j of jobs) {
           if (!keywordMatches(t.keyword, j.title ?? '', null)) continue
@@ -272,7 +271,7 @@ export async function membersPanel(db: Db, opts: { sinceHours?: number } = {}) {
       })
       const widenedMissing = wanted.some((w) => !byText.has(w))
       // what their searches cost in Apify over 30 days (posts bought x $0.002); a search shared by several members is split between them
-      const theirQueries = new Set<string>([...rows.map((r) => r.query), ...widened.map((w) => w.query)].filter(Boolean).map((q) => String(q).toLowerCase()))
+      const theirQueries = new Set<string>([...rows.map((r) => r.query), ...widened.map((w) => w.query), ...mine.flatMap((t) => queriesForTarget({ keyword: t.keyword, location: t.location }))].filter(Boolean).map((q) => String(q).toLowerCase()))
       let apifyUsd30 = 0
       for (const q of theirQueries) apifyUsd30 += (postsByQuery.get(q) ?? 0) * USD_PER_POST / (sharedBy.get(q) ?? 1)
       return {

@@ -61,6 +61,13 @@ const SEARCH_SYNONYMS: Record<string, string[]> = {
 // memory. Before this, every page load pulled the full table (~17 MB) from Supabase.
 // ---------------------------------------------------------------------------
 const COLUMNS = 'id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, author_avatar, posted_at, extracted_at, is_verified_job, quality, work_type, employer_type, on_linkedin_jobs'
+// Mass-posted staffing roles (the same post text from 5+ different accounts, no link) are folded together and
+// shown last. Needs the text_key column (supabase/2026-11-05-text-key.sql). Off until BLAST_FILTER=true; while
+// it is off the column is not read at all. If the column is missing the feed falls back to the plain columns.
+const BLAST_ON = process.env.BLAST_FILTER === 'true'
+let useTextKey = BLAST_ON
+const cols = () => (useTextKey ? `${COLUMNS}, text_key` : COLUMNS)
+const withoutTextKey = (r: Row): Row => { if (!('text_key' in r)) return r; const c = { ...r }; delete c.text_key; return c }
 const HISTORY_DAYS = 30                 // longest window the page can ask for
 const CORE_DAYS = 14                    // sent by default; older roles (CORE_DAYS..HISTORY_DAYS) only on request (?archive=1)
 const OLD_TTL_MS = 12 * 3600_000        // roles older than 48h barely change: refresh every 12h (the 72h list below overlaps by 24h)
@@ -82,14 +89,19 @@ const PARALLEL_PAGES = 6
 async function fetchAll(build: (q: any) => any): Promise<Row[]> {
   const db = createServerClient()
   const base = () => build(
-    db.from('jobs').select(COLUMNS)
+    db.from('jobs').select(cols())
       .eq('is_verified_job', true)
       .or('quality.is.null,quality.neq.low')
   ).order('extracted_at', { ascending: false }).order('id', { ascending: true })
   const page = async (from: number): Promise<Row[]> => {
-    const { data, error } = await base().range(from, from + PAGE - 1)
-    if (error) throw new Error(error.message)
-    return data ?? []
+    let res = await base().range(from, from + PAGE - 1)
+    if (res.error && useTextKey && /text_key/.test(String(res.error.message))) {
+      useTextKey = false   // column not created yet: carry on without it
+      console.error('[jobs] text_key column missing; run supabase/2026-11-05-text-key.sql')
+      res = await base().range(from, from + PAGE - 1)
+    }
+    if (res.error) throw new Error(res.error.message)
+    return res.data ?? []
   }
 
   let total: number | null = null
@@ -255,7 +267,7 @@ function tierPool(all: Row[], recentKept: Row[], hasPass: boolean, now: number, 
   }
   // fresh = posted inside the free delay, newest first
   const fresh = recentKept
-    .filter((r) => { const t = ts(r.posted_at); return !isNaN(t) && t >= cutoff })
+    .filter((r) => { const t = ts(r.posted_at); return !r.blast && !isNaN(t) && t >= cutoff })
     .sort((a, b) => ts(b.posted_at) - ts(a.posted_at))
   const top = fresh.slice(0, FREE_SAMPLE_COUNT + FREE_TITLE_ONLY_COUNT)
   const previewIds = top.slice(0, FREE_SAMPLE_COUNT).map((r) => r.id as string)
@@ -483,7 +495,8 @@ export async function GET(req: NextRequest) {
 
   // then fold reposts of the same mandate into their newest post, so every
   // count below (fresh, today, totals, matches) talks about jobs, not posts
-  const all: Row[] = dedupeReposts(merged as (Row & RepostRow)[])
+  const blastOn = BLAST_ON && useTextKey
+  const all: Row[] = dedupeReposts(merged as (Row & RepostRow)[], { textFold: blastOn, flagBlasts: blastOn })
   const recentIds = new Set(recentRows.map((r) => r.id))
   const recentKept = all.filter((r) => recentIds.has(r.id))
 
@@ -557,7 +570,7 @@ export async function GET(req: NextRequest) {
   // goes out without the recruiter's name, photo or profile, and without the post link (the post
   // URL carries the author's name). The card's recruiter line is the one route to /offer.
   const pv = new Set(previewIds)
-  const jobs = pool.slice(offset, offset + limit).map((r) =>
+  const jobs = pool.slice(offset, offset + limit).map(withoutTextKey).map((r) =>
     hasPass || pv.has(r.id)
       ? r
       : { ...r, post_url: '', author_name: null, author_linkedin_url: null, author_avatar: null, gated: true })

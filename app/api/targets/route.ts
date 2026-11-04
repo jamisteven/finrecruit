@@ -5,7 +5,7 @@ import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
 import { normaliseKeyword } from '@/lib/normaliseKeyword'
 import { distilForQuery, keywordMatches, locationMatches, titleSearchGroups, titleFilter } from '@/lib/matchTarget'
-import { claimQuery, releaseTargets, widerLocation } from '@/lib/targetQueries'
+import { claimQuery, releaseTargets, widerLocation, keywordAlternatives } from '@/lib/targetQueries'
 
 export const runtime = 'nodejs'
 
@@ -142,39 +142,46 @@ export async function POST(req: NextRequest) {
     const toRun: string[] = []   // the exact query texts to kick off now
     let queued = 0
 
+    const claimedPrimary = new Set<string>()
     for (const p of ordered) {
-      if (queued >= MAX_PER_USER) { covered.push(p.location ? `${p.keyword} / ${p.location}` : p.keyword); continue }
-      // How much of this do we already hold?
-      const count = await feedCoverage(db, p.keyword, p.location)
       const label = p.location ? `${p.keyword} / ${p.location}` : p.keyword
-
-      if (count >= COVERAGE_THRESHOLD) { covered.push(label); continue }
-
-      const qKeyword = distilForQuery(p.keyword)
-      const queryText = p.location
-        ? `hiring ${qKeyword} ${p.location}`
-        : `hiring ${qKeyword}`
-
       // Someone re-saving the same target shouldn't bump the shared counter
       // (it drives retirement) or trigger another Apify run.
       const isNewForUser = !hadBefore.has(`${p.keyword}|${p.location ?? ''}`)
-      const existed = await claimQuery(db, queryText, p.keyword, p.location, isNewForUser)
-      if (!existed || isNewForUser) { added.push(label); toRun.push(queryText); queued++ }
-      else covered.push(label)
+      // "aml/kyc/risk" is three roles: each gets its own query (one role is the usual case)
+      const roles = keywordAlternatives(p.keyword)
+      for (const role of roles) {
+        const roleLabel = roles.length > 1 ? (p.location ? `${role} / ${p.location}` : role) : label
+        if (queued >= MAX_PER_USER) { covered.push(roleLabel); continue }
+        // How much of this do we already hold?
+        const count = await feedCoverage(db, role, p.location)
+        if (count >= COVERAGE_THRESHOLD) { covered.push(roleLabel); continue }
 
-      // The city they asked for is thin, so also watch the surrounding region.
-      // Someone wanting ".net engineer" in San Jose gets California too, rather
-      // than an empty tab while the roles sit in New York.
-      if (p.location && count < 5) {
-        const wider = widerLocation(p.location)
-        if (wider) {
-          const wideText = `hiring ${qKeyword} ${wider}`
-          // One claim per member per region, however many of their cities widen to it
-          const wideKey = `${p.keyword}|${wider}`
-          const isNewWide = isNewForUser && !claimedWide.has(wideKey)
-          claimedWide.add(wideKey)
-          const existedWide = await claimQuery(db, wideText, p.keyword, wider, isNewWide)
-          if (!existedWide || isNewWide) { widened.push(`${p.keyword} / ${wider}`); toRun.push(wideText) }
+        const qKeyword = distilForQuery(role)
+        const queryText = p.location
+          ? `hiring ${qKeyword} ${p.location}`
+          : `hiring ${qKeyword}`
+        if (claimedPrimary.has(queryText.toLowerCase())) continue   // two of their roles distil to the same search
+        claimedPrimary.add(queryText.toLowerCase())
+
+        const existed = await claimQuery(db, queryText, p.keyword, p.location, isNewForUser)
+        if (!existed || isNewForUser) { added.push(roleLabel); toRun.push(queryText); queued++ }
+        else covered.push(roleLabel)
+
+        // The city they asked for is thin, so also watch the surrounding region.
+        // Someone wanting ".net engineer" in San Jose gets California too, rather
+        // than an empty tab while the roles sit in New York.
+        if (p.location && count < 5) {
+          const wider = widerLocation(p.location)
+          if (wider) {
+            const wideText = `hiring ${qKeyword} ${wider}`
+            // One claim per member per region, however many of their cities widen to it
+            const wideKey = `${role.toLowerCase()}|${wider}`
+            const isNewWide = isNewForUser && !claimedWide.has(wideKey)
+            claimedWide.add(wideKey)
+            const existedWide = await claimQuery(db, wideText, p.keyword, wider, isNewWide)
+            if (!existedWide || isNewWide) { widened.push(`${role} / ${wider}`); toRun.push(wideText) }
+          }
         }
       }
     }

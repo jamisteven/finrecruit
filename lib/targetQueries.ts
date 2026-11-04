@@ -9,7 +9,7 @@
 // every save and never released.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { distilForQuery } from '@/lib/matchTarget'
+import { distilForQuery, alternatives } from '@/lib/matchTarget'
 import { wideningLadder } from '@/lib/widenLocation'
 import { intervalsFor, BASE_INTERVAL_HOURS } from '@/lib/sweepBudget'
 
@@ -38,20 +38,41 @@ export function widerLocation(location: string | null): string | null {
   return wider.location
 }
 
-export function primaryQuery(t: Target): string {
-  const qk = distilForQuery(String(t.keyword))
-  return t.location ? `hiring ${qk} ${t.location}` : `hiring ${qk}`
+// A search typed as several roles ("aml/kyc/reference data risk") is bought as one query per role: LinkedIn finds
+// nothing useful for the whole phrase. Capped so one long box can't claim a dozen queries.
+const MAX_ALTERNATIVES = 4
+export function keywordAlternatives(keyword: string): string[] {
+  return [...new Map(alternatives(String(keyword)).map((a) => [a.toLowerCase(), a])).values()].slice(0, MAX_ALTERNATIVES)
 }
 
-export function widenedQueryFor(t: Target): string | null {
+const dedupeText = (texts: string[]) => [...new Map(texts.map((q) => [q.toLowerCase(), q])).values()]
+
+/** The query text for one role in one place. */
+export const queryText = (keyword: string, location: string | null): string => {
+  const qk = distilForQuery(keyword)
+  return location ? `hiring ${qk} ${location}` : `hiring ${qk}`
+}
+
+/** Every role of the target, in its own place. */
+export function primaryQueries(t: Target): string[] {
+  return dedupeText(keywordAlternatives(t.keyword).map((a) => queryText(a, t.location)))
+}
+/** The first one: what the status views show for the target. */
+export function primaryQuery(t: Target): string {
+  return primaryQueries(t)[0]
+}
+
+export function widenedQueriesFor(t: Target): string[] {
   const wider = widerLocation(t.location)
-  return wider ? `hiring ${distilForQuery(String(t.keyword))} ${wider}` : null
+  return wider ? dedupeText(keywordAlternatives(t.keyword).map((a) => queryText(a, wider))) : []
+}
+export function widenedQueryFor(t: Target): string | null {
+  return widenedQueriesFor(t)[0] ?? null
 }
 
 /** Every query text a target can have claimed: its own, and its region's. */
 export function queriesForTarget(t: Target): string[] {
-  const w = widenedQueryFor(t)
-  return w ? [primaryQuery(t), w] : [primaryQuery(t)]
+  return dedupeText([...primaryQueries(t), ...widenedQueriesFor(t)])
 }
 
 /**

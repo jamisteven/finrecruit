@@ -112,6 +112,11 @@ const mergeJobs = (base: JobPost[], extra: JobPost[]): JobPost[] => {
 }
 
 const toTime = (iso?: string | null) => (iso ? new Date(iso).getTime() : 0)
+// Roles the server flagged as mass-posted go after everything else; order inside each group is kept.
+function demoteBlasts(list: JobPost[]): JobPost[] {
+  if (!list.some((j) => j.blast)) return list
+  return [...list.filter((j) => !j.blast), ...list.filter((j) => j.blast)]
+}
 
 // Search shorthand -> phrases people actually write in titles (keep in sync with the jobs route)
 const SEARCH_SYNONYMS: Record<string, string[]> = {
@@ -783,7 +788,7 @@ export default function HomePage() {
         const d = toTime(b.posted_at) - toTime(a.posted_at)
         return filters.sortBy === 'newest' ? d : -d
       }
-      return [...[...myExact].sort(byDate), ...[...myAgency].sort(byDate), ...myRough]
+      return demoteBlasts([...[...myExact].sort(byDate), ...[...myAgency].sort(byDate), ...myRough])
     }
     const list = allJobs.filter((job) => {
       if (filters.sector !== 'all' && job.sector !== filters.sector) return false
@@ -816,14 +821,21 @@ export default function HomePage() {
       return true
     })
     // Client-side sort fallback (API also sorts; demo data needs it)
-    return [...list].sort((a, b) => {
+    return demoteBlasts([...list].sort((a, b) => {
       const d = toTime(b.posted_at) - toTime(a.posted_at)
       return filters.sortBy === 'newest' ? d : -d
-    })
+    }))
   }, [allJobs, filters.sector, filters.locations, filters.workTypes, filters.sortBy, myFeedOn, myExact, myAgency, myRough])
   // where the agency group and the nearby group begin in the matches feed (section labels go there)
-  const firstAgencyId = myFeedOn && myAgency.length > 0 ? [...myAgency].sort((a, b) => toTime(b.posted_at) - toTime(a.posted_at))[filters.sortBy === 'newest' ? 0 : myAgency.length - 1]?.id ?? null : null
-  const firstRoughId = myFeedOn && myRough.length > 0 ? myRough[0].id : null
+  const firstAgencyId = (() => {
+    if (!myFeedOn) return null
+    const list = myAgency.filter((j) => !j.blast).sort((a, b) => toTime(b.posted_at) - toTime(a.posted_at))
+    return list.length === 0 ? null : (filters.sortBy === 'newest' ? list[0] : list[list.length - 1]).id
+  })()
+  const firstRoughId = myFeedOn && myRough.length > 0 ? myRough.find((j) => !j.blast)?.id ?? null : null
+  // mass-posted staffing roles (same text from 5+ accounts) sit after everything else, under their own label
+  const firstBlastId = displayJobs.find((j) => j.blast)?.id ?? null
+  const blastCount = displayJobs.filter((j) => j.blast).length
 
   // When a search comes back thin, work out what relaxing each filter would give.
   // allJobs is already search-filtered server-side, so these are cheap recounts.
@@ -1802,6 +1814,9 @@ export default function HomePage() {
                   {job.id === firstAgencyId && (
                     <div className="sec-head group-head"><span>Via agencies</span><i /><em className="sec-note">contract and placement roles · {myAgency.length}</em></div>
                   )}
+                  {job.id === firstBlastId && (
+                    <div className="sec-head group-head"><span>Mass-posted staffing roles</span><i /><em className="sec-note">the same post from 5+ accounts · {blastCount}</em></div>
+                  )}
                   {job.id === firstRoughId && (
                     <div className="sec-head group-head"><span>Same roles, other places</span><i /><em className="sec-note">{myNearby > 0 ? `${myNearby} nearby, then the rest` : `${myRough.length}`}</em></div>
                   )}
@@ -1816,9 +1831,10 @@ export default function HomePage() {
                       )}
                       {!!job.repost_count && (
                         <span className="reposts" title="The same role was posted by several recruiters; this is the newest post">
-                          Posted {job.repost_count + 1}×
+                          {(job.poster_count ?? 0) >= 2 ? `Posted by ${job.poster_count} recruiters` : `Posted ${job.repost_count + 1}×`}
                         </span>
                       )}
+                      {!job.company && (job.poster_count ?? 0) >= 3 && <span className="agency-tag" title="Several different accounts posted this role and none names the hiring company">Client not named</span>}
                       {job.employer_type === 'agency' && <span className="agency-tag" title="Posted by a recruitment agency or staffing firm placing at a client">Agency</span>}
                       {job.on_linkedin_jobs && <span className="agency-tag" title="The recruiter's post links a listing that is also on LinkedIn Jobs. The post itself is how you reach them directly.">Also on LinkedIn Jobs</span>}
                       {job.posted_at && <span className={`ago${isFresh(job.posted_at) ? ' fresh' : ''}`}>{timeAgo(job.posted_at)}</span>}

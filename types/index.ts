@@ -15,6 +15,8 @@ export type JobPost = {
   sector: string
   post_url: string
   repost_count?: number   // other posts of this same role folded into this one
+  poster_count?: number   // how many different people posted it (this post's author included)
+  blast?: boolean         // the same post text from 5+ different accounts with no link: shown last
   author_name: string | null
   author_headline: string | null
   author_avatar?: string | null
