@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { keywordMatches, locationMatches, titleSearchGroups } from './matchTarget'
 import { apifyBudget, budgetMode, USD_PER_POST } from './apifyBudget'
 import { widenedQueryFor } from './targetQueries'
+import { BASE_INTERVAL_HOURS } from '@/lib/sweepBudget'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, any, any>
@@ -238,12 +239,14 @@ export async function membersPanel(db: Db, opts: { sinceHours?: number } = {}) {
         const lastRun = q?.last_run_at ? new Date(q.last_run_at).getTime() : null
         const dud = q ? isDud(String(q.query)) : false
         // Member searches run when the member opens the site, so a search is only a problem if they visited well
-        // after its last run and it still did not catch up (a quiet member's old searches are by design)
+        // after its last run and it still did not catch up (a quiet member's old searches are by design).
+        // A visit re-runs a search only once its wait is over (BASE_INTERVAL_HOURS, longer for the slow lane), so
+        // 'well after' has to be longer than that wait, or a search that is simply not due yet is flagged.
         const lv = lastVisit.get(p.id)
         const visitedSince = lastRun !== null && lv ? Date.parse(lv) - lastRun : 0
         // a problem = something to fix; the slow lane is working as designed (4-day cooldown)
         const flag = !q ? 'no query' : !q.active ? 'inactive' : lastRun === null ? 'never ran'
-          : (visitedSince > (dud ? 5 * DAY : 13 * 3600_000) ? 'stale' : null)
+          : (visitedSince > (dud ? 5 * DAY : (BASE_INTERVAL_HOURS + 1) * 3600_000) ? 'stale' : null)
         return {
           keyword: t.keyword, location: t.location, exact7, exact14, agency14, anywhere14,
           query: q?.query ?? null, active: q?.active ?? null, lastRunAt: q?.last_run_at ?? null,
