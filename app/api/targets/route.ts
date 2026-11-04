@@ -198,7 +198,8 @@ export async function POST(req: NextRequest) {
           headers: { 'Content-Type': 'application/json', 'x-ingest-secret': process.env.INGEST_SECRET ?? '' },
           body: JSON.stringify({ queries }),
         }).catch((e) => console.error('[targets] run-priority call failed', e))))
-        if (email && isFirstSave) {
+        // Off unless SEARCHES_READY_EMAIL=true is set in Vercel (switched off Nov 4: its "twice a day" wording may no longer be true)
+        if (email && isFirstSave && process.env.SEARCHES_READY_EMAIL === 'true') {
           try {
             const status = await memberStatus(db, user.id)
             const msg = searchesReadyEmail(status)

@@ -63,7 +63,7 @@ const SEARCH_SYNONYMS: Record<string, string[]> = {
 const COLUMNS = 'id, title, company, location, seniority, salary, apply_method, summary, tags, sector, post_url, author_name, author_headline, author_linkedin_url, author_avatar, posted_at, extracted_at, is_verified_job, quality, work_type, employer_type, on_linkedin_jobs'
 const HISTORY_DAYS = 30                 // longest window the page can ask for
 const CORE_DAYS = 14                    // sent by default; older roles (CORE_DAYS..HISTORY_DAYS) only on request (?archive=1)
-const OLD_TTL_MS = 4 * 3600_000         // roles older than 48h barely change: refresh every 4h
+const OLD_TTL_MS = 12 * 3600_000        // roles older than 48h barely change: refresh every 12h (the 72h list below overlaps by 24h)
 const ARCHIVE_TTL_MS = 12 * 3600_000     // the oldest roles change least
 const RECENT_TTL_MS = 3 * 60_000        // the last 72h (and undated roles): refresh every 3 min
 const RECENT_WINDOW_MS = 72 * 3600_000  // overlaps the 48h boundary so nothing falls between the caches
@@ -148,8 +148,50 @@ const loadArchive = () => load('archive', ARCHIVE_TTL_MS, (q) => q
   .gte('posted_at', new Date(Date.now() - HISTORY_DAYS * 86400000).toISOString())
   .lt('posted_at', new Date(Date.now() - CORE_DAYS * 86400000).toISOString()))
 
-const loadRecent = () => load('recent', RECENT_TTL_MS, (q) => q
-  .or(`posted_at.gte.${new Date(Date.now() - RECENT_WINDOW_MS).toISOString()},posted_at.is.null`))
+// The last 72h are refreshed every few minutes, but only the rows added since the previous refresh are read
+// (a small overlap catches rows landing out of order). The whole window is re-read once an hour to pick up
+// roles that were edited, removed or downgraded, and when the instance is cold.
+const RECENT_FULL_REFRESH_MS = 60 * 60_000
+const RECENT_OVERLAP_MS = 10 * 60_000
+type RecentEntry = Entry & { fullAt: number; newest: number }
+let recentEntry: RecentEntry | undefined
+let recentInflight: Promise<RecentEntry> | undefined
+const extractedMs = (r: Row) => { const t = Date.parse(String(r.extracted_at ?? '')); return Number.isFinite(t) ? t : 0 }
+
+async function refreshRecent(prev?: RecentEntry): Promise<RecentEntry> {
+  const now = Date.now()
+  const cutoff = now - RECENT_WINDOW_MS
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const inWindow = (q: any) => q.or(`posted_at.gte.${new Date(cutoff).toISOString()},posted_at.is.null`)
+  if (prev && prev.newest > 0 && now - prev.fullAt < RECENT_FULL_REFRESH_MS) {
+    const since = new Date(prev.newest - RECENT_OVERLAP_MS).toISOString()
+    const fresh = await fetchAll((q) => inWindow(q).gte('extracted_at', since))
+    const byId = new Map<string, Row>(prev.rows.map((r) => [r.id as string, r]))
+    for (const r of fresh) byId.set(r.id as string, r)
+    const rows = [...byId.values()]
+      .filter((r) => !r.posted_at || !(Date.parse(String(r.posted_at)) < cutoff))   // roles aged out of the window drop off
+      .sort((a, b) => (extractedMs(b) - extractedMs(a)) || String(a.id).localeCompare(String(b.id)))
+    return { rows, at: now, fullAt: prev.fullAt, newest: fresh.reduce((m, r) => Math.max(m, extractedMs(r)), prev.newest) }
+  }
+  const rows = await fetchAll(inWindow)
+  return { rows, at: now, fullAt: now, newest: rows.reduce((m, r) => Math.max(m, extractedMs(r)), 0) }
+}
+
+async function loadRecent(): Promise<Row[]> {
+  const hit = recentEntry
+  if (hit && Date.now() - hit.at < RECENT_TTL_MS) return hit.rows
+  if (!recentInflight) {
+    recentInflight = refreshRecent(hit)
+      .then((e) => { recentEntry = e; return e })
+      .finally(() => { recentInflight = undefined })
+  }
+  try {
+    return (await recentInflight).rows
+  } catch (e) {
+    if (hit) return hit.rows   // serve the last good copy rather than failing the page
+    throw e
+  }
+}
 
 // Counting the older roles costs Supabase almost nothing (no rows are sent), so the page can show
 // the full total without downloading them.
@@ -260,11 +302,20 @@ export async function GET(req: NextRequest) {
   // facets=1: region and city counts over the whole month, no roles
   const facets = searchParams.get('facets') === '1'
 
+  // pub=1: the visitor's browser holds no sign-in cookie, so the answer is the free-tier list, which is the same
+  // for everyone and can sit in the CDN for a couple of minutes instead of waking the server for each page load.
+  // It never carries a member's view: with pub=1 the session is not even read, so it can only ever be the free list.
+  const pub = searchParams.get('pub') === '1'
+    && searchParams.get('mine') !== '1' && searchParams.get('freshCount') !== '1' && searchParams.get('withheld') !== '1'
+  const sharedCache = 'public, max-age=60, s-maxage=120, stale-while-revalidate=600'
+  const cacheControl = pub ? sharedCache : 'private, max-age=60'
+
   // Pass holders see roles as they land; everyone else waits FREE_DELAY_HOURS
   let hasPass = false
   let passExpiresAt: string | null = null
   let userId: string | null = null
   try {
+    if (pub) throw new Error('pub')   // skip the session entirely (caught below: free tier)
     const session = await getSessionClient()
     const { data: { user } } = await session.auth.getUser()
     if (user) {
@@ -384,7 +435,7 @@ export async function GET(req: NextRequest) {
     facetKey = [tier, sector && sector !== 'all' ? sector : 'all', wts.join(','), searchParams.get('region') || '', searchParams.get('cities') === '1' ? 'c' : ''].join('|')
     const send = (v: LocationFacets) => {
       const r = NextResponse.json(v)
-      r.headers.set('Cache-Control', 'private, max-age=60')
+      r.headers.set('Cache-Control', cacheControl)
       return r
     }
     const mem = facetCache.get(facetKey)
@@ -460,7 +511,7 @@ export async function GET(req: NextRequest) {
     facetCache.set(facetKey, { v, at: now })
     void cachePut(createServerClient(), `feed:facets:${facetKey}`, v as unknown as Record<string, unknown>)
     const r = NextResponse.json(v)
-    r.headers.set('Cache-Control', 'private, max-age=60')
+    r.headers.set('Cache-Control', cacheControl)
     return r
   }
 
@@ -539,8 +590,10 @@ export async function GET(req: NextRequest) {
     latestPostedAt,
     ...(archive ? {} : { archiveCounts }),
     stats: stats ?? sharedStats ?? undefined,
+    ...(pub ? { pub: true } : {}),
   })
-  // the browser may reuse this for a minute (refreshes, sort toggles) without hitting the server
-  res.headers.set('Cache-Control', 'private, max-age=60')
+  // the browser may reuse this for a minute (refreshes, sort toggles) without hitting the server;
+  // free-tier copies may also sit in the CDN
+  res.headers.set('Cache-Control', cacheControl)
   return res
 }

@@ -15,8 +15,15 @@ import { captureAttribution } from '@/lib/attribution'
 type EarlyJobs = { at: number; quick: Promise<any>; full: Promise<any> }
 const earlyJson = (url: string): Promise<any> => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null)
 /* eslint-enable @typescript-eslint/no-explicit-any */
+// Sign-in is kept in a cookie the browser can read. With none, this visitor is logged out, so the page asks for the
+// shared free-tier list (&pub=1), which the CDN can hold for a couple of minutes instead of the server rebuilding it
+// for every visit. Only ever the free list: a member who is somehow mistaken for a visitor is re-fetched (see below).
+let forceFresh = false
+const pubQs = () => (
+  typeof document !== 'undefined' && !forceFresh && !/(?:^|;\s*)sb-[^=;]*-auth-token/.test(document.cookie) ? '&pub=1' : ''
+)
 let earlyJobs: EarlyJobs | null = typeof window !== 'undefined' && window.location.pathname === '/'
-  ? { at: Date.now(), quick: earlyJson('/api/jobs?sortBy=newest&limit=400&quick=1'), full: earlyJson('/api/jobs?sortBy=newest&limit=20000') }
+  ? { at: Date.now(), quick: earlyJson(`/api/jobs?sortBy=newest&limit=400&quick=1${pubQs()}`), full: earlyJson(`/api/jobs?sortBy=newest&limit=20000${pubQs()}`) }
   : null
 
 const DEFAULT_FILTERS: FilterState = {
@@ -398,6 +405,7 @@ export default function HomePage() {
   const searchRef = useRef<HTMLInputElement>(null)
   const prevSlotKey = useRef<string | null>(null)
 
+  const [servedPub, setServedPub] = useState(false)   // the list on screen came from the shared logged-out copy
   const fetchSeq = useRef(0)  // only the newest request may write results (older, slower ones are dropped)
   const fetchJobs = useCallback(async () => {
     const seq = ++fetchSeq.current
@@ -415,7 +423,7 @@ export default function HomePage() {
       // Use the requests started at load if they are still fresh and the sort is the default one
       const early = earlyJobs && Date.now() - earlyJobs.at < 15_000 && filters.sortBy === 'newest' ? earlyJobs : null
       earlyJobs = null
-      ;(early ? early.full : fetch(`/api/jobs?${params}`).then((r) => (r.ok ? r.json() : null)))
+      ;(early ? early.full : fetch(`/api/jobs?${params}${pubQs()}`).then((r) => (r.ok ? r.json() : null)))
         .then((full) => {
           if (seq !== fetchSeq.current) return
           if (full?.jobs?.length) { fullLanded = true; setAllJobs(full.jobs) }
@@ -435,7 +443,7 @@ export default function HomePage() {
         data = await early.quick
         if (!data) throw new Error('API error')
       } else {
-        const res = await fetch(`/api/jobs?${fast}`)
+        const res = await fetch(`/api/jobs?${fast}${pubQs()}`)
         if (!res.ok) throw new Error('API error')
         data = await res.json()
       }
@@ -445,6 +453,7 @@ export default function HomePage() {
       // so a refresh or re-sort never swaps a member's matches for a thinner set.
       if (!fullLanded) setAllJobs((prev) => mergeJobs(prev, data.jobs ?? []))
       setHasPass(!!data.hasPass)
+      setServedPub(!!data.pub)
       setPassExpires(data.passExpiresAt ?? null)
       setFirstLoad(true)
       setWithheld(data.withheld ?? 0)
@@ -470,7 +479,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!wantsArchive || archiveRequested.current) return
     archiveRequested.current = true
-    fetch('/api/jobs?archive=1&limit=20000')
+    fetch(`/api/jobs?archive=1&limit=20000${pubQs()}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.jobs?.length) setArchiveJobs(d.jobs) })
       .catch(() => { archiveRequested.current = false })
@@ -500,13 +509,22 @@ export default function HomePage() {
   useEffect(() => {
     if (!facetsWanted) return
     let dead = false
-    fetch(`/api/jobs?${facetQuery}`)
+    fetch(`/api/jobs?${facetQuery}${hasPass ? '' : pubQs()}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((v) => { if (dead) return; if (v?.regions) { setFacets({ key: facetQuery, v }); setFacetsFailed(false) } else setFacetsFailed(true) })
       .catch(() => { if (!dead) setFacetsFailed(true) })
     return () => { dead = true }
   }, [facetsWanted, facetQuery])
   const facetNow = facets?.key === facetQuery ? facets.v : null
+
+  // Safety net: if a signed-in member was served the shared logged-out copy (no readable sign-in cookie),
+  // load their own list as soon as the session is confirmed
+  useEffect(() => {
+    if (!userEmail || !servedPub || forceFresh) return
+    forceFresh = true   // from here on every request goes out without pub=1; the new response clears servedPub
+    const t = setTimeout(fetchJobs, 0)
+    return () => clearTimeout(t)
+  }, [userEmail, servedPub, fetchJobs])
 
   // Debounced so typing in search doesn't fire a request per keystroke
   // (the very first call goes straight out: there is nothing to debounce yet)
