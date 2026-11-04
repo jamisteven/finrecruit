@@ -4,7 +4,7 @@ import { sendEmail, searchesReadyEmail } from '@/lib/email'
 import { createServerClient } from '@/lib/supabase'
 import { getSessionClient } from '@/lib/supabase-session'
 import { normaliseKeyword } from '@/lib/normaliseKeyword'
-import { distilForQuery, keywordMatches, locationMatches, titleSearchGroups } from '@/lib/matchTarget'
+import { distilForQuery, keywordMatches, locationMatches, titleSearchGroups, titleFilter } from '@/lib/matchTarget'
 import { claimQuery, releaseTargets, widerLocation } from '@/lib/targetQueries'
 
 export const runtime = 'nodejs'
@@ -30,7 +30,7 @@ async function feedCoverage(db: ReturnType<typeof createServerClient>, keyword: 
       .neq('sector', 'other')
       .or('quality.is.null,quality.neq.low')
       .gte('posted_at', since)
-    for (const g of groups) q = q.or(g.map((x) => `title.ilike."%${x}%"`).join(','))
+    for (const g of groups) q = q.or(g.map(titleFilter).join(','))
     const { data } = await q.order('posted_at', { ascending: false }).range(from, from + 999)
     const rows = data ?? []
     for (const j of rows) {

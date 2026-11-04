@@ -37,6 +37,28 @@ function tokens(s: string): string[] {
     .filter(Boolean)
 }
 
+// "IT" is an acronym, not the word "it". Titles are matched case-sensitively, so "IT Support Engineer" and
+// "Head of IT" count but "Make it happen" and "Credit Analyst" do not. A saved "it" (any case) means the acronym.
+// IT must stand alone: at the start or end of the title, or next to one of IT_EDGES.
+const IT_EDGES = [' ', '/', '-', '(', ')', ',']
+const IT_RE = /(^|[ /\-(),])IT($|[ /\-(),])/
+const hasITAcronym = (title: string) => IT_RE.test(title) || /information technology/i.test(title)
+
+// Database prefilter for the same rule (case-insensitive, so never stricter than hasITAcronym). Entries starting
+// with RAW_FILTER are used as-is by titleFilter instead of being wrapped in %...%.
+const RAW_FILTER = '\u0001'
+const IT_PREFILTER: string[] = (() => {
+  const left = ['', ...IT_EDGES], right = ['', ...IT_EDGES]
+  const out: string[] = [`${RAW_FILTER}%information technology%`]
+  for (const l of left) for (const r of right) out.push(`${RAW_FILTER}${l === '' ? '' : '%'}${l}it${r}${r === '' ? '' : '%'}`)
+  return out
+})()
+
+/** The PostgREST filter for one entry of a titleSearchGroups group. */
+export function titleFilter(x: string): string {
+  return x.startsWith(RAW_FILTER) ? `title.ilike."${x.slice(RAW_FILTER.length)}"` : `title.ilike."%${x}%"`
+}
+
 function familyOf(word: string): string[] | null {
   return ROLE_FAMILIES.find((f) => f.includes(word)) ?? null
 }
@@ -81,14 +103,17 @@ function tokenPresent(t: string, haySet: Set<string>, hayText: string): boolean 
  * null = the keyword can't match anything.
  */
 export function titleSearchGroups(keyword: string): string[][] | null {
-  const kt = tokens(keyword)
-  if (kt.length === 0) return null
+  const all = tokens(keyword)
+  if (all.length === 0) return null
+  const wantsIT = all.includes('it')
+  const kt = all.filter((t) => t !== 'it')
   const roleWords = kt.filter((t) => familyOf(t))
   const distinctive = kt.filter((t) => !familyOf(t) && !FILLER.has(t))
-  if (roleWords.length === 0 && distinctive.length === 0) return null
+  if (roleWords.length === 0 && distinctive.length === 0 && !wantsIT) return null
   const variants = (t: string) => [t, t.endsWith('s') ? t.slice(0, -1) : `${t}s`, ...(TOKEN_ALIASES[t] ?? [])]
   const groups = distinctive.map(variants)
   if (roleWords.length) groups.push([...new Set(roleWords.flatMap((rw) => familyOf(rw)!).flatMap(variants))])
+  if (wantsIT) groups.push(IT_PREFILTER)
   return groups
 }
 
@@ -102,8 +127,14 @@ export function titleSearchGroups(keyword: string): string[][] | null {
  * back to requiring the role word, which keeps broad keywords usable.
  */
 export function keywordMatches(keyword: string, title: string, summary?: string | null): boolean {
-  const kt = tokens(keyword)
+  let kt = tokens(keyword)
   if (kt.length === 0) return false
+  // "it" in a search means the IT acronym, which has to be in the title; whatever else was typed is matched as usual
+  if (kt.includes('it')) {
+    if (!hasITAcronym(title)) return false
+    kt = kt.filter((t) => t !== 'it')
+    if (kt.length === 0) return true
+  }
 
   const roleWords = kt.filter((t) => familyOf(t))
   const distinctive = kt.filter((t) => !familyOf(t) && !FILLER.has(t))
@@ -168,7 +199,9 @@ export function distilForQuery(keyword: string): string {
   const kt = tokens(keyword)
   if (kt.length === 0) return keyword
 
+  // "it" is the IT acronym, kept (in capitals) as the distinctive word of the query
   const distinctive = kt.filter((t) => !familyOf(t) && !FILLER.has(t))
+  if (kt.includes('it')) distinctive.unshift('IT')
   const role = kt.find((t) => familyOf(t))
 
   // Nothing distinctive ("software engineer") — keep it as typed, or we'd be

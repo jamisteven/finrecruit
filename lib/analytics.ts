@@ -2,7 +2,7 @@
 // One function per panel; all of them read with the service-role client.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { keywordMatches, locationMatches, titleSearchGroups } from './matchTarget'
+import { keywordMatches, locationMatches, titleSearchGroups, titleFilter } from './matchTarget'
 import { apifyBudget, budgetMode, USD_PER_POST } from './apifyBudget'
 import { widenedQueryFor } from './targetQueries'
 import { BASE_INTERVAL_HOURS } from '@/lib/sweepBudget'
@@ -76,7 +76,7 @@ async function jobsForTargets(db: Db, targets: Row[]): Promise<Row[]> {
     if (!groups) return
     const rows = await fetchAll(db, 'jobs', JOB_COLS, (q: Q) => {
       q = inFeedWindow(q)
-      for (const g of groups) q = q.or(g.map((x) => `title.ilike."%${x}%"`).join(','))
+      for (const g of groups) q = q.or(g.map(titleFilter).join(','))
       return q
     })
     for (const r of rows) byId.set(String(r.id), r)

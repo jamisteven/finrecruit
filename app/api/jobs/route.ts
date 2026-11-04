@@ -7,7 +7,7 @@ import { matchEmployer } from '@/lib/employers'
 import { locationFacets, type LocationFacets } from '@/lib/locations'
 import type { WorkType } from '@/types'
 import { cacheGet, cachePut } from '@/lib/analyticsCache'
-import { keywordMatches, titleSearchGroups } from '@/lib/matchTarget'
+import { keywordMatches, titleSearchGroups, titleFilter } from '@/lib/matchTarget'
 
 // Free visitors see a role only once it is this old. Keep in sync with FREE_DELAY_HOURS in app/page.tsx.
 const FREE_DELAY_HOURS = 48
@@ -354,7 +354,7 @@ export async function GET(req: NextRequest) {
             .eq('is_verified_job', true)
             .or('quality.is.null,quality.neq.low')
             .or(`posted_at.gte.${since},posted_at.is.null`)
-          for (const g of groups) q = q.or(g.map((x) => `title.ilike."%${x}%"`).join(','))
+          for (const g of groups) q = q.or(g.map(titleFilter).join(','))
           const { data, error } = await q.order('extracted_at', { ascending: false }).order('id', { ascending: true }).range(from, from + PAGE - 1)
           if (error) throw new Error(error.message)
           for (const r of data ?? []) if (keywordMatches(kw, String(r.title ?? ''), null)) byId.set(r.id, r)

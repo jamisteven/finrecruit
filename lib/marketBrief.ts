@@ -5,7 +5,7 @@
 // with the numbers filled in. Roles are matched the way the member's feed matches them (keywordMatches / locationMatches).
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { keywordMatches, locationMatches, titleSearchGroups } from './matchTarget'
+import { keywordMatches, locationMatches, titleSearchGroups, titleFilter } from './matchTarget'
 import { unsubUrl } from './winback'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,7 +83,7 @@ async function rolesForKeyword(db: Db, keyword: string, since: string): Promise<
       .eq('is_verified_job', true)
       .or(`posted_at.gte.${since},and(posted_at.is.null,extracted_at.gte.${since})`)
       .or('quality.is.null,quality.neq.low')
-    for (const g of groups) q = q.or(g.map((x) => `title.ilike."%${x}%"`).join(','))
+    for (const g of groups) q = q.or(g.map(titleFilter).join(','))
     const { data, error } = await q.order('posted_at', { ascending: false }).range(from, from + 999)
     if (error) throw new Error(`jobs: ${error.message}`)
     out.push(...((data ?? []) as Row[]))
