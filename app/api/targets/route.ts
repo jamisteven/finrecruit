@@ -84,6 +84,16 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // A search that can never match a title (only filler words, e.g. "senior") would save fine and sit empty for
+    // the life of the membership, so refuse it now and say why
+    const unmatchable = [...new Set(pairs.filter((p) => !titleSearchGroups(p.keyword)).map((p) => p.keyword))]
+    if (unmatchable.length) {
+      return NextResponse.json(
+        { error: `"${unmatchable[0]}" is too general to match job titles. Add the kind of role, e.g. "${unmatchable[0]} manager" or "${unmatchable[0]} engineer".` },
+        { status: 400 }
+      )
+    }
+
     const db = createServerClient()
 
     // What they had before this save — used below so a re-save doesn't bump the

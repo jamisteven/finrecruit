@@ -37,27 +37,77 @@ function tokens(s: string): string[] {
     .filter(Boolean)
 }
 
-// "IT" is an acronym, not the word "it". Titles are matched case-sensitively, so "IT Support Engineer" and
-// "Head of IT" count but "Make it happen" and "Credit Analyst" do not. A saved "it" (any case) means the acronym.
-// IT must stand alone: at the start or end of the title, or next to one of IT_EDGES.
-const IT_EDGES = [' ', '/', '-', '(', ')', ',']
-const IT_RE = /(^|[ /\-(),])IT($|[ /\-(),])/
-const hasITAcronym = (title: string) => IT_RE.test(title) || /information technology/i.test(title)
+// Acronyms and the phrases they stand for. Members type either one ("QA" or "quality assurance"; normaliseKeyword
+// saves the phrase), and job titles use either ("QA Engineer", "Quality Assurance Engineer"), so a search matches a
+// title with the phrase OR the acronym. Acronyms are matched as whole words and case-sensitively, so "IT" is the
+// acronym and never the word "it", and "AM" never matches "am". A typed "it" always means the acronym.
+const ACRONYMS: [string, string][] = [
+  ['IT', 'information technology'], ['HR', 'human resources'], ['QA', 'quality assurance'],
+  ['GRC', 'governance risk and compliance'], ['FP&A', 'financial planning and analysis'],
+  ['SRE', 'site reliability engineer'], ['TPM', 'technical program manager'], ['PM', 'product manager'],
+  ['ML', 'machine learning'], ['AE', 'account executive'], ['SDR', 'sales development representative'],
+  ['BDR', 'business development representative'], ['CS', 'customer success'], ['CX', 'customer experience'],
+  ['IB', 'investment banking'], ['PE', 'private equity'], ['VC', 'venture capital'], ['TA', 'talent acquisition'],
+  ['BA', 'business analyst'], ['PO', 'product owner'], ['AM', 'account manager'], ['CF', 'corporate finance'],
+  ['FI', 'fixed income'], ['FICC', 'fixed income currencies and commodities'], ['RGM', 'revenue growth management'],
+  ['UX', 'user experience'], ['UI', 'user interface'], ['RevOps', 'revenue operations'],
+]
+const ACR_LEFT = [' ', '(', '/', '-']        // what may sit before a standalone acronym (or the start of the title)
+const ACR_RIGHT = [' ', ')', '/', '-', ',']  // ... and after it (or the end of the title)
+const reEsc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const ACR_RE = new Map(ACRONYMS.map(([a]) => [a, new RegExp(`(^|[ (/-])${reEsc(a)}($|[ )/,-])`)]))
+const hasAcronym = (title: string, acr: string) =>
+  ACR_RE.get(acr)!.test(title) || (acr === 'IT' && /information technology/i.test(title))
 
-// Database prefilter for the same rule (case-insensitive, so never stricter than hasITAcronym). Entries starting
-// with RAW_FILTER are used as-is by titleFilter instead of being wrapped in %...%.
+// Database prefilter for hasAcronym (case-insensitive, so never stricter). Entries starting with RAW_FILTER are used
+// as-is by titleFilter instead of being wrapped in %...%.
 const RAW_FILTER = '\u0001'
-const IT_PREFILTER: string[] = (() => {
-  const left = ['', ...IT_EDGES], right = ['', ...IT_EDGES]
-  const out: string[] = [`${RAW_FILTER}%information technology%`]
-  for (const l of left) for (const r of right) out.push(`${RAW_FILTER}${l === '' ? '' : '%'}${l}it${r}${r === '' ? '' : '%'}`)
+const acronymGroup = (acr: string): string[] => {
+  const a = acr.toLowerCase()
+  const out: string[] = acr === 'IT' ? [`${RAW_FILTER}%information technology%`] : []
+  for (const l of ['', ...ACR_LEFT]) for (const r of ['', ...ACR_RIGHT])
+    out.push(`${RAW_FILTER}${l === '' ? '' : '%'}${l}${a}${r}${r === '' ? '' : '%'}`)
   return out
-})()
+}
 
 /** The PostgREST filter for one entry of a titleSearchGroups group. */
 export function titleFilter(x: string): string {
   return x.startsWith(RAW_FILTER) ? `title.ilike."${x.slice(RAW_FILTER.length)}"` : `title.ilike."%${x}%"`
 }
+
+// A search typed as several roles ("aml/kyc/reference data risk", "ux, ui designer", "analyst or associate") means
+// ANY of them, not all at once. Only split when every part is a real word ("ci/cd" and "ux/ui" stay whole).
+export function alternatives(keyword: string): string[] {
+  const words = (x: string) => x.replace(/[^a-z0-9]/gi, '').length
+  const out: string[] = []
+  for (const piece of keyword.split(/\s*[,|]\s*|\s+or\s+/i).map((x) => x.trim()).filter(Boolean)) {
+    const sub = piece.split(/\s*\/\s*/).map((x) => x.trim()).filter(Boolean)
+    if (sub.length > 1 && sub.every((x) => words(x) >= 3)) out.push(...sub)
+    else out.push(piece)
+  }
+  return out.length ? out : [keyword]
+}
+
+// Words that are filler next to a role ("senior", "software engineer") but still name the field when they stand alone
+const SOLO_OK = new Set(['software', 'technical', 'tech'])
+
+type Variant = { acr: string | null; rest: string[] }
+/** The ways a keyword can be read: as typed, and with any phrase swapped for its acronym (a typed "it" is only ever the acronym). */
+function variantsOf(kt: string[]): Variant[] {
+  if (kt.includes('it')) return [{ acr: 'IT', rest: kt.filter((t) => t !== 'it') }]
+  const out: Variant[] = [{ acr: null, rest: kt }]
+  for (const [acr, phrase] of ACRONYMS) {
+    const pt = tokens(phrase)
+    // a typed acronym ("revops", "sre") also reads as the phrase it stands for ("revenue operations")
+    const typed = kt.indexOf(acr.toLowerCase())
+    if (acr.length >= 3 && typed >= 0) out.push({ acr: null, rest: [...kt.slice(0, typed), ...pt, ...kt.slice(typed + 1)] })
+    for (let i = 0; i + pt.length <= kt.length; i++) {
+      if (pt.every((w, j) => kt[i + j] === w)) { out.push({ acr, rest: [...kt.slice(0, i), ...kt.slice(i + pt.length)] }); break }
+    }
+  }
+  return out
+}
+const hasSignal = (rest: string[]) => rest.some((t) => familyOf(t) || !FILLER.has(t) || SOLO_OK.has(t))
 
 function familyOf(word: string): string[] | null {
   return ROLE_FAMILIES.find((f) => f.includes(word)) ?? null
@@ -76,6 +126,8 @@ const TOKEN_ALIASES: Record<string, string[]> = {
   marketing: ['growth'],
   accounts: ['account'],
   account: ['accounts'],
+  programme: ['program'],
+  program: ['programme'],
 }
 
 // Substring matching is what lets "quant" find "quantitative", but on short
@@ -103,18 +155,34 @@ function tokenPresent(t: string, haySet: Set<string>, hayText: string): boolean 
  * null = the keyword can't match anything.
  */
 export function titleSearchGroups(keyword: string): string[][] | null {
+  const parts = alternatives(keyword).map(groupsForOne).filter((g): g is string[][] => !!g)
+  if (parts.length === 0) return null
+  // any one alternative is enough: (A and B) or C = (A or C) and (B or C)
+  return parts.reduce((acc, r) => acc.flatMap((g1) => r.map((g2) => [...new Set([...g1, ...g2])])))
+}
+
+function groupsForOne(keyword: string): string[][] | null {
   const all = tokens(keyword)
   if (all.length === 0) return null
-  const wantsIT = all.includes('it')
-  const kt = all.filter((t) => t !== 'it')
-  const roleWords = kt.filter((t) => familyOf(t))
-  const distinctive = kt.filter((t) => !familyOf(t) && !FILLER.has(t))
-  if (roleWords.length === 0 && distinctive.length === 0 && !wantsIT) return null
   const variants = (t: string) => [t, t.endsWith('s') ? t.slice(0, -1) : `${t}s`, ...(TOKEN_ALIASES[t] ?? [])]
-  const groups = distinctive.map(variants)
-  if (roleWords.length) groups.push([...new Set(roleWords.flatMap((rw) => familyOf(rw)!).flatMap(variants))])
-  if (wantsIT) groups.push(IT_PREFILTER)
-  return groups
+  const groupsOf = (kt: string[]): string[][] => {
+    const roleWords = kt.filter((t) => familyOf(t))
+    const distinctive = kt.filter((t) => !familyOf(t) && !FILLER.has(t))
+    if (roleWords.length === 0 && distinctive.length === 0 && kt.length > 0 && kt.every((t) => SOLO_OK.has(t))) return kt.map(variants)
+    const groups = distinctive.map(variants)
+    if (roleWords.length) groups.push([...new Set(roleWords.flatMap((rw) => familyOf(rw)!).flatMap(variants))])
+    return groups
+  }
+  // one list of groups (all must hold) per way of reading the keyword; any one reading is enough, so the lists are
+  // combined as (A and B) or C = (A or C) and (B or C)
+  const readings: string[][][] = []
+  for (const v of variantsOf(all)) {
+    const g = groupsOf(v.rest)
+    if (v.acr) readings.push([...g, acronymGroup(v.acr)])
+    else if (g.length) readings.push(g)
+  }
+  if (readings.length === 0) return null
+  return readings.reduce((acc, r) => acc.flatMap((g1) => r.map((g2) => [...new Set([...g1, ...g2])])))
 }
 
 /**
@@ -127,21 +195,32 @@ export function titleSearchGroups(keyword: string): string[][] | null {
  * back to requiring the role word, which keeps broad keywords usable.
  */
 export function keywordMatches(keyword: string, title: string, summary?: string | null): boolean {
-  let kt = tokens(keyword)
-  if (kt.length === 0) return false
-  // "it" in a search means the IT acronym, which has to be in the title; whatever else was typed is matched as usual
-  if (kt.includes('it')) {
-    if (!hasITAcronym(title)) return false
-    kt = kt.filter((t) => t !== 'it')
-    if (kt.length === 0) return true
-  }
+  return alternatives(keyword).some((alt) => matchOne(alt, title, summary))
+}
 
+function matchOne(keyword: string, title: string, summary?: string | null): boolean {
+  const kt = tokens(keyword)
+  if (kt.length === 0) return false
+  return variantsOf(kt).some((v) => {
+    if (!v.acr) return matchTokens(v.rest, title, summary)
+    if (!hasAcronym(title, v.acr)) return false
+    // the acronym is in the title; whatever else was typed ("support", "manager") still has to match
+    return !hasSignal(v.rest) || matchTokens(v.rest, title, summary)
+  })
+}
+
+function matchTokens(kt: string[], title: string, summary?: string | null): boolean {
   const roleWords = kt.filter((t) => familyOf(t))
   const distinctive = kt.filter((t) => !familyOf(t) && !FILLER.has(t))
 
   const titleToks = tokens(title)
   const titleSet = new Set(titleToks)
   const titleText = titleToks.join(' ')
+
+  // "software" or "tech" on its own: filler beside a role, but the whole search when it stands alone (title only)
+  if (roleWords.length === 0 && distinctive.length === 0 && kt.length > 0 && kt.every((t) => SOLO_OK.has(t))) {
+    return kt.every((t) => tokenPresent(t, titleSet, titleText))
+  }
 
   if (roleWords.length === 0) {
     // A topic keyword ("fixed income", "grc", "private equity") names a subject, not a job, so the
