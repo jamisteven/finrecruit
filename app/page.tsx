@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase-browser'
-import { useEffect, useState, useCallback, useMemo, useRef, Fragment } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, useDeferredValue, Fragment } from 'react'
 import { JobPost, FilterState, Sector, WorkType } from '@/types'
 import { keywordMatches, locationMatches } from '@/lib/matchTarget'
 import { nearness } from '@/lib/widenLocation'
@@ -100,6 +100,19 @@ function dropsAround(now: number, dropBatches: DropBatch[]): { prev: Drop | null
   }
 }
 
+
+// How one role matches a member's saved searches, kept per set of searches (module level, so it survives re-renders)
+type MatchInfo = { sig: string; exact: boolean; rough: boolean; tier: 1 | 2 | 3 }
+const matchCaches = new Map<string, Map<string, MatchInfo>>()
+function matchCacheFor(key: string): Map<string, MatchInfo> {
+  let m = matchCaches.get(key)
+  if (!m) {
+    if (matchCaches.size >= 4) matchCaches.clear()
+    m = new Map()
+    matchCaches.set(key, m)
+  }
+  return m
+}
 
 // A role the free tier can see only as a title; everything else stays on the server.
 type LockedJob = { title: string; sector: string; posted_at: string | null }
@@ -334,8 +347,9 @@ export default function HomePage() {
   }, [rawJobs])
 
   // Per typed word: what to look for, and whether we silently fixed a likely typo
+  const deferredSearch = useDeferredValue(filters.search)
   const searchTerms = useMemo(() => {
-    const tokens = filters.search.toLowerCase().replace(/[,()%*\\"]/g, ' ').split(/\s+/).filter(Boolean)
+    const tokens = deferredSearch.toLowerCase().replace(/[,()%*\\"]/g, ' ').split(/\s+/).filter(Boolean)
     return tokens.map((tok) => {
       const known = SEARCH_SYNONYMS[tok]
       if (known) return { tok, phrases: known, fixed: null as string | null }
@@ -351,7 +365,7 @@ export default function HomePage() {
       }
       return { tok, phrases: [tok], fixed: null as string | null }
     })
-  }, [filters.search, rawJobs, searchIndex, vocab])
+  }, [deferredSearch, rawJobs, searchIndex, vocab])
   const searchFixes = searchTerms.filter((t) => t.fixed)
 
   const allJobs = useMemo(() => {
@@ -763,13 +777,33 @@ export default function HomePage() {
   // rough = the same keyword in the title, anywhere in the world. Searching
   // summaries too matched half the corpus, because words like "program" and
   // "manager" turn up in almost every description.
+  // Worked out once per role (and kept until the member's searches change), not on every list update: the feed
+  // re-sorts and re-filters as the roles arrive and as filters are typed, and checking every loaded role against every
+  // saved search each time froze the tab.
+  const targetsKey = useMemo(() => JSON.stringify(myTargets), [myTargets])
+  const infoOf = useCallback((j: JobPost): MatchInfo => {
+    const matchCache = matchCacheFor(targetsKey)
+    const sig = `${j.title ?? ''}\u0001${j.location ?? ''}\u0001${j.work_type ?? ''}`
+    const hit = matchCache.get(j.id)
+    if (hit && hit.sig === sig) return hit
+    let exact = false, rough = false
+    let tier: 1 | 2 | 3 = 3
+    for (const t of myTargets) {
+      if (!keywordMatches(t.keyword, j.title ?? '', null)) continue
+      rough = true
+      if (locationMatches(t.location, j.location ?? null, j.work_type ?? null)) exact = true
+      const n = nearness(t.location, j.location ?? null)
+      if (n < tier) tier = n
+    }
+    const info = { sig, exact, rough, tier }
+    matchCache.set(j.id, info)
+    return info
+  }, [targetsKey, myTargets])
   const matchesTargets = useCallback((j: JobPost, strict: boolean) => {
     if (myTargets.length === 0) return false
-    return myTargets.some((t) => {
-      if (!keywordMatches(t.keyword, j.title ?? '', null)) return false
-      return strict ? locationMatches(t.location, j.location ?? null, j.work_type ?? null) : true
-    })
-  }, [myTargets])
+    const i = infoOf(j)
+    return strict ? i.exact : i.rough
+  }, [myTargets, infoOf])
 
   const myExactAll = useMemo(() => allJobs.filter((j) => matchesTargets(j, true)), [allJobs, matchesTargets])
   // Direct employers lead. Agency and staffing posts (contract placements at a client) are real
@@ -777,15 +811,7 @@ export default function HomePage() {
   const myExact = useMemo(() => myExactAll.filter((j) => j.employer_type !== 'agency'), [myExactAll])
   const myAgency = useMemo(() => myExactAll.filter((j) => j.employer_type === 'agency'), [myExactAll])
   // How near a fallback job is to the member's own places: same state, same country, elsewhere.
-  const roughTier = useCallback((j: JobPost): 1 | 2 | 3 => {
-    let best: 1 | 2 | 3 = 3
-    for (const t of myTargets) {
-      if (!keywordMatches(t.keyword, j.title ?? '', null)) continue
-      const n = nearness(t.location, j.location ?? null)
-      if (n < best) best = n
-    }
-    return best
-  }, [myTargets])
+  const roughTier = useCallback((j: JobPost): 1 | 2 | 3 => infoOf(j).tier, [infoOf])
   const myRough = useMemo(
     () => allJobs
       .filter((j) => !matchesTargets(j, true) && matchesTargets(j, false))

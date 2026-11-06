@@ -77,7 +77,16 @@ export function titleFilter(x: string): string {
 
 // A search typed as several roles ("aml/kyc/reference data risk", "ux, ui designer", "analyst or associate") means
 // ANY of them, not all at once. Only split when every part is a real word ("ci/cd" and "ux/ui" stay whole).
+const altCache = new Map<string, string[]>()
 export function alternatives(keyword: string): string[] {
+  const hit = altCache.get(keyword)
+  if (hit) return hit
+  const out = computeAlternatives(keyword)
+  if (altCache.size > 500) altCache.clear()
+  altCache.set(keyword, out)
+  return out
+}
+function computeAlternatives(keyword: string): string[] {
   const words = (x: string) => x.replace(/[^a-z0-9]/gi, '').length
   const out: string[] = []
   for (const piece of keyword.split(/\s*[,|]\s*|\s+or\s+/i).map((x) => x.trim()).filter(Boolean)) {
@@ -198,10 +207,24 @@ export function keywordMatches(keyword: string, title: string, summary?: string 
   return alternatives(keyword).some((alt) => matchOne(alt, title, summary))
 }
 
+// What a keyword turns into (its words and the ways it can be read) never changes, and a feed check asks about
+// the same few keywords for thousands of titles, so it is worked out once per keyword.
+const planCache = new Map<string, { kt: string[]; variants: Variant[] }>()
+function planOf(keyword: string) {
+  let plan = planCache.get(keyword)
+  if (!plan) {
+    const kt = tokens(keyword)
+    plan = { kt, variants: kt.length === 0 ? [] : variantsOf(kt) }
+    if (planCache.size > 500) planCache.clear()
+    planCache.set(keyword, plan)
+  }
+  return plan
+}
+
 function matchOne(keyword: string, title: string, summary?: string | null): boolean {
-  const kt = tokens(keyword)
+  const { kt, variants } = planOf(keyword)
   if (kt.length === 0) return false
-  return variantsOf(kt).some((v) => {
+  return variants.some((v) => {
     if (!v.acr) return matchTokens(v.rest, title, summary)
     if (!hasAcronym(title, v.acr)) return false
     // the acronym is in the title; whatever else was typed ("support", "manager") still has to match
@@ -209,9 +232,20 @@ function matchOne(keyword: string, title: string, summary?: string | null): bool
   })
 }
 
+const splitCache = new Map<string, { roleWords: string[]; distinctive: string[] }>()
+function splitOf(kt: string[]) {
+  const key = kt.join('\u0001')
+  let sp = splitCache.get(key)
+  if (!sp) {
+    sp = { roleWords: kt.filter((t) => familyOf(t)), distinctive: kt.filter((t) => !familyOf(t) && !FILLER.has(t)) }
+    if (splitCache.size > 1000) splitCache.clear()
+    splitCache.set(key, sp)
+  }
+  return sp
+}
+
 function matchTokens(kt: string[], title: string, summary?: string | null): boolean {
-  const roleWords = kt.filter((t) => familyOf(t))
-  const distinctive = kt.filter((t) => !familyOf(t) && !FILLER.has(t))
+  const { roleWords, distinctive } = splitOf(kt)
 
   const titleToks = tokens(title)
   const titleSet = new Set(titleToks)
