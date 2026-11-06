@@ -19,6 +19,7 @@ const earlyJson = (url: string): Promise<any> => fetch(url).then((r) => (r.ok ? 
 // shared free-tier list (&pub=1), which the CDN can hold for a couple of minutes instead of the server rebuilding it
 // for every visit. Only ever the free list: a member who is somehow mistaken for a visitor is re-fetched (see below).
 let forceFresh = false
+let noCache = false   // set once a signed-in visitor needs the answer for them, never a copy the browser kept
 const pubQs = () => (
   typeof document !== 'undefined' && !forceFresh && !/(?:^|;\s*)sb-[^=;]*-auth-token/.test(document.cookie) ? '&pub=1' : ''
 )
@@ -363,6 +364,11 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)   // skeletons from the first paint, not after the first fetch starts
   const [visibleCount, setVisibleCount] = useState(150)
   const [hasPass, setHasPass] = useState(false)
+  // Whose list is on screen. The server says which account it answered for; until that is the signed-in account
+  // the tier is not known, so nothing on the page may claim "free" (or push an upgrade) at a member.
+  const [viewer, setViewer] = useState<string | null>(null)
+  const tierPending = !!userEmail && (viewer ?? '').toLowerCase() !== userEmail.toLowerCase()
+  const showFree = !hasPass && !tierPending
   const [withheld, setWithheld] = useState(0)
   const [addedToday, setAddedToday] = useState(0)
   // Totals worked out by the server and kept in the database: ready with the first response, nothing to wait for
@@ -410,7 +416,6 @@ export default function HomePage() {
   const searchRef = useRef<HTMLInputElement>(null)
   const prevSlotKey = useRef<string | null>(null)
 
-  const [servedPub, setServedPub] = useState(false)   // the list on screen came from the shared logged-out copy
   const fetchSeq = useRef(0)  // only the newest request may write results (older, slower ones are dropped)
   const fetchJobs = useCallback(async () => {
     const seq = ++fetchSeq.current
@@ -428,7 +433,7 @@ export default function HomePage() {
       // Use the requests started at load if they are still fresh and the sort is the default one
       const early = earlyJobs && Date.now() - earlyJobs.at < 15_000 && filters.sortBy === 'newest' ? earlyJobs : null
       earlyJobs = null
-      ;(early ? early.full : fetch(`/api/jobs?${params}${pubQs()}`).then((r) => (r.ok ? r.json() : null)))
+      ;(early ? early.full : fetch(`/api/jobs?${params}${pubQs()}`, noCache ? { cache: 'no-store' } : undefined).then((r) => (r.ok ? r.json() : null)))
         .then((full) => {
           if (seq !== fetchSeq.current) return
           if (full?.jobs?.length) { fullLanded = true; setAllJobs(full.jobs) }
@@ -448,7 +453,7 @@ export default function HomePage() {
         data = await early.quick
         if (!data) throw new Error('API error')
       } else {
-        const res = await fetch(`/api/jobs?${fast}${pubQs()}`)
+        const res = await fetch(`/api/jobs?${fast}${pubQs()}`, noCache ? { cache: 'no-store' } : undefined)
         if (!res.ok) throw new Error('API error')
         data = await res.json()
       }
@@ -458,7 +463,7 @@ export default function HomePage() {
       // so a refresh or re-sort never swaps a member's matches for a thinner set.
       if (!fullLanded) setAllJobs((prev) => mergeJobs(prev, data.jobs ?? []))
       setHasPass(!!data.hasPass)
-      setServedPub(!!data.pub)
+      setViewer(typeof data.viewer === 'string' ? data.viewer : null)
       setPassExpires(data.passExpiresAt ?? null)
       setFirstLoad(true)
       setWithheld(data.withheld ?? 0)
@@ -522,14 +527,22 @@ export default function HomePage() {
   }, [facetsWanted, facetQuery])
   const facetNow = facets?.key === facetQuery ? facets.v : null
 
-  // Safety net: if a signed-in member was served the shared logged-out copy (no readable sign-in cookie),
-  // load their own list as soon as the session is confirmed
+  // Safety net: a signed-in member must be served their own list. If what is on screen was answered for someone
+  // else (the shared logged-out copy, a copy the browser kept from another account, or a session the server could
+  // not read yet right after login), ask again, straight to the server, a few times with a growing pause.
+  const tierTries = useRef(0)
   useEffect(() => {
-    if (!userEmail || !servedPub || forceFresh) return
-    forceFresh = true   // from here on every request goes out without pub=1; the new response clears servedPub
-    const t = setTimeout(fetchJobs, 0)
+    if (!tierPending) { tierTries.current = 0; return }
+    if (!firstLoad || loading) return
+    const waits = [0, 1500, 4000, 9000]
+    const n = tierTries.current
+    if (n >= waits.length) return
+    tierTries.current = n + 1
+    forceFresh = true   // from here on no request goes out as pub=1
+    noCache = true
+    const t = setTimeout(fetchJobs, waits[n])
     return () => clearTimeout(t)
-  }, [userEmail, servedPub, fetchJobs])
+  }, [tierPending, firstLoad, loading, lastUpdated, fetchJobs])
 
   // Debounced so typing in search doesn't fire a request per keystroke
   // (the very first call goes straight out: there is nothing to debounce yet)
@@ -1137,7 +1150,7 @@ export default function HomePage() {
 
   const filtersActive = !!filters.search || filters.sector !== 'all'
     || filters.locations.length > 0 || filters.workTypes.length > 0
-  const splitFeed = !hasPass && !filtersActive && previewIds.length > 0
+  const splitFeed = showFree && !filtersActive && previewIds.length > 0
   const todaySet = useMemo(() => new Set([...previewIds, ...teaserIds]), [previewIds, teaserIds])
   const todayJobs = useMemo(
     () => (splitFeed ? displayJobs.filter((j) => todaySet.has(j.id)) : []),
@@ -1176,12 +1189,12 @@ export default function HomePage() {
     }, 450)
     return () => { alive = false; clearTimeout(t) }
   }, [hasPass, freshQuery, filters.sector, filters.locations.length, filters.workTypes.length])
-  const showFreshUpsell = !hasPass && freshMatches > 0 && freshQuery.length >= 2
+  const showFreshUpsell = showFree && freshMatches > 0 && freshQuery.length >= 2
   const showSugBox = sugOpen && (sugList.length > 0 || showFreshUpsell)
 
   // Title-only locked roles: only shown when no search/location/work-type filter is active,
   // and narrowed to the selected sector so the cards never contradict the filter.
-  const lockedShown = !hasPass && !filters.search && filters.locations.length === 0 && filters.workTypes.length === 0
+  const lockedShown = showFree && !filters.search && filters.locations.length === 0 && filters.workTypes.length === 0
     ? lockedJobs.filter((l) => filters.sector === 'all' || l.sector === filters.sector)
     : []
   const renderLocked = (l: LockedJob, i: number) => (
@@ -1411,7 +1424,7 @@ export default function HomePage() {
                 : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>}
             </button>
 
-            {!hasPass && !userEmail && (
+            {showFree && !userEmail && (
               <a className="btn-primary signup" href="/offer?src=header_signup" onClick={() => track('cta_click', { where: 'header_signup' })}>Sign up</a>
             )}
           </div>
@@ -1425,7 +1438,7 @@ export default function HomePage() {
           <h1>The jobs LinkedIn<br /><em>doesn&apos;t show you.</em></h1>
           <p className="sub">Apply directly to hiring managers and internal teams. Unlisted roles shared within professional networks before they ever hit public job boards - tracked in real time.</p>
           <HeroPromises />
-          {!hasPass && renderOffer('offer-d')}
+          {showFree && renderOffer('offer-d')}
         </div>
 
         {renderArt('art-d')}
@@ -1444,7 +1457,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {!hasPass && <div className="offer-wrap">{renderOffer('offer-m')}</div>}
+      {showFree && <div className="offer-wrap">{renderOffer('offer-m')}</div>}
 
       </>)}
 
@@ -1459,7 +1472,7 @@ export default function HomePage() {
       />
 
       {/* ── Signed-in strip: replaces the pitch once someone has an account ── */}
-      {userEmail && firstLoad && (
+      {userEmail && firstLoad && !tierPending && (
         <div className="member-wrap">
           {hasPass ? (
             <div className="member-bar active">
@@ -1604,7 +1617,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {!hasPass && (
+          {showFree && (
             <div className="pass pass-side">
               <h3>Stop missing early drops.</h3>
               <p className="pass-sub">Recruiters answer the first messages they get. Free sees each post {FREE_DELAY_HOURS} hours late.</p>
@@ -1707,7 +1720,7 @@ export default function HomePage() {
             )
           ) : (
             <>
-            {!hasPass && withheld > 0 && (
+            {showFree && withheld > 0 && (
               <a className="feed-top" href="/offer?src=feed_top" onClick={() => track('cta_click', { where: 'feed_top', n: withheld })}>
                 <span><b>{withheld} fresh {withheld === 1 ? 'role' : 'roles'}</b> from the last {FREE_DELAY_HOURS} hours {withheld === 1 ? 'is' : 'are'} Premium.</span>
                 <em>Unlock Today&apos;s Roles &rarr;</em>
@@ -1767,7 +1780,7 @@ export default function HomePage() {
               </div>
             )}
 
-            {!hasPass && (
+            {showFree && (
               <div className="inline-cta">
                 <div>
                   <h3>{withheld > 0 ? `${withheld} fresh roles from the last ${FREE_DELAY_HOURS} hours are Premium.` : `Roles from the last ${FREE_DELAY_HOURS} hours are Premium.`}</h3>
@@ -1777,7 +1790,7 @@ export default function HomePage() {
               </div>
             )}
 
-            {splitFeed && <div className="sec-head"><span>{hasPass ? 'Earlier roles' : 'Older roles · free to read'}</span><i />{!hasPass && <em className="sec-note">Recruiter names &amp; links are Premium</em>}</div>}
+            {splitFeed && <div className="sec-head"><span>{hasPass ? 'Earlier roles' : 'Older roles · free to read'}</span><i />{showFree && <em className="sec-note">Recruiter names &amp; links are Premium</em>}</div>}
             <div className="cards">
               {!splitFeed && lockedShown.map(renderLocked)}
               {myFeedOn && myStatus && (

@@ -320,12 +320,17 @@ export async function GET(req: NextRequest) {
   const pub = searchParams.get('pub') === '1'
     && searchParams.get('mine') !== '1' && searchParams.get('freshCount') !== '1' && searchParams.get('withheld') !== '1'
   const sharedCache = 'public, max-age=60, s-maxage=120, stale-while-revalidate=600'
-  const cacheControl = pub ? sharedCache : 'private, max-age=60'
+  let cacheControl = pub ? sharedCache : 'private, max-age=60'
+  // sign-in cookie present on the request (the session itself is read below)
+  const hasAuthCookie = req.cookies.getAll().some((c) => /^sb-.*auth-token/.test(c.name))
 
   // Pass holders see roles as they land; everyone else waits FREE_DELAY_HOURS
   let hasPass = false
   let passExpiresAt: string | null = null
   let userId: string | null = null
+  // Which account this answer is for. Left null whenever the session could not be established or the pass lookup
+  // failed, so the page never takes a failed lookup for "this member is free" and asks again.
+  let viewerEmail: string | null = null
   try {
     if (pub) throw new Error('pub')   // skip the session entirely (caught below: free tier)
     const session = await getSessionClient()
@@ -337,8 +342,13 @@ export async function GET(req: NextRequest) {
       passExpiresAt = profile?.pass_expires_at ?? null
       hasPass = !!profile?.pass_expires_at && new Date(profile.pass_expires_at) > new Date()
       if (profErr) console.error('[jobs] profile query error:', profErr.message)
+      else viewerEmail = user.email ?? null
     }
-  } catch { /* treat any failure as free tier */ }
+  } catch { /* any failure is served as the free list, but the page is told it is not this member's answer */ }
+  // A sign-in cookie with no account behind it (expired, not yet readable) or a failed pass lookup: never let the
+  // browser keep this answer
+  if (!pub && ((hasAuthCookie && !viewerEmail) || (userId && !viewerEmail))) cacheControl = 'private, no-store'
+
 
   // A member's matches, straight from the database: only roles whose title could match one of their saved
   // searches (the same title prefilter the analytics page uses), checked exactly in code. A few hundred rows
@@ -386,7 +396,7 @@ export async function GET(req: NextRequest) {
   if (searchParams.get('freshCount') === '1') {
     const out = (n: number) => {
       const r = NextResponse.json({ freshMatches: n })
-      r.headers.set('Cache-Control', 'private, max-age=60')
+      r.headers.set('Cache-Control', 'private, max-age=60'); r.headers.set('Vary', 'Cookie')
       return r
     }
     if (hasPass || !search) return out(0)
@@ -409,7 +419,7 @@ export async function GET(req: NextRequest) {
   if (searchParams.get('withheld') === '1') {
     const out = (body: unknown) => {
       const r = NextResponse.json(body)
-      r.headers.set('Cache-Control', 'private, max-age=60')
+      r.headers.set('Cache-Control', 'private, max-age=60'); r.headers.set('Vary', 'Cookie')
       return r
     }
     if (hasPass) return out({ roles: [], matched: 0, total: 0 })
@@ -447,7 +457,7 @@ export async function GET(req: NextRequest) {
     facetKey = [tier, sector && sector !== 'all' ? sector : 'all', wts.join(','), searchParams.get('region') || '', searchParams.get('cities') === '1' ? 'c' : ''].join('|')
     const send = (v: LocationFacets) => {
       const r = NextResponse.json(v)
-      r.headers.set('Cache-Control', cacheControl)
+      r.headers.set('Cache-Control', cacheControl); if (!pub) r.headers.set('Vary', 'Cookie')
       return r
     }
     const mem = facetCache.get(facetKey)
@@ -524,7 +534,7 @@ export async function GET(req: NextRequest) {
     facetCache.set(facetKey, { v, at: now })
     void cachePut(createServerClient(), `feed:facets:${facetKey}`, v as unknown as Record<string, unknown>)
     const r = NextResponse.json(v)
-    r.headers.set('Cache-Control', cacheControl)
+    r.headers.set('Cache-Control', cacheControl); if (!pub) r.headers.set('Vary', 'Cookie')
     return r
   }
 
@@ -593,6 +603,7 @@ export async function GET(req: NextRequest) {
     jobs,
     total: pool.length,
     hasPass,
+    viewer: viewerEmail,
     passExpiresAt: hasPass ? passExpiresAt : null,
     withheld,
     lockedJobs,
@@ -607,6 +618,6 @@ export async function GET(req: NextRequest) {
   })
   // the browser may reuse this for a minute (refreshes, sort toggles) without hitting the server;
   // free-tier copies may also sit in the CDN
-  res.headers.set('Cache-Control', cacheControl)
+  res.headers.set('Cache-Control', cacheControl); if (!pub) res.headers.set('Vary', 'Cookie')
   return res
 }
